@@ -116,7 +116,7 @@ wss.on('connection', ws => {
         if (!me.alive) return;
         const n = Math.min(4, Math.max(0, m.count | 0)); // one piece can clear at most 4 lines
         me.lines += n;
-        const garbage = n >= 4 ? 4 : n === 3 ? 2 : n === 2 ? 1 : 0;
+        const garbage = n >= 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0;
         if (!garbage) return;
         for (const p of room.players.values())
           if (p.id !== me.id && p.alive) send(p.ws, { t: 'garbage', count: garbage, from: me.id });

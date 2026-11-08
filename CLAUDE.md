@@ -14,9 +14,10 @@ plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-dep
 - Gamepad/controller support would be welcome later, but it is low priority.
 - Every player gets the same piece queue (shared seed from the server).
 - Players can save one piece (C or Shift). Bringing it back swaps it with the current piece; allowed once per piece.
-- Clearing 2/3/4 lines sends 1/2/4 garbage lines to every other living player.
-- Specials are fired at one chosen player by pressing that player's number (1–6); your own
-  number targets yourself. Never apply a special to all players at once.
+- Clearing 2/3/4 lines sends 1/2/3 garbage lines to every other living player.
+- Specials are fired at one chosen player by pressing that player's number (1–6). Numbers are
+  per viewer: you are always 1 on your own screen (so 1 = yourself), others are 2+ in join order.
+  Never apply a special to all players at once.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and saves their best
   run per username to the leaderboard shown on the homepage (`GET /api/leaderboard`, top 10).

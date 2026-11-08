@@ -15,18 +15,22 @@ const PIECES = [ // id, matrix
 const SPECIALS = {
   A: ['Add Line',     '#ff7b7b', 'Adds a junk line to the bottom of the target board', 6],
   C: ['Clear Line',   '#7bffb0', 'Removes the bottom line of the target board', 6],
-  R: ['Random Blocks', '#7bd3ff', 'Drops ~7 random junk blocks onto the target board', 4],
-  Q: ['Quake',        '#ffb347', 'Shakes every row of the target board sideways', 3],
-  G: ['Gravity',      '#c8a2ff', 'Drops all blocks down, filling every hole', 2],
+  R: ['Random Clear', '#7bd3ff', 'Knocks 10 random blocks out of the target board', 4],
+  Q: ['Earthquake',   '#ffb347', 'Shakes every row of the target board sideways', 3],
+  G: ['Gravity',      '#c8a2ff', 'Drops all blocks down, filling every hole', 1.5],
   B: ['Blank',        '#d0d0d0', 'Turns all special blocks on the target into junk', 3],
   H: ['Haste',        '#ff66d9', 'Target pieces fall 3x faster for 10 seconds', 3],
-  S: ['Switch',       '#fff36b', 'Switches your whole board with the target', 1],
-  N: ['Nuke',         '#ffffff', 'Wipes the target board completely clean', 1],
+  S: ['Switch',       '#fff36b', 'Switches your whole board with the target', 0.7],
+  N: ['Nuke',         '#ffffff', 'Wipes the target board completely clean', 0.7],
 };
 const SP_KEYS = Object.keys(SPECIALS);
 const MAX_INV = 18;
 const SLOT_COLORS = ['', '#ff5470', '#30d5ff', '#4cde6c', '#ffd23f', '#b45cff', '#ff9a3c'];
-const badge = (slot, big) => `<span class="slot${big ? ' big' : ''}" style="background:${SLOT_COLORS[slot]}">${slot}</span>`;
+const badge = (n, big) => `<span class="slot${big ? ' big' : ''}" style="background:${SLOT_COLORS[n]}">${n}</span>`;
+// Numbers are per viewer: you are always 1 on your own screen, everyone else is 2, 3, ... in join-slot order.
+// The server still identifies players by their slot; we translate when firing a special.
+const ordered = () => [...players.filter(p => p.id === myId), ...players.filter(p => p.id !== myId).sort((a, b) => a.slot - b.slot)];
+const numOf = p => ordered().indexOf(p) + 1;
 
 // ---------- state ----------
 let ws, myId = null, hostId = null, roomState = 'lobby';
@@ -122,8 +126,8 @@ function clearLines(collect) {
 function garbageRow(withSpecials) {
   const row = Array(W).fill('8');
   row[(Math.random() * W) | 0] = '.';
-  if (withSpecials && Math.random() < 0.4) {
-    const count = Math.random() < 0.1 ? 2 : 1;
+  if (withSpecials && Math.random() < 0.7) {
+    const count = Math.random() < 0.25 ? 2 : 1;
     for (let i = 0; i < count; i++) {
       const filled = row.map((c, x) => c === '8' ? x : -1).filter(x => x >= 0);
       row[filled[(Math.random() * filled.length) | 0]] = randomSpecial();
@@ -158,13 +162,8 @@ function applySpecial(s) {
     case 'C': board.pop(); board.unshift(emptyRow()); break;
     case 'N': board = newBoard(); break;
     case 'R': {
-      // add ~7 junk blocks into empty cells, kept to the stack area so they don't float near the top
-      let top = board.findIndex(r => r.some(c => c !== '.')); if (top < 0) top = H;
-      const minY = Math.max(2, Math.min(top - 2, H - 6));
-      const empty = []; for (let y = minY; y < H; y++) for (let x = 0; x < W; x++) if (board[y][x] === '.') empty.push([x, y]);
-      const n = 6 + ((Math.random() * 3) | 0);
-      for (let i = 0; i < n && empty.length; i++) { const [x, y] = empty.splice((Math.random() * empty.length) | 0, 1)[0]; board[y][x] = '8'; }
-      clearLines(false);
+      const filled = []; board.forEach((r, y) => r.forEach((c, x) => c !== '.' && filled.push([x, y])));
+      for (let i = 0; i < 10 && filled.length; i++) { const [x, y] = filled.splice((Math.random() * filled.length) | 0, 1)[0]; board[y][x] = '.'; }
       break;
     }
     case 'Q':
@@ -179,13 +178,13 @@ function applySpecial(s) {
   }
   if (playing) { fixPiece(); syncBoard(); }
 }
-function useSpecial(slot) {
+function useSpecial(num) {
   if (!playing || !inventory.length || countingDown()) return;
-  const target = players.find(p => p.slot === slot);
+  const target = ordered()[num - 1];
   if (!target || !target.alive) return;
   const s = inventory.shift();
   renderInv();
-  net({ t: 'special', special: s, slot });
+  net({ t: 'special', special: s, slot: target.slot });
 }
 
 // ---------- game loop ----------
@@ -292,14 +291,14 @@ function draw() {
 }
 function renderOpps() {
   const wrap = $('opponents');
-  const others = players.filter(p => p.id !== myId);
+  const others = ordered().slice(1);
   if (wrap.children.length !== others.length || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id)) {
     wrap.innerHTML = '';
     for (const p of others) {
       const el = document.createElement('div');
       el.className = 'opp'; el.dataset.id = p.id;
-      el.innerHTML = `<div class="name">${badge(p.slot, true)}<span class="nm">${esc(p.name)}</span><span class="w"></span></div><canvas width="${W * 14}" height="${H * 14}"></canvas>`;
-      el.onclick = () => useSpecial(p.slot);
+      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${esc(p.name)}</span><span class="w"></span></div><canvas width="${W * 14}" height="${H * 14}"></canvas>`;
+      el.onclick = () => useSpecial(numOf(players.find(q => q.id === p.id)));
       wrap.appendChild(el);
     }
   }
@@ -320,15 +319,15 @@ function renderInv() {
 }
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
-  $('mySlot').innerHTML = me ? `${badge(me.slot, true)} ${esc(me.name)}` : '';
+  $('mySlot').innerHTML = me ? `${badge(1, true)} ${esc(me.name)}` : '';
   renderTargets();
-  $('playerList').innerHTML = players.map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(p.slot)} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
+  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
   $('startBtn').classList.toggle('hidden', !(myId === hostId && roomState === 'lobby'));
   renderOpps();
 }
 function renderTargets() {
-  $('targets').innerHTML = players.map(p => `<button class="tgt${roomState === 'playing' && !p.alive ? ' dead' : ''}" data-slot="${p.slot}" style="border-color:${SLOT_COLORS[p.slot]}">${badge(p.slot)} ${p.id === myId ? 'You' : esc(p.name)}</button>`).join('');
-  for (const b of $('targets').children) b.onclick = () => useSpecial(+b.dataset.slot);
+  $('targets').innerHTML = ordered().map((p, i) => `<button class="tgt${roomState === 'playing' && !p.alive ? ' dead' : ''}" data-num="${i + 1}" style="border-color:${SLOT_COLORS[i + 1]}">${badge(i + 1)} ${p.id === myId ? 'You' : esc(p.name)}</button>`).join('');
+  for (const b of $('targets').children) b.onclick = () => useSpecial(+b.dataset.num);
 }
 function updateStats() { $('lines').textContent = lines; $('level').textContent = level; }
 function setStatus(s) { $('status').textContent = s; }
@@ -340,7 +339,7 @@ function addLine(d) {
 function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
 function chatLine(id, msg) {
   const p = players.find(q => q.id === id), d = document.createElement('div'); d.className = 'msg';
-  d.innerHTML = `${p ? badge(p.slot) : ''}<span class="who"${p ? ` style="color:${SLOT_COLORS[p.slot]}"` : ''}>${esc(p ? p.name : '?')}</span>`;
+  d.innerHTML = `${p ? badge(numOf(p)) : ''}<span class="who"${p ? ` style="color:${SLOT_COLORS[numOf(p)]}"` : ''}>${esc(p ? p.name : '?')}</span>`;
   d.appendChild(document.createTextNode(msg)); addLine(d);
 }
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
