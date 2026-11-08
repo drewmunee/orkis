@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stackwar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="join" class="screen">
+  <h1>STACKWAR</h1>
+  <p class="tag">Same pieces. Shared misery. Clear 2+ lines to bury your rivals,<br>collect special blocks, and fire them at whoever deserves it.</p>
+  <form id="joinForm">
+    <input id="name" placeholder="Your name" maxlength="14" required>
+    <input id="room" placeholder="Room code" maxlength="20" value="lobby">
+    <button>Join</button>
+  </form>
+  <p id="joinErr" class="err"></p>
+</div>
+
+<div id="game" class="screen hidden">
+  <div id="left">
+    <div class="panel">
+      <div class="label me"><span id="mySlot"></span></div>
+      <canvas id="board" width="300" height="600"></canvas>
+    </div>
+  </div>
+  <div id="mid">
+    <div class="panel">
+      <div class="label">Next</div>
+      <canvas id="next" width="120" height="240"></canvas>
+    </div>
+    <div class="panel stats">
+      <div>Lines <b id="lines">0</b></div>
+      <div>Level <b id="level">1</b></div>
+    </div>
+    <div class="panel">
+      <div class="label">Specials <small>(press a player's number to fire at them, D to discard)</small></div>
+      <div id="inv"></div>
+      <div class="label" style="margin-top:8px">Fire at</div>
+      <div id="targets"></div>
+      <div id="invHelp"></div>
+    </div>
+    <div class="panel" id="lobbyPanel">
+      <div class="label">Room <b id="roomName"></b></div>
+      <div id="playerList"></div>
+      <button id="startBtn" class="hidden">Start game</button>
+      <div id="status"></div>
+    </div>
+    <div class="panel">
+      <div class="label">Log</div>
+      <div id="log"></div>
+      <input id="chat" placeholder="Chat (Enter)" maxlength="200">
+    </div>
+  </div>
+  <div id="opponents"></div>
+</div>
+
+<details id="help">
+  <summary>Controls &amp; specials</summary>
+  <p><b>←/→</b> move · <b>↑ / X</b> rotate · <b>Z</b> rotate back · <b>↓</b> soft drop · <b>Space</b> hard drop<br>
+  <b>1–6</b> fire your next special at that numbered player (your own number = yourself) · <b>D</b> discard · or click a board</p>
+  <ul id="specialList"></ul>
+</details>
+<script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+:root { --bg:#0e1020; --panel:#181b33; --line:#2b2f55; --text:#e6e8ff; --dim:#8a8fbf; --accent:#ffcc33; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, sans-serif; min-height:100vh; }
+.hidden { display:none !important; }
+#join { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:90vh; text-align:center; padding:16px; }
+h1 { font-size:56px; letter-spacing:10px; margin:0; color:var(--accent); text-shadow:0 0 24px #ffcc3355; }
+.tag { color:var(--dim); }
+form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+input, button { font:inherit; padding:9px 12px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; border:none; }
+.err { color:#ff6b6b; }
+#game { display:flex; gap:14px; padding:14px; align-items:flex-start; flex-wrap:wrap; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:10px; }
+.label { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+.label small { text-transform:none; letter-spacing:0; }
+#board { display:block; background:#05060f; border:2px solid var(--line); max-width:100%; height:auto; }
+#mid { width:260px; }
+#next { display:block; margin:0 auto; }
+.stats { display:flex; justify-content:space-around; }
+#inv { display:flex; flex-wrap:wrap; gap:3px; min-height:28px; }
+.sp { width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-weight:800; border-radius:4px; color:#111; }
+.sp.first { outline:2px solid #fff; }
+#invHelp { color:var(--dim); font-size:12px; margin-top:6px; min-height:16px; }
+#playerList div { display:flex; justify-content:space-between; padding:2px 0; }
+#playerList .dead { opacity:.4; text-decoration:line-through; }
+#status { color:var(--accent); margin-top:6px; font-weight:600; }
+#startBtn { width:100%; margin-top:8px; }
+#log { height:140px; overflow-y:auto; font-size:12px; color:var(--dim); margin-bottom:6px; }
+#log div { padding:1px 0; }
+#chat { width:100%; }
+#opponents { display:grid; grid-template-columns:repeat(auto-fill, 150px); gap:10px; flex:1; min-width:160px; }
+.opp { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px; cursor:pointer; }
+.opp:hover { border-color:var(--accent); }
+.opp canvas { display:block; width:100%; background:#05060f; }
+.opp .name { font-size:12px; margin-bottom:4px; display:flex; justify-content:space-between; }
+.opp.dead canvas { opacity:.3; }
+.opp.flash { animation:flash .4s; }
+@keyframes flash { 0%{ box-shadow:0 0 0 4px var(--accent);} 100%{ box-shadow:none; } }
+#help { position:fixed; bottom:10px; right:10px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; max-width:360px; font-size:12px; }
+#help ul { padding-left:0; list-style:none; }
+#help li { display:flex; gap:6px; align-items:center; margin:3px 0; }
+#help .sp { width:20px; height:20px; flex:none; }
+@media (max-width:700px){ #mid{ width:100%; } h1{ font-size:36px; letter-spacing:5px; } }
+
+.slot { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; color:#111; font-weight:900; font-size:12px; }
+.slot.big { width:30px; height:30px; font-size:18px; box-shadow:0 0 10px rgba(255,255,255,.25); }
+.label.me { text-transform:none; letter-spacing:0; font-size:16px; color:var(--text); display:flex; align-items:center; gap:8px; }
+.opp .name { align-items:center; gap:6px; font-size:14px; }
+.opp .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#targets { display:flex; flex-wrap:wrap; gap:4px; }
+.tgt { background:transparent; color:var(--text); border:2px solid; padding:3px 8px 3px 3px; font-weight:600; display:flex; align-items:center; gap:5px; }
+.tgt:hover { background:#ffffff14; }
+.tgt.dead { opacity:.35; text-decoration:line-through; }
