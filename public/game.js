@@ -33,6 +33,9 @@ let ws, myId = null, hostId = null, roomState = 'lobby';
 let players = [];               // from server
 const boards = new Map();       // id -> cells string
 let board, piece, queue, rng, playing = false;
+const COUNTDOWN_MS = 3000;
+let countdownEnd = 0; // game is frozen until this time while 3-2-1 shows on every board
+const countingDown = () => performance.now() < countdownEnd;
 let soloRun = false; // game started with only this player: score goes to the leaderboard
 let held = null, holdUsed = false; // saved piece index; hold allowed once per piece
 let inventory = [], lines = 0, level = 1, hasteUntil = 0;
@@ -177,7 +180,7 @@ function applySpecial(s) {
   if (playing) { fixPiece(); syncBoard(); }
 }
 function useSpecial(slot) {
-  if (!playing || !inventory.length) return;
+  if (!playing || !inventory.length || countingDown()) return;
   const target = players.find(p => p.slot === slot);
   if (!target || !target.alive) return;
   const s = inventory.shift();
@@ -193,7 +196,7 @@ function gravityMs() {
 }
 function frame(t) {
   const dt = Math.min(100, t - lastTime); lastTime = t;
-  if (playing && piece) {
+  if (playing && piece && !countingDown()) {
     dropAcc += dt;
     if (dropAcc >= gravityMs()) { dropAcc = 0; if (!collides(piece.m, piece.x, piece.y + 1)) piece.y++; }
     if (collides(piece.m, piece.x, piece.y + 1)) { lockAcc += dt; if (lockAcc >= 500) lock(); }
@@ -213,7 +216,7 @@ function die() {
 function startGame(seed) {
   board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0;
   held = null; holdUsed = false;
-  playing = true; dropAcc = 0; spawn(); renderInv(); updateStats(); syncBoard();
+  playing = true; dropAcc = 0; countdownEnd = performance.now() + COUNTDOWN_MS; spawn(); renderInv(); updateStats(); syncBoard();
   boards.clear();
   setStatus('');
 }
@@ -252,12 +255,26 @@ function draw() {
   for (let x = 1; x < W; x++) { ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, H * CELL); ctx.stroke(); }
   if (!board) return;
   board.forEach((r, y) => r.forEach((c, x) => drawCell(c, x, y, CELL, ctx)));
-  if (piece) {
+  if (piece && !countingDown()) {
     let gy = piece.y; while (!collides(piece.m, piece.x, gy + 1)) gy++;
     piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(piece.id, piece.x + x, gy + y, CELL, ctx, 0.2); }));
     piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(piece.id, piece.x + x, piece.y + y, CELL, ctx); }));
   }
   if (performance.now() < hasteUntil) { ctx.fillStyle = 'rgba(255,102,217,.08)'; ctx.fillRect(0, 0, W * CELL, H * CELL); }
+  // 3-2-1 countdown, then a brief GO!
+  const left = countdownEnd - performance.now();
+  if (playing && left > -600) {
+    const label = left > 0 ? String(Math.ceil(left / 1000)) : 'GO!';
+    const frac = left > 0 ? (left % 1000) / 1000 : (left + 600) / 600; // fades/shrinks within each second
+    if (left > 0) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W * CELL, H * CELL); }
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, 0.25 + frac);
+    ctx.font = `900 ${Math.round((label === 'GO!' ? 90 : 150) * (0.8 + 0.3 * frac))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.strokeText(label, W * CELL / 2, H * CELL / 2);
+    ctx.fillStyle = label === 'GO!' ? '#4cde6c' : '#ffcc33'; ctx.fillText(label, W * CELL / 2, H * CELL / 2);
+    ctx.restore();
+  }
   // saved piece (dimmed once it has been used for this piece)
   hctx.clearRect(0, 0, 100, 70);
   if (held !== null && playing) {
@@ -391,7 +408,7 @@ document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
   if (e.key === 'Enter' && !$('game').classList.contains('hidden')) { $('chat').focus(); e.preventDefault(); return; }
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
-  if (!playing || !piece) return;
+  if (!playing || !piece || countingDown()) return;
   switch (e.key) {
     case 'ArrowLeft': tryMove(-1, 0); break;
     case 'ArrowRight': tryMove(1, 0); break;
