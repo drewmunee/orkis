@@ -8,6 +8,7 @@ plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-dep
   Optimize for people at a computer with a keyboard.
 - Gamepad/controller support would be welcome later, but it is low priority.
 - Every player gets the same piece queue (shared seed from the server).
+- Players can save one piece (C or Shift). Bringing it back swaps it with the current piece; allowed once per piece.
 - Clearing 2/3/4 lines sends 1/2/4 garbage lines to every other living player.
 - Specials are fired at one chosen player by pressing that player's number (1–6); your own
   number targets yourself. Never apply a special to all players at once.

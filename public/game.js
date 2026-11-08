@@ -33,6 +33,7 @@ let ws, myId = null, hostId = null, roomState = 'lobby';
 let players = [];               // from server
 const boards = new Map();       // id -> cells string
 let board, piece, queue, rng, playing = false;
+let held = null, holdUsed = false; // saved piece index; hold allowed once per piece
 let inventory = [], lines = 0, level = 1, hasteUntil = 0;
 let dropAcc = 0, lockAcc = 0, lockResets = 0, lastTime = 0, sendPending = false;
 
@@ -42,6 +43,7 @@ let theme = {};
 function readTheme() { const cs = getComputedStyle(document.documentElement); theme = { well: cs.getPropertyValue('--well').trim(), grid: cs.getPropertyValue('--grid').trim() }; renderOpps(); }
 const ctx = $('board').getContext('2d');
 const nctx = $('next').getContext('2d');
+const hctx = $('hold').getContext('2d');
 
 // ---------- seeded RNG / shared queue ----------
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -58,11 +60,18 @@ const serialize = b => b.map(r => r.join('')).join('');
 const deserialize = s => { const b = newBoard(); if (s && s.length === W * H) for (let i = 0; i < W * H; i++) b[(i / W) | 0][i % W] = s[i]; return b; };
 const rotate = m => m[0].map((_, i) => m.map(r => r[i]).reverse());
 
-function spawn() {
-  const [id, m] = PIECES[queue.next()];
-  piece = { id, m, x: ((W - m[0].length) / 2) | 0, y: id === '1' ? -1 : 0 };
+function spawn(idx = queue.next()) {
+  const [id, m] = PIECES[idx];
+  piece = { idx, id, m, x: ((W - m[0].length) / 2) | 0, y: id === '1' ? -1 : 0 };
   lockAcc = 0; lockResets = 0;
   if (collides(piece.m, piece.x, piece.y)) die();
+}
+function hold() {
+  // Save the current piece. If one was already saved, bring it back out (from the top) and save the current one instead.
+  if (holdUsed) return;
+  const cur = piece.idx;
+  if (held === null) spawn(); else spawn(held);
+  held = cur; holdUsed = true;
 }
 function collides(m, px, py) {
   for (let y = 0; y < m.length; y++) for (let x = 0; x < m[y].length; x++) {
@@ -91,6 +100,7 @@ function lock() {
   if (over) return die();
   const n = clearLines(true);
   if (n >= 2) net({ t: 'lines', count: n });
+  holdUsed = false;
   spawn();
   syncBoard();
 }
@@ -201,6 +211,7 @@ function die() {
 }
 function startGame(seed) {
   board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0;
+  held = null; holdUsed = false;
   playing = true; dropAcc = 0; spawn(); renderInv(); updateStats(); syncBoard();
   boards.clear();
   setStatus('');
@@ -246,6 +257,14 @@ function draw() {
     piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(piece.id, piece.x + x, piece.y + y, CELL, ctx); }));
   }
   if (performance.now() < hasteUntil) { ctx.fillStyle = 'rgba(255,102,217,.08)'; ctx.fillRect(0, 0, W * CELL, H * CELL); }
+  // saved piece (dimmed once it has been used for this piece)
+  hctx.clearRect(0, 0, 120, 70);
+  if (held !== null && playing) {
+    const [id, m] = PIECES[held]; const s = 22, rows = m.filter(r => r.some(v => v)), oy = (70 - rows.length * s) / 2 - m.indexOf(rows[0]) * s;
+    hctx.save(); hctx.translate((120 - m[0].length * s) / 2, oy);
+    m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(id, x, y, s, hctx, holdUsed ? 0.35 : 1); }));
+    hctx.restore();
+  }
   // next pieces (same for everyone)
   nctx.clearRect(0, 0, 120, 240);
   if (queue && playing) queue.list.slice(0, 3).forEach((pi, i) => {
@@ -355,6 +374,7 @@ document.addEventListener('keydown', e => {
     case 'ArrowDown': if (tryMove(0, 1)) dropAcc = 0; break;
     case 'ArrowUp': case 'x': case 'X': tryRotate(1); break;
     case 'z': case 'Z': tryRotate(-1); break;
+    case 'c': case 'C': case 'Shift': hold(); break;
     case ' ': while (tryMove(0, 1)); lock(); break;
     case 'd': case 'D': if (inventory.length) { inventory.shift(); renderInv(); } break;
     default: return;

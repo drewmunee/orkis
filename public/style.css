@@ -22,7 +22,7 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 #board { display:block; background:var(--well); border:2px solid var(--line); height:clamp(420px, calc(100vh - 120px), 900px); width:auto; aspect-ratio:1 / 2; }
 #left .panel { margin-bottom:0; }
 #mid { width:250px; justify-self:end; }
-#next { display:block; margin:0 auto; }
+#next, #hold { display:block; margin:0 auto; }
 .stats { display:flex; justify-content:space-around; }
 #inv { display:flex; flex-wrap:wrap; gap:3px; min-height:28px; }
 .sp { width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-weight:800; border-radius:4px; color:#111; }

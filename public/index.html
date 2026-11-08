@@ -29,6 +29,10 @@
 <div id="game" class="screen hidden">
   <div id="mid">
     <div class="panel">
+      <div class="label">Saved <small>(C or Shift)</small></div>
+      <canvas id="hold" width="120" height="70"></canvas>
+    </div>
+    <div class="panel">
       <div class="label">Next</div>
       <canvas id="next" width="120" height="240"></canvas>
     </div>
@@ -66,7 +70,7 @@
 
 <details id="help">
   <summary>Controls &amp; specials</summary>
-  <p><b>←/→</b> move · <b>↑ / X</b> rotate · <b>Z</b> rotate back · <b>↓</b> soft drop · <b>Space</b> hard drop<br>
+  <p><b>←/→</b> move · <b>↑ / X</b> rotate · <b>Z</b> rotate back · <b>↓</b> soft drop · <b>Space</b> hard drop · <b>C / Shift</b> save piece (or swap with the saved one)<br>
   <b>1–6</b> fire your next special at that numbered player (your own number = yourself) · <b>D</b> discard · or click a board</p>
   <ul id="specialList"></ul>
 </details>
