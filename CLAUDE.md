@@ -1,5 +1,10 @@
 # Project notes
 
+> **Reminder for the owner (say this at the start of every session until it's done):**
+> Persistent data isn't set up yet. Create a free Postgres database on Neon (neon.tech), copy its
+> `postgresql://` connection string, and add it in Render → Environment as `DATABASE_URL`.
+> Until then the solo leaderboard resets on every restart/redeploy. Remove this note once it's done.
+
 Stackwar: multiplayer falling-block battle game. Node.js server (`server.js`, WebSockets via `ws`)
 plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-deploys from `main`.
 
