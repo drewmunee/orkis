@@ -28,22 +28,22 @@
 
 <div id="game" class="screen hidden">
   <div id="mid">
-    <div class="panel">
-      <div class="label">Saved <small>(C or Shift)</small></div>
-      <canvas id="hold" width="120" height="70"></canvas>
+    <div class="panel" id="pieces">
+      <div>
+        <div class="label">Saved <small>C / Shift</small></div>
+        <canvas id="hold" width="100" height="70"></canvas>
+        <div class="stat">Lines <b id="lines">0</b></div>
+        <div class="stat">Level <b id="level">1</b></div>
+      </div>
+      <div>
+        <div class="label">Next</div>
+        <canvas id="next" width="100" height="204"></canvas>
+      </div>
     </div>
     <div class="panel">
-      <div class="label">Next</div>
-      <canvas id="next" width="120" height="240"></canvas>
-    </div>
-    <div class="panel stats">
-      <div>Lines <b id="lines">0</b></div>
-      <div>Level <b id="level">1</b></div>
-    </div>
-    <div class="panel">
-      <div class="label">Specials <small>(press a player's number to fire at them, D to discard)</small></div>
+      <div class="label">Specials <small>D to discard</small></div>
       <div id="inv"></div>
-      <div class="label" style="margin-top:8px">Fire at</div>
+      <div class="label" style="margin-top:8px">Fire at <small>press their number</small></div>
       <div id="targets"></div>
       <div id="invHelp"></div>
     </div>
@@ -53,11 +53,6 @@
       <button id="startBtn" class="hidden">Start game</button>
       <div id="status"></div>
     </div>
-    <div class="panel">
-      <div class="label">Log</div>
-      <div id="log"></div>
-      <input id="chat" placeholder="Chat (Enter)" maxlength="200">
-    </div>
   </div>
   <div id="left">
     <div class="panel">
@@ -65,7 +60,14 @@
       <canvas id="board" width="300" height="600"></canvas>
     </div>
   </div>
-  <div id="opponents"></div>
+  <div id="right">
+    <div id="opponents"></div>
+    <div class="panel" id="chatPanel">
+      <div class="label">Chat &amp; log <small>(Enter to type, Esc to go back to the game)</small></div>
+      <div id="log"></div>
+      <input id="chat" placeholder="Say something…" maxlength="200" autocomplete="off">
+    </div>
+  </div>
 </div>
 
 <details id="help">

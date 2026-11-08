@@ -23,7 +23,9 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 #left .panel { margin-bottom:0; }
 #mid { width:250px; justify-self:end; }
 #next, #hold { display:block; margin:0 auto; }
-.stats { display:flex; justify-content:space-around; }
+#pieces { display:flex; justify-content:space-around; }
+.stat { margin-top:10px; color:var(--dim); }
+.stat b { color:var(--text); font-size:16px; margin-left:4px; }
 #inv { display:flex; flex-wrap:wrap; gap:3px; min-height:28px; }
 .sp { width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-weight:800; border-radius:4px; color:#111; }
 .sp.first { outline:2px solid var(--ring); }
@@ -32,10 +34,20 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 #playerList .dead { opacity:.4; text-decoration:line-through; }
 #status { color:var(--accent); margin-top:6px; font-weight:600; }
 #startBtn { width:100%; margin-top:8px; }
-#log { height:140px; overflow-y:auto; font-size:12px; color:var(--dim); margin-bottom:6px; }
-#log div { padding:1px 0; }
+/* Side columns are capped at the window height; the chat takes whatever space the opponent boards leave. */
+#mid { max-height:calc(100vh - 58px); }
+#right { height:calc(100vh - 58px); }
+#mid { overflow-y:auto; }
+#right { display:flex; flex-direction:column; gap:10px; width:max-content; justify-self:start; }
+#chatPanel { margin-bottom:0; flex:1; min-height:170px; display:flex; flex-direction:column; width:calc(3 * var(--oppw) + 20px); }
+#log { flex:1; min-height:0; overflow-y:auto; font-size:13px; margin-bottom:8px; padding-right:4px; }
+#log div { padding:3px 0; overflow-wrap:anywhere; }
+#log .ev { color:var(--dim); font-size:12px; font-style:italic; }
+#log .msg .slot { width:18px; height:18px; font-size:11px; margin-right:5px; vertical-align:-3px; }
+#log .msg .who { font-weight:700; margin-right:6px; }
 #chat { width:100%; }
-#opponents { display:grid; grid-template-columns:repeat(auto-fill, 140px); gap:10px; width:100%; justify-self:start; }
+#game { --oppw:clamp(90px, calc((100vh - 400px) / 4.4), 140px); }
+#opponents { display:grid; grid-template-columns:repeat(3, var(--oppw)); gap:10px; }
 .opp { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px; cursor:pointer; }
 .opp:hover { border-color:var(--accent); }
 .opp canvas { display:block; width:100%; background:var(--well); }
@@ -43,7 +55,7 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 .opp.dead canvas { opacity:.3; }
 .opp.flash { animation:flash .4s; }
 @keyframes flash { 0%{ box-shadow:0 0 0 4px var(--accent);} 100%{ box-shadow:none; } }
-#help { position:fixed; bottom:10px; right:10px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; max-width:360px; font-size:12px; }
+#help { position:absolute; top:6px; left:12px; z-index:6; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; max-width:360px; font-size:12px; }
 #help ul { padding-left:0; list-style:none; }
 #help li { display:flex; gap:6px; align-items:center; margin:3px 0; }
 #help .sp { width:20px; height:20px; flex:none; }
@@ -68,3 +80,9 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 #theme { font:inherit; padding:4px 6px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer; }
 #game { padding-top:44px; }
 .tgt.dead { opacity:.35; text-decoration:line-through; }
+/* tighter spacing so the side column fits short windows (or a zoomed-in browser) */
+#mid .panel { margin-bottom:8px; }
+#playerList div { padding:0; }
+#invHelp { margin-top:4px; }
+.opp .slot.big { width:24px; height:24px; font-size:14px; }
+.opp .name { gap:4px; font-size:13px; }

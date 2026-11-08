@@ -130,7 +130,7 @@ wss.on('connection', ws => {
         checkGameOver(room);
         break;
       case 'chat':
-        broadcast(room, { t: 'log', msg: `${me.name}: ${String(m.msg).slice(0, 200)}` });
+        broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
         break;
     }
   });

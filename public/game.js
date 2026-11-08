@@ -258,18 +258,18 @@ function draw() {
   }
   if (performance.now() < hasteUntil) { ctx.fillStyle = 'rgba(255,102,217,.08)'; ctx.fillRect(0, 0, W * CELL, H * CELL); }
   // saved piece (dimmed once it has been used for this piece)
-  hctx.clearRect(0, 0, 120, 70);
+  hctx.clearRect(0, 0, 100, 70);
   if (held !== null && playing) {
     const [id, m] = PIECES[held]; const s = 22, rows = m.filter(r => r.some(v => v)), oy = (70 - rows.length * s) / 2 - m.indexOf(rows[0]) * s;
-    hctx.save(); hctx.translate((120 - m[0].length * s) / 2, oy);
+    hctx.save(); hctx.translate((100 - m[0].length * s) / 2, oy);
     m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(id, x, y, s, hctx, holdUsed ? 0.35 : 1); }));
     hctx.restore();
   }
   // next pieces (same for everyone)
-  nctx.clearRect(0, 0, 120, 240);
+  nctx.clearRect(0, 0, 100, 204);
   if (queue && playing) queue.list.slice(0, 3).forEach((pi, i) => {
-    const [id, m] = PIECES[pi]; const s = 22, ox = (120 - m[0].length * s) / 2;
-    m.forEach((r, y) => r.forEach((v, x) => { if (v) { nctx.save(); nctx.translate(ox, 10 + i * 78); drawCell(id, x, y, s, nctx); nctx.restore(); } }));
+    const [id, m] = PIECES[pi]; const s = 22, ox = (100 - m[0].length * s) / 2;
+    m.forEach((r, y) => r.forEach((v, x) => { if (v) { nctx.save(); nctx.translate(ox, 10 + i * 66); drawCell(id, x, y, s, nctx); nctx.restore(); } }));
   });
 }
 function renderOpps() {
@@ -314,7 +314,17 @@ function renderTargets() {
 }
 function updateStats() { $('lines').textContent = lines; $('level').textContent = level; }
 function setStatus(s) { $('status').textContent = s; }
-function log(msg) { const d = document.createElement('div'); d.textContent = msg; const l = $('log'); l.appendChild(d); l.scrollTop = l.scrollHeight; while (l.children.length > 100) l.firstChild.remove(); }
+function addLine(d) {
+  const l = $('log'), atBottom = l.scrollHeight - l.scrollTop - l.clientHeight < 30;
+  l.appendChild(d); while (l.children.length > 150) l.firstChild.remove();
+  if (atBottom) l.scrollTop = l.scrollHeight; // don't yank the view if someone scrolled up to read
+}
+function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
+function chatLine(id, msg) {
+  const p = players.find(q => q.id === id), d = document.createElement('div'); d.className = 'msg';
+  d.innerHTML = `${p ? badge(p.slot) : ''}<span class="who"${p ? ` style="color:${SLOT_COLORS[p.slot]}"` : ''}>${esc(p ? p.name : '?')}</span>`;
+  d.appendChild(document.createTextNode(msg)); addLine(d);
+}
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const nameOf = id => (players.find(p => p.id === id) || {}).name || '?';
 function flash(id) { const el = document.querySelector(`.opp[data-id="${id}"]`); if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } }
@@ -359,6 +369,7 @@ function connect(name, room) {
         log(m.winnerName ? `— ${m.winnerName} wins —` : '— Game over —');
         break;
       case 'log': log(m.msg); break;
+      case 'chat': chatLine(m.id, m.msg); break;
     }
   };
 }
@@ -366,6 +377,7 @@ function connect(name, room) {
 // ---------- input ----------
 document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
+  if (e.key === 'Enter' && !$('game').classList.contains('hidden')) { $('chat').focus(); e.preventDefault(); return; }
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
   if (!playing || !piece) return;
   switch (e.key) {
@@ -383,7 +395,12 @@ document.addEventListener('keydown', e => {
 });
 $('joinForm').onsubmit = e => { e.preventDefault(); $('joinErr').textContent = ''; connect($('name').value, $('room').value); };
 $('startBtn').onclick = () => net({ t: 'start' });
-$('chat').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) { net({ t: 'chat', msg: e.target.value }); e.target.value = ''; e.target.blur(); } });
+$('chat').addEventListener('keydown', e => {
+  // Enter sends (or just leaves the box if empty); Esc leaves without sending. Either way, focus returns to the game.
+  e.stopPropagation(); // keep chat keys away from the game controls
+  if (e.key === 'Enter') { if (e.target.value.trim()) net({ t: 'chat', msg: e.target.value }); e.target.value = ''; e.target.blur(); }
+  else if (e.key === 'Escape') e.target.blur();
+});
 $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]}">${k}</span><b>${SPECIALS[k][0]}</b> — ${SPECIALS[k][2]}</li>`).join('');
 try { $('name').value = localStorage.getItem('sw-name') || ''; } catch {}
 $('theme').value = document.documentElement.dataset.theme || 'system';
