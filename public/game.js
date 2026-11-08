@@ -226,7 +226,15 @@ function drawCell(c, x, y, size, cx, alpha = 1) {
   }
   cx.globalAlpha = 1;
 }
+function fitBoard() { // match the canvas pixels to its on-screen size so the big board stays sharp
+  const c = $('board'), r = c.getBoundingClientRect();
+  if (!r.width) return;
+  const dpr = window.devicePixelRatio || 1, w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  ctx.setTransform(w / (W * CELL), 0, 0, h / (H * CELL), 0, 0);
+}
 function draw() {
+  fitBoard();
   ctx.fillStyle = theme.well; ctx.fillRect(0, 0, W * CELL, H * CELL);
   ctx.strokeStyle = theme.grid; ctx.lineWidth = 1;
   for (let x = 1; x < W; x++) { ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, H * CELL); ctx.stroke(); }
