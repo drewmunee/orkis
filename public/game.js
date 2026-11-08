@@ -37,6 +37,9 @@ let inventory = [], lines = 0, level = 1, hasteUntil = 0;
 let dropAcc = 0, lockAcc = 0, lockResets = 0, lastTime = 0, sendPending = false;
 
 const $ = id => document.getElementById(id);
+// canvas colors follow the CSS theme variables; re-read whenever the theme changes
+let theme = {};
+function readTheme() { const cs = getComputedStyle(document.documentElement); theme = { well: cs.getPropertyValue('--well').trim(), grid: cs.getPropertyValue('--grid').trim() }; renderOpps(); }
 const ctx = $('board').getContext('2d');
 const nctx = $('next').getContext('2d');
 
@@ -214,6 +217,7 @@ function drawCell(c, x, y, size, cx, alpha = 1) {
   const sp = isSpecial(c);
   cx.fillStyle = sp ? SPECIALS[c][1] : COLORS[c];
   cx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  if (sp) { cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.lineWidth = 1; cx.strokeRect(x * size + 1.5, y * size + 1.5, size - 3, size - 3); }
   if (!sp && size > 12) { cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(x * size + 1, y * size + 1, size - 2, 4); }
   if (sp) {
     cx.fillStyle = '#111'; cx.font = `bold ${Math.floor(size * 0.65)}px system-ui`;
@@ -223,8 +227,8 @@ function drawCell(c, x, y, size, cx, alpha = 1) {
   cx.globalAlpha = 1;
 }
 function draw() {
-  ctx.fillStyle = '#05060f'; ctx.fillRect(0, 0, W * CELL, H * CELL);
-  ctx.strokeStyle = '#141733';
+  ctx.fillStyle = theme.well; ctx.fillRect(0, 0, W * CELL, H * CELL);
+  ctx.strokeStyle = theme.grid; ctx.lineWidth = 1;
   for (let x = 1; x < W; x++) { ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, H * CELL); ctx.stroke(); }
   if (!board) return;
   board.forEach((r, y) => r.forEach((c, x) => drawCell(c, x, y, CELL, ctx)));
@@ -259,7 +263,7 @@ function renderOpps() {
     el.classList.toggle('dead', roomState === 'playing' && !p.alive);
     el.querySelector('.w').textContent = p.wins ? `${p.wins}★` : '';
     const cx = el.querySelector('canvas').getContext('2d');
-    cx.fillStyle = '#05060f'; cx.fillRect(0, 0, W * 14, H * 14);
+    cx.fillStyle = theme.well; cx.fillRect(0, 0, W * 14, H * 14);
     const b = deserialize(boards.get(p.id));
     b.forEach((r, y) => r.forEach((c, x) => drawCell(c, x, y, 14, cx)));
   }
@@ -334,7 +338,7 @@ function connect(name, room) {
 
 // ---------- input ----------
 document.addEventListener('keydown', e => {
-  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
   if (!playing || !piece) return;
   switch (e.key) {
@@ -353,7 +357,15 @@ $('joinForm').onsubmit = e => { e.preventDefault(); $('joinErr').textContent = '
 $('startBtn').onclick = () => net({ t: 'start' });
 $('chat').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) { net({ t: 'chat', msg: e.target.value }); e.target.value = ''; e.target.blur(); } });
 $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]}">${k}</span><b>${SPECIALS[k][0]}</b> — ${SPECIALS[k][2]}</li>`).join('');
-$('name').value = localStorage.getItem('sw-name') || '';
+try { $('name').value = localStorage.getItem('sw-name') || ''; } catch {}
+$('theme').value = document.documentElement.dataset.theme || 'system';
+$('theme').addEventListener('change', e => {
+  document.documentElement.dataset.theme = e.target.value;
+  try { localStorage.setItem('sw-theme', e.target.value); } catch {}
+  readTheme(); e.target.blur();
+});
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
+readTheme();
 $('name').addEventListener('change', e => { try { localStorage.setItem('sw-name', e.target.value); } catch {} });
 
 board = null;

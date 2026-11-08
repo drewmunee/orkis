@@ -4,9 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stackwar</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('sw-theme')||'system'}catch(e){document.documentElement.dataset.theme='system'}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<label id="themeBar">Theme
+  <select id="theme">
+    <option value="system">System</option>
+    <option value="dark">Dark</option>
+    <option value="light">Light</option>
+  </select>
+</label>
 <div id="join" class="screen">
   <h1>STACKWAR</h1>
   <p class="tag">Same pieces. Shared misery. Clear 2+ lines to bury your rivals,<br>collect special blocks, and fire them at whoever deserves it.</p>
