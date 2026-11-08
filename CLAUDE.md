@@ -12,6 +12,11 @@ plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-dep
 - Clearing 2/3/4 lines sends 1/2/4 garbage lines to every other living player.
 - Specials are fired at one chosen player by pressing that player's number (1–6); your own
   number targets yourself. Never apply a special to all players at once.
+- **Solo runs:** a game started with only one player in the room is a solo run. The server counts
+  that player's cleared lines itself (clients report each clear, capped at 4) and saves their best
+  run per username to the leaderboard shown on the homepage (`GET /api/leaderboard`, top 10).
+- **Leaderboard storage** (`leaderboard.js`): Postgres when `DATABASE_URL` is set (required on Render,
+  whose filesystem is wiped on every restart/redeploy); otherwise `data/leaderboard.json` for local play.
 - The light/dark theme is chosen with the Theme dropdown (System/Dark/Light), saved per browser.
 
 ## Roadmap (from the owner)

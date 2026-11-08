@@ -33,6 +33,7 @@ let ws, myId = null, hostId = null, roomState = 'lobby';
 let players = [];               // from server
 const boards = new Map();       // id -> cells string
 let board, piece, queue, rng, playing = false;
+let soloRun = false; // game started with only this player: score goes to the leaderboard
 let held = null, holdUsed = false; // saved piece index; hold allowed once per piece
 let inventory = [], lines = 0, level = 1, hasteUntil = 0;
 let dropAcc = 0, lockAcc = 0, lockResets = 0, lastTime = 0, sendPending = false;
@@ -99,7 +100,7 @@ function lock() {
   piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) { const by = piece.y + y; if (by < 0) over = true; else board[by][piece.x + x] = piece.id; } }));
   if (over) return die();
   const n = clearLines(true);
-  if (n >= 2) net({ t: 'lines', count: n });
+  if (n) net({ t: 'lines', count: n }); // server counts every clear (solo score) and sends garbage for 2+
   holdUsed = false;
   spawn();
   syncBoard();
@@ -350,7 +351,9 @@ function connect(name, room) {
         break;
       case 'start':
         players = m.players; roomState = 'playing'; renderPlayers();
-        log('— Game started —'); startGame(m.seed);
+        soloRun = m.players.length === 1;
+        log(soloRun ? '— Solo run started —' : '— Game started —'); startGame(m.seed);
+        if (m.players.length === 1) setStatus('Solo run: clear as many lines as you can. It speeds up every 10 lines.');
         break;
       case 'board': boards.set(m.id, m.cells); renderOpps(); break;
       case 'garbage': if (playing) { addGarbage(m.count, true); syncBoard(); } break;
@@ -365,11 +368,20 @@ function connect(name, room) {
       case 'dead': { const p = players.find(q => q.id === m.id); if (p) p.alive = false; log(`${nameOf(m.id)} is out`); renderPlayers(); break; }
       case 'gameover':
         playing = false; piece = null; roomState = 'lobby';
-        setStatus(m.winnerId === myId ? '🏆 You win!' : m.winnerName ? `${m.winnerName} wins!` : 'Game over');
+        if (!soloRun) setStatus(m.winnerId === myId ? '🏆 You win!' : m.winnerName ? `${m.winnerName} wins!` : 'Game over');
         log(m.winnerName ? `— ${m.winnerName} wins —` : '— Game over —');
         break;
       case 'log': log(m.msg); break;
       case 'chat': chatLine(m.id, m.msg); break;
+      case 'solo': {
+        const nl = n => `${n} line${n === 1 ? '' : 's'}`;
+        const msg = m.error ? `Solo run over: ${nl(m.lines)} (couldn't save to the leaderboard)`
+          : !m.lines ? 'Solo run over: no lines cleared'
+          : m.lines >= m.best ? `Solo run over: ${nl(m.lines)}, a personal best! #${m.rank} on the leaderboard`
+          : `Solo run over: ${nl(m.lines)}. Your best is ${m.best} (#${m.rank} on the leaderboard)`;
+        setStatus(msg); log(msg);
+        break;
+      }
     }
   };
 }
@@ -395,6 +407,14 @@ document.addEventListener('keydown', e => {
 });
 $('joinForm').onsubmit = e => { e.preventDefault(); $('joinErr').textContent = ''; connect($('name').value, $('room').value); };
 $('startBtn').onclick = () => net({ t: 'start' });
+function loadLeaderboard() {
+  fetch('/api/leaderboard').then(r => r.json()).then(rows => {
+    $('lbList').innerHTML = rows.length
+      ? rows.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm">${esc(r.name)}</span><b>${r.lines}</b></li>`).join('')
+      : '<li class="empty">No solo runs yet. Join an empty room and press Start to set the first score.</li>';
+  }).catch(() => { $('lbList').innerHTML = '<li class="empty">Leaderboard unavailable right now.</li>'; });
+}
+loadLeaderboard();
 $('chat').addEventListener('keydown', e => {
   // Enter sends (or just leaves the box if empty); Esc leaves without sending. Either way, focus returns to the game.
   e.stopPropagation(); // keep chat keys away from the game controls

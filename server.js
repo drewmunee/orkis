@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const leaderboard = require('./leaderboard');
 
 const PORT = process.env.PORT || 3000;
 const PUB = path.join(__dirname, 'public');
@@ -11,6 +12,12 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
+  if (p === '/api/leaderboard') {
+    leaderboard.top().then(
+      rows => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(rows)); },
+      err => { console.error('leaderboard read failed:', err.message); res.writeHead(500); res.end('[]'); });
+    return;
+  }
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(PUB, p));
   if (!file.startsWith(PUB)) { res.writeHead(403); return res.end(); }
@@ -40,6 +47,16 @@ function freeSlot(room) {
   for (let s = 1; s <= MAX_PLAYERS; s++) if (!used.has(s)) return s;
   return 0;
 }
+// A game started with only one player is a solo run: the server counts that player's
+// cleared lines itself and records the total on the leaderboard when the run ends.
+function finishSolo(room, p) {
+  if (room.state !== 'playing' || room.startCount !== 1 || !p.alive) return;
+  const lines = p.lines;
+  if (lines < 1) return send(p.ws, { t: 'solo', lines: 0 });
+  leaderboard.submit(p.name, lines).then(
+    ({ best, rank }) => send(p.ws, { t: 'solo', lines, best, rank }),
+    err => { console.error('leaderboard write failed:', err.message); send(p.ws, { t: 'solo', lines, error: true }); });
+}
 function checkGameOver(room) {
   if (room.state !== 'playing') return;
   const alive = [...room.players.values()].filter(p => p.alive);
@@ -54,7 +71,7 @@ function checkGameOver(room) {
 }
 
 wss.on('connection', ws => {
-  const me = { id: nextId++, ws, name: '', slot: 0, alive: false, board: '', wins: 0 };
+  const me = { id: nextId++, ws, name: '', slot: 0, alive: false, board: '', wins: 0, lines: 0 };
   let room = null;
 
   ws.on('message', raw => {
@@ -85,7 +102,7 @@ wss.on('connection', ws => {
         room.state = 'playing';
         room.startCount = room.players.size;
         const seed = (Math.random() * 2 ** 31) | 0;
-        for (const p of room.players.values()) { p.alive = true; p.board = ''; }
+        for (const p of room.players.values()) { p.alive = true; p.board = ''; p.lines = 0; }
         broadcast(room, { t: 'start', seed, players: playerList(room) });
         break;
       }
@@ -97,7 +114,8 @@ wss.on('connection', ws => {
       case 'lines': {
         // Multi-line clears send garbage rows to every other living player.
         if (!me.alive) return;
-        const n = m.count | 0;
+        const n = Math.min(4, Math.max(0, m.count | 0)); // one piece can clear at most 4 lines
+        me.lines += n;
         const garbage = n >= 4 ? 4 : n === 3 ? 2 : n === 2 ? 1 : 0;
         if (!garbage) return;
         for (const p of room.players.values())
@@ -125,6 +143,7 @@ wss.on('connection', ws => {
       }
       case 'dead':
         if (!me.alive) return;
+        finishSolo(room, me);
         me.alive = false;
         broadcast(room, { t: 'dead', id: me.id });
         checkGameOver(room);
@@ -137,6 +156,7 @@ wss.on('connection', ws => {
 
   ws.on('close', () => {
     if (!room) return;
+    finishSolo(room, me); // a solo player closing the tab still gets their run recorded
     room.players.delete(me.id);
     if (room.players.size === 0) { rooms.delete(room.code); return; }
     if (room.hostId === me.id) room.hostId = room.players.values().next().value.id;
