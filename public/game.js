@@ -15,7 +15,7 @@ const PIECES = [ // id, matrix
 const SPECIALS = {
   A: ['Add Line',     '#ff7b7b', 'Adds a junk line to the bottom of the target board', 6],
   C: ['Clear Line',   '#7bffb0', 'Removes the bottom line of the target board', 6],
-  R: ['Random Clear', '#7bd3ff', 'Knocks 10 random blocks out of the target board', 4],
+  R: ['Random Clear', '#7bd3ff', 'Knocks 8 random blocks out of the target board', 4],
   Q: ['Earthquake',   '#ffb347', 'Shakes every row of the target board sideways', 3],
   G: ['Gravity',      '#c8a2ff', 'Drops all blocks down, filling every hole', 1.5],
   B: ['Blank',        '#d0d0d0', 'Turns all special blocks on the target into junk', 3],
@@ -142,12 +142,13 @@ function garbageRow(withSpecials) {
   }
   return row;
 }
-function randomSpecial() {
-  const total = SP_KEYS.reduce((s, k) => s + SPECIALS[k][3], 0);
+function randomSpecial(keys = SP_KEYS) {
+  const total = keys.reduce((s, k) => s + SPECIALS[k][3], 0);
   let r = Math.random() * total;
-  for (const k of SP_KEYS) { r -= SPECIALS[k][3]; if (r < 0) return k; }
-  return 'A';
+  for (const k of keys) { r -= SPECIALS[k][3]; if (r < 0) return k; }
+  return keys[0];
 }
+const BONUS_KEYS = SP_KEYS.filter(k => !'ACDH'.includes(k)); // first 4-line clear reward pool
 function addGarbage(count, withSpecials) {
   for (let i = 0; i < count; i++) {
     const top = board.shift();
@@ -170,7 +171,7 @@ function applySpecial(s) {
     case 'N': board = newBoard(); break;
     case 'R': {
       const filled = []; board.forEach((r, y) => r.forEach((c, x) => c !== '.' && filled.push([x, y])));
-      for (let i = 0; i < 10 && filled.length; i++) { const [x, y] = filled.splice((Math.random() * filled.length) | 0, 1)[0]; board[y][x] = '.'; }
+      for (let i = 0; i < 8 && filled.length; i++) { const [x, y] = filled.splice((Math.random() * filled.length) | 0, 1)[0]; board[y][x] = '.'; }
       break;
     }
     case 'Q':
@@ -180,7 +181,11 @@ function applySpecial(s) {
       for (let x = 0; x < W; x++) { const col = []; for (let y = 0; y < H; y++) if (board[y][x] !== '.') col.push(board[y][x]); for (let y = H - 1; y >= 0; y--) board[y][x] = col.length ? col.pop() : '.'; }
       clearLines(false);
       break;
-    case 'B': board = board.map(r => r.map(c => isSpecial(c) ? '8' : c)); break;
+    case 'B': { // turn 3 random special blocks into plain junk
+      const sp = []; board.forEach((r, y) => r.forEach((c, x) => isSpecial(c) && sp.push([x, y])));
+      for (let i = 0; i < 3 && sp.length; i++) { const [x, y] = sp.splice((Math.random() * sp.length) | 0, 1)[0]; board[y][x] = '8'; }
+      break;
+    }
     case 'H': hasteUntil = performance.now() + 10000; break;
     case 'D': darkUntil = performance.now() + DARKNESS_MS; break;
   }
@@ -336,19 +341,13 @@ function renderInv() {
     else d.className = 'sp empty';
     el.appendChild(d);
   }
-  $('invHelp').textContent = inventory.length ? `Next: ${SPECIALS[inventory[0]][0]} — ${SPECIALS[inventory[0]][2]}` : 'Clear lines containing lettered blocks to collect specials.';
 }
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
   $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${esc(me.name)}</span>` : '';
-  renderTargets();
   $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
   $('startBtn').classList.toggle('hidden', !(myId === hostId && roomState === 'lobby'));
   renderOpps();
-}
-function renderTargets() {
-  $('targets').innerHTML = ordered().map((p, i) => `<button class="tgt${roomState === 'playing' && !p.alive ? ' dead' : ''}" data-num="${i + 1}" style="border-color:${SLOT_COLORS[i + 1]}">${badge(i + 1)} ${p.id === myId ? 'You' : esc(p.name)}</button>`).join('');
-  for (const b of $('targets').children) b.onclick = () => useSpecial(+b.dataset.num);
 }
 function updateStats() { $('lines').textContent = lines; $('level').textContent = level; }
 function setStatus(s) { $('status').textContent = s; }
@@ -410,6 +409,11 @@ function connect(name, room) {
         break;
       case 'log': log(m.msg); break;
       case 'chat': chatLine(m.id, m.msg); break;
+      case 'bonus': if (playing) {
+        const s = randomSpecial(BONUS_KEYS);
+        inventory.push(s); if (inventory.length > MAX_INV) inventory.splice(0, inventory.length - MAX_INV);
+        renderInv(); log(`Bonus for the first 4-line clear: ${SPECIALS[s][0]}`);
+      } break;
       case 'solo': {
         const nl = n => `${n} line${n === 1 ? '' : 's'}`;
         const msg = m.error ? `Solo run over: ${nl(m.lines)} (couldn't save to the leaderboard)`

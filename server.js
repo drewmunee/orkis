@@ -103,6 +103,7 @@ wss.on('connection', ws => {
         room.startCount = room.players.size;
         const seed = (Math.random() * 2 ** 31) | 0;
         for (const p of room.players.values()) { p.alive = true; p.board = ''; p.lines = 0; }
+        room.firstFourDone = false; // first 4-line clear of each match earns a bonus
         broadcast(room, { t: 'start', seed, players: playerList(room) });
         break;
       }
@@ -116,11 +117,16 @@ wss.on('connection', ws => {
         if (!me.alive) return;
         const n = Math.min(4, Math.max(0, m.count | 0)); // one piece can clear at most 4 lines
         me.lines += n;
-        const garbage = n >= 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0;
+        let garbage = n >= 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0;
+        // The match's first 4-line clear sends 4 lines instead of 3 and earns a free special.
+        const firstFour = n >= 4 && !room.firstFourDone;
+        if (firstFour) { room.firstFourDone = true; garbage = 4; send(me.ws, { t: 'bonus' }); }
         if (!garbage) return;
         for (const p of room.players.values())
           if (p.id !== me.id && p.alive) send(p.ws, { t: 'garbage', count: garbage, from: me.id });
-        broadcast(room, { t: 'log', msg: `${me.name} cleared ${n} lines → +${garbage} to all` });
+        broadcast(room, { t: 'log', msg: firstFour
+          ? `${me.name} got the first 4-line clear → +4 to all and a bonus special`
+          : `${me.name} cleared ${n} lines → +${garbage} to all` });
         break;
       }
       case 'special': {

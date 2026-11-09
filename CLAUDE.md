@@ -16,12 +16,14 @@ plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-dep
 - Every player gets the same piece queue (shared seed from the server).
 - Players can save one piece (C or Shift). Bringing it back swaps it with the current piece; allowed once per piece.
 - Clearing 2/3/4 lines sends 1/2/3 garbage lines to every other living player.
+  Exception: the first 4-line clear of each match sends 4 and gives that player a free random special
+  (never Add Line, Clear Line, Darkness or Haste).
 - Specials are fired at one chosen player by pressing that player's number (1–6). Numbers are
   per viewer: you are always 1 on your own screen (so 1 = yourself), others are 2+ in join order.
   Never apply a special to all players at once.
 - Specials hand is shown in the header right above your board (leftmost fires next). It holds 5; collecting more drops the oldest (next-to-fire) ones. Clearing 3+ lines
   at once collects each special in those lines twice.
-- Specials: A Add Line, C Clear Line, R Random Clear, Q Earthquake, G Gravity, B Blank, H Haste,
+- Specials: A Add Line, C Clear Line, R Random Clear (8 blocks), Q Earthquake, G Gravity, B Blank (3 specials), H Haste,
   D Darkness (target board blacked out ~4s), S Switch, N Nuke. N/G/S are rarer than the rest.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and saves their best
