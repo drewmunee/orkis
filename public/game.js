@@ -20,11 +20,13 @@ const SPECIALS = {
   G: ['Gravity',      '#c8a2ff', 'Drops all blocks down, filling every hole', 1.5],
   B: ['Blank',        '#d0d0d0', 'Turns all special blocks on the target into junk', 3],
   H: ['Haste',        '#ff66d9', 'Target pieces fall 3x faster for 10 seconds', 3],
+  D: ['Darkness',     '#3b3363', 'Blacks out the target board for 4 seconds (only the falling piece stays faintly visible)', 3, '#fff'],
   S: ['Switch',       '#fff36b', 'Switches your whole board with the target', 0.7],
   N: ['Nuke',         '#ffffff', 'Wipes the target board completely clean', 0.7],
 };
 const SP_KEYS = Object.keys(SPECIALS);
-const MAX_INV = 18;
+const MAX_INV = 5; // collecting past this drops the oldest (next-to-fire) specials
+const DARKNESS_MS = 4000;
 const SLOT_COLORS = ['', '#ff5470', '#30d5ff', '#4cde6c', '#ffd23f', '#b45cff', '#ff9a3c'];
 const badge = (n, big) => `<span class="slot${big ? ' big' : ''}" style="background:${SLOT_COLORS[n]}">${n}</span>`;
 // Numbers are per viewer: you are always 1 on your own screen, everyone else is 2, 3, ... in join-slot order.
@@ -42,7 +44,7 @@ let countdownEnd = 0; // game is frozen until this time while 3-2-1 shows on eve
 const countingDown = () => performance.now() < countdownEnd;
 let soloRun = false; // game started with only this player: score goes to the leaderboard
 let held = null, holdUsed = false; // saved piece index; hold allowed once per piece
-let inventory = [], lines = 0, level = 1, hasteUntil = 0;
+let inventory = [], lines = 0, level = 1, hasteUntil = 0, darkUntil = 0;
 let dropAcc = 0, lockAcc = 0, lockResets = 0, lastTime = 0, sendPending = false;
 
 const $ = id => document.getElementById(id);
@@ -113,14 +115,19 @@ function lock() {
   syncBoard();
 }
 function clearLines(collect) {
-  let n = 0;
+  let n = 0; const got = [];
   for (let y = H - 1; y >= 0; y--) {
     if (board[y].every(c => c !== '.')) {
-      if (collect) for (const c of board[y]) if (isSpecial(c) && inventory.length < MAX_INV) inventory.push(c);
+      for (const c of board[y]) if (isSpecial(c)) got.push(c);
       board.splice(y, 1); board.unshift(emptyRow()); n++; y++;
     }
   }
-  if (n && collect) { lines += n; level = 1 + Math.floor(lines / 10); renderInv(); updateStats(); }
+  if (n && collect) {
+    // a 3- or 4-line clear collects each special twice; the hand holds 5, oldest fall off first
+    for (const c of got) for (let k = 0; k < (n >= 3 ? 2 : 1); k++) inventory.push(c);
+    if (inventory.length > MAX_INV) inventory.splice(0, inventory.length - MAX_INV);
+    lines += n; level = 1 + Math.floor(lines / 10); renderInv(); updateStats();
+  }
   return n;
 }
 function garbageRow(withSpecials) {
@@ -175,6 +182,7 @@ function applySpecial(s) {
       break;
     case 'B': board = board.map(r => r.map(c => isSpecial(c) ? '8' : c)); break;
     case 'H': hasteUntil = performance.now() + 10000; break;
+    case 'D': darkUntil = performance.now() + DARKNESS_MS; break;
   }
   if (playing) { fixPiece(); syncBoard(); }
 }
@@ -213,7 +221,7 @@ function die() {
   setStatus('You topped out!');
 }
 function startGame(seed) {
-  board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0;
+  board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0; darkUntil = 0;
   held = null; holdUsed = false;
   playing = true; dropAcc = 0; countdownEnd = performance.now() + COUNTDOWN_MS; spawn(); renderInv(); updateStats(); syncBoard();
   boards.clear();
@@ -234,7 +242,7 @@ function drawCell(c, x, y, size, cx, alpha = 1) {
   if (sp) { cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.lineWidth = 1; cx.strokeRect(x * size + 1.5, y * size + 1.5, size - 3, size - 3); }
   if (!sp && size > 12) { cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(x * size + 1, y * size + 1, size - 2, 4); }
   if (sp) {
-    cx.fillStyle = '#111'; cx.font = `bold ${Math.floor(size * 0.65)}px system-ui`;
+    cx.fillStyle = SPECIALS[c][4] || '#111'; cx.font = `bold ${Math.floor(size * 0.65)}px system-ui`;
     cx.textAlign = 'center'; cx.textBaseline = 'middle';
     cx.fillText(c, x * size + size / 2, y * size + size / 2 + 1);
   }
@@ -260,6 +268,13 @@ function draw() {
     piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(piece.id, piece.x + x, piece.y + y, CELL, ctx); }));
   }
   if (performance.now() < hasteUntil) { ctx.fillStyle = 'rgba(255,102,217,.08)'; ctx.fillRect(0, 0, W * CELL, H * CELL); }
+  // Darkness: black out the stack and ghost (fades in/out), leaving only a faint outline of the falling piece
+  const dark = darkUntil - performance.now();
+  if (playing && dark > 0) {
+    const a = Math.min(1, (DARKNESS_MS - dark) / 250, dark / 400);
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W * CELL, H * CELL); ctx.restore();
+    if (piece) piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(piece.id, piece.x + x, piece.y + y, CELL, ctx, 0.3); }));
+  }
   // 3-2-1 countdown, then a brief GO!
   const left = countdownEnd - performance.now();
   if (playing && left > -600) {
@@ -314,7 +329,7 @@ function renderOpps() {
 }
 function renderInv() {
   const el = $('inv'); el.innerHTML = '';
-  inventory.forEach((s, i) => { const d = document.createElement('div'); d.className = 'sp' + (i === 0 ? ' first' : ''); d.style.background = SPECIALS[s][1]; d.textContent = s; d.title = SPECIALS[s][0]; el.appendChild(d); });
+  inventory.forEach((s, i) => { const d = document.createElement('div'); d.className = 'sp' + (i === 0 ? ' first' : ''); d.style.background = SPECIALS[s][1]; d.style.color = SPECIALS[s][4] || ''; d.textContent = s; d.title = SPECIALS[s][0]; el.appendChild(d); });
   $('invHelp').textContent = inventory.length ? `Next: ${SPECIALS[inventory[0]][0]} — ${SPECIALS[inventory[0]][2]}` : 'Clear lines containing lettered blocks to collect specials.';
 }
 function renderPlayers() {
@@ -437,7 +452,7 @@ $('chat').addEventListener('keydown', e => {
   if (e.key === 'Enter') { if (e.target.value.trim()) net({ t: 'chat', msg: e.target.value }); e.target.value = ''; e.target.blur(); }
   else if (e.key === 'Escape') e.target.blur();
 });
-$('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]}">${k}</span><b>${SPECIALS[k][0]}</b> — ${SPECIALS[k][2]}</li>`).join('');
+$('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]};color:${SPECIALS[k][4] || '#111'}">${k}</span><b>${SPECIALS[k][0]}</b> — ${SPECIALS[k][2]}</li>`).join('');
 try { $('name').value = localStorage.getItem('sw-name') || ''; } catch {}
 $('theme').value = document.documentElement.dataset.theme || 'system';
 $('theme').addEventListener('change', e => {

@@ -18,6 +18,10 @@ plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-dep
 - Specials are fired at one chosen player by pressing that player's number (1–6). Numbers are
   per viewer: you are always 1 on your own screen (so 1 = yourself), others are 2+ in join order.
   Never apply a special to all players at once.
+- Specials hand holds 5; collecting more drops the oldest (next-to-fire) ones. Clearing 3+ lines
+  at once collects each special in those lines twice.
+- Specials: A Add Line, C Clear Line, R Random Clear, Q Earthquake, G Gravity, B Blank, H Haste,
+  D Darkness (target board blacked out ~4s), S Switch, N Nuke. N/G/S are rarer than the rest.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and saves their best
   run per username to the leaderboard shown on the homepage (`GET /api/leaderboard`, top 10).
