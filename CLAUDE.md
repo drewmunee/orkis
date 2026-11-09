@@ -12,13 +12,14 @@ plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-dep
 - **Desktop + keyboard only.** Do not spend effort on phone/touch support or mobile layouts.
   Optimize for people at a computer with a keyboard.
 - Gamepad/controller support would be welcome later, but it is low priority.
+- Boards are 10 wide x 23 tall. The game must fit on screen without scrolling (tested at 1152x720 up to 1920x1080).
 - Every player gets the same piece queue (shared seed from the server).
 - Players can save one piece (C or Shift). Bringing it back swaps it with the current piece; allowed once per piece.
 - Clearing 2/3/4 lines sends 1/2/3 garbage lines to every other living player.
 - Specials are fired at one chosen player by pressing that player's number (1–6). Numbers are
   per viewer: you are always 1 on your own screen (so 1 = yourself), others are 2+ in join order.
   Never apply a special to all players at once.
-- Specials hand holds 5; collecting more drops the oldest (next-to-fire) ones. Clearing 3+ lines
+- Specials hand is shown in the header right above your board (leftmost fires next). It holds 5; collecting more drops the oldest (next-to-fire) ones. Clearing 3+ lines
   at once collects each special in those lines twice.
 - Specials: A Add Line, C Clear Line, R Random Clear, Q Earthquake, G Gravity, B Blank, H Haste,
   D Darkness (target board blacked out ~4s), S Switch, N Nuke. N/G/S are rarer than the rest.

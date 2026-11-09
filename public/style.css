@@ -19,14 +19,22 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:10px; }
 .label { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
 .label small { text-transform:none; letter-spacing:0; }
-#board { display:block; background:var(--well); border:2px solid var(--line); height:clamp(420px, calc(100vh - 120px), 900px); width:auto; aspect-ratio:1 / 2; }
+#board { display:block; background:var(--well); border:2px solid var(--line); height:clamp(420px, calc(100vh - 120px), 1000px); width:auto; aspect-ratio:10 / 23; }
 #left .panel { margin-bottom:0; }
 #mid { width:250px; justify-self:end; }
 #next, #hold { display:block; margin:0 auto; }
 #pieces { display:flex; justify-content:space-around; }
 .stat { margin-top:10px; color:var(--dim); }
 .stat b { color:var(--text); font-size:16px; margin-left:4px; }
-#inv { display:flex; flex-wrap:wrap; gap:3px; min-height:28px; }
+/* specials hand sits in the header right above the board, where the player is already looking */
+#inv { display:flex; gap:4px; margin-left:auto; }
+#inv .sp { width:30px; height:30px; font-size:17px; border-radius:5px; }
+#inv .sp.first { outline:3px solid var(--ring); outline-offset:1px; transform:scale(1.08); }
+#inv .sp.empty { border:2px dashed var(--line); background:transparent; }
+#left .panel { width:min-content; } /* header never wider than the board */
+#mySlot { display:flex; align-items:center; gap:8px; min-width:0; width:0; flex:1; }
+#mySlot .nm { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.label.me { margin-bottom:8px; }
 .sp { width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-weight:800; border-radius:4px; color:#111; }
 .sp.first { outline:2px solid var(--ring); }
 #invHelp { color:var(--dim); font-size:12px; margin-top:6px; min-height:16px; }
@@ -39,14 +47,14 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 #right { height:calc(100vh - 58px); }
 #mid { overflow-y:auto; }
 #right { display:flex; flex-direction:column; gap:10px; width:max-content; justify-self:start; }
-#chatPanel { margin-bottom:0; flex:1; min-height:170px; display:flex; flex-direction:column; width:calc(3 * var(--oppw) + 20px); }
+#chatPanel { margin-bottom:0; height:clamp(150px, 26vh, 240px); display:flex; flex-direction:column; width:calc(3 * var(--oppw) + 20px); }
 #log { flex:1; min-height:0; overflow-y:auto; font-size:13px; margin-bottom:8px; padding-right:4px; }
 #log div { padding:3px 0; overflow-wrap:anywhere; }
 #log .ev { color:var(--dim); font-size:12px; font-style:italic; }
 #log .msg .slot { width:18px; height:18px; font-size:11px; margin-right:5px; vertical-align:-3px; }
 #log .msg .who { font-weight:700; margin-right:6px; }
 #chat { width:100%; }
-#game { --oppw:clamp(90px, calc((100vh - 400px) / 4.4), 140px); }
+#game { --oppw:clamp(80px, calc((100vh - 26vh - 158px) / 4.3), 150px); }
 #opponents { display:grid; grid-template-columns:repeat(3, var(--oppw)); gap:10px; }
 .opp { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px; cursor:pointer; }
 .opp:hover { border-color:var(--accent); }

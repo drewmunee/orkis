@@ -44,9 +44,8 @@
       </div>
     </div>
     <div class="panel">
-      <div class="label">Specials <small>max 5 · D to discard</small></div>
-      <div id="inv"></div>
-      <div class="label" style="margin-top:8px">Fire at <small>press their number</small></div>
+      <div class="label">Specials <small>shown above your board · D to discard</small></div>
+      <div class="label">Fire at <small>press their number</small></div>
       <div id="targets"></div>
       <div id="invHelp"></div>
     </div>
@@ -59,8 +58,8 @@
   </div>
   <div id="left">
     <div class="panel">
-      <div class="label me"><span id="mySlot"></span></div>
-      <canvas id="board" width="300" height="600"></canvas>
+      <div class="label me"><span id="mySlot"></span><div id="inv" title="Your specials (leftmost fires next)"></div></div>
+      <canvas id="board" width="300" height="690"></canvas>
     </div>
   </div>
   <div id="right">

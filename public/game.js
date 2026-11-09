@@ -1,6 +1,6 @@
 // Stackwar client
 (() => {
-const W = 10, H = 20, CELL = 30;
+const W = 10, H = 23, CELL = 30;
 const COLORS = { '1':'#30d5ff', '2':'#ffd23f', '3':'#b45cff', '4':'#4cde6c', '5':'#ff5470', '6':'#3d7bff', '7':'#ff9a3c', '8':'#6b6f8f' };
 const PIECES = [ // id, matrix
   ['1', [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]]],
@@ -329,12 +329,18 @@ function renderOpps() {
 }
 function renderInv() {
   const el = $('inv'); el.innerHTML = '';
-  inventory.forEach((s, i) => { const d = document.createElement('div'); d.className = 'sp' + (i === 0 ? ' first' : ''); d.style.background = SPECIALS[s][1]; d.style.color = SPECIALS[s][4] || ''; d.textContent = s; d.title = SPECIALS[s][0]; el.appendChild(d); });
+  // always show all 5 slots above the board so it's clear how full the hand is; slot 1 is fired next
+  for (let i = 0; i < MAX_INV; i++) {
+    const s = inventory[i], d = document.createElement('div');
+    if (s) { d.className = 'sp' + (i === 0 ? ' first' : ''); d.style.background = SPECIALS[s][1]; d.style.color = SPECIALS[s][4] || ''; d.textContent = s; d.title = SPECIALS[s][0]; }
+    else d.className = 'sp empty';
+    el.appendChild(d);
+  }
   $('invHelp').textContent = inventory.length ? `Next: ${SPECIALS[inventory[0]][0]} — ${SPECIALS[inventory[0]][2]}` : 'Clear lines containing lettered blocks to collect specials.';
 }
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
-  $('mySlot').innerHTML = me ? `${badge(1, true)} ${esc(me.name)}` : '';
+  $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${esc(me.name)}</span>` : '';
   renderTargets();
   $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
   $('startBtn').classList.toggle('hidden', !(myId === hostId && roomState === 'lobby'));
