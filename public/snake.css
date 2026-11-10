@@ -1,8 +1,11 @@
-/* Snakewar: the field fills the window; small translucent panels float over its corners */
+/* Snakewar: the field fills the space between a left column (scoreboard, chat) and a right column
+   (theme, help, held items). snakewar.js keeps the same margins (PAD) when sizing the field. */
 body.snake-page { overflow:hidden; height:100vh; }
 #field { position:fixed; inset:0; width:100vw; height:100vh; display:block; }
-.sw-panel { position:fixed; z-index:5; background:color-mix(in srgb, var(--panel) 82%, transparent); border:1px solid var(--line); border-radius:8px; padding:8px 10px; backdrop-filter:blur(3px); font-size:13px; }
-#hud { top:8px; left:8px; width:220px; }
+.sw-panel { background:color-mix(in srgb, var(--panel) 88%, transparent); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px; }
+
+#leftCol { position:fixed; z-index:5; top:8px; bottom:8px; left:8px; width:236px; display:flex; flex-direction:column; gap:8px; }
+#hud { flex:none; max-height:calc(100% - 150px); overflow-y:auto; }
 .sw-title { font-weight:800; letter-spacing:3px; color:#3ccf6e; margin-bottom:6px; white-space:nowrap; }
 /* full-width, easy-to-hit button at the top of the panel */
 #leaveBtn { display:block; width:100%; margin-bottom:8px; padding:8px 10px; font-size:13px; font-weight:700; text-align:left; background:transparent; color:var(--text); border:1px solid var(--line); border-radius:6px; cursor:pointer; }
@@ -10,24 +13,52 @@ body.snake-page { overflow:hidden; height:100vh; }
 #roomName { color:var(--dim); font-weight:600; letter-spacing:0; font-size:12px; }
 #players div { display:flex; align-items:center; gap:6px; padding:1px 0; }
 #players .dot { width:12px; height:12px; border-radius:3px; flex:none; }
+#players .tm { color:#fff; font-size:9px; font-weight:900; width:14px; height:14px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex:none; }
 #players .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #players .me .nm { font-weight:800; }
 #players .dead { opacity:.4; }
 #players .ln { color:var(--dim); font-variant-numeric:tabular-nums; }
+#modeInfo { color:var(--dim); font-size:12px; margin-top:6px; }
+#modeInfo:empty { display:none; }
 #startBtn { width:100%; margin-top:8px; padding:6px; }
-#status { color:var(--title); font-weight:700; margin-top:4px; }
+#teamBtn { width:100%; margin-top:6px; padding:6px; background:transparent; color:var(--text); border:1px solid var(--line); font-weight:600; font-size:12px; }
+#teamBtn.on { border-color:#2f6bff; box-shadow:inset 4px 0 0 #ff2d2d, inset -4px 0 0 #2f6bff; }
+#status { color:var(--title); font-weight:700; margin-top:6px; }
 #status:empty { display:none; }
-#chatBox { bottom:8px; left:8px; width:300px; }
-#log { height:96px; overflow-y:auto; font-size:12px; margin-bottom:6px; }
+#score { font-size:18px; font-weight:800; margin-top:6px; font-variant-numeric:tabular-nums; }
+#tokens { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); font-weight:700; }
+#tokens .pips { color:#ff4d6d; font-size:20px; letter-spacing:2px; margin-left:6px; vertical-align:-2px; }
+#tokens .off { opacity:.25; }
+#tokens small { display:block; color:var(--dim); font-weight:400; }
+
+#chatBox { margin-top:auto; flex:1 1 auto; min-height:120px; max-height:260px; display:flex; flex-direction:column; }
+#log { flex:1; min-height:0; overflow-y:auto; font-size:12px; margin-bottom:6px; }
 #log div { padding:1px 0; overflow-wrap:anywhere; }
 #log .ev { color:var(--dim); font-style:italic; }
 #log .who { font-weight:700; margin-right:5px; }
 #chat { width:100%; padding:5px 8px; font-size:12px; }
-#corner { position:fixed; top:8px; right:8px; z-index:6; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
-#corner #themeBar { position:static; }
-#snakeHelp { position:static; max-width:300px; font-size:12px; }
+
+#topBar { position:fixed; z-index:5; top:8px; left:252px; right:156px; display:flex; justify-content:center; gap:14px; pointer-events:none; }
+#teamRevives, #shrinkMsg { font-weight:900; font-size:18px; padding:5px 14px; border-radius:20px; background:var(--panel); border:1px solid var(--line); white-space:nowrap; }
+#teamRevives span { margin:0 8px; }
+#teamRevives .red { color:#ff2d2d; } #teamRevives .blue { color:#2f6bff; }
+#shrinkMsg { color:#fff; background:#d9263b; border-color:#d9263b; }
+
+#rightCol { position:fixed; z-index:6; top:8px; right:8px; bottom:8px; width:140px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+#rightCol #themeBar { position:static; justify-content:flex-end; }
+#snakeHelp { font-size:12px; }
+#snakeHelp[open] { position:absolute; top:34px; right:0; width:340px; max-height:calc(100vh - 60px); overflow-y:auto; z-index:7; background:var(--panel); }
 #snakeHelp summary { cursor:pointer; }
 #snakeHelp ul { list-style:none; padding:0; margin:6px 0 0; }
 #snakeHelp li { display:flex; gap:6px; align-items:center; margin:3px 0; }
 #snakeHelp .ic { width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; flex:none; color:#111; font-weight:800; }
-#score { font-size:18px; font-weight:800; margin-top:6px; font-variant-numeric:tabular-nums; }
+
+/* held items: very large so they're readable from the corner of your eye */
+#itemsWrap { margin-top:auto; margin-bottom:auto; }
+.itemsLabel { text-align:center; color:var(--dim); font-size:11px; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; }
+#items { display:flex; flex-direction:column; align-items:center; gap:12px; }
+.item { width:112px; height:112px; border-radius:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:color-mix(in srgb, var(--c) 30%, var(--panel)); border:3px solid var(--c); }
+.item .ic { font-size:60px; line-height:1; font-weight:900; color:var(--text); }
+.item .lb { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:4px; color:var(--text); }
+.item.next { box-shadow:0 0 0 4px var(--panel), 0 0 0 7px var(--c), 0 0 22px var(--c); }
+.item.empty { border:3px dashed var(--line); background:transparent; width:96px; height:96px; }

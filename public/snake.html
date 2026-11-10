@@ -11,21 +11,33 @@
 <body class="snake-page">
 <canvas id="field"></canvas>
 
-<div id="hud" class="sw-panel">
-  <button id="leaveBtn" type="button" title="Leave this room and go back to game and lobby select">‹ Back to lobby</button>
-  <div class="sw-title">SNAKEWAR <span id="roomName"></span></div>
-  <div id="players"></div>
-  <button id="startBtn" class="hidden">Start round</button>
-  <div id="score" class="hidden"></div>
-  <div id="status"></div>
+<!-- left column: scoreboard and controls on top, chat at the bottom; the field never goes under it -->
+<div id="leftCol">
+  <div id="hud" class="sw-panel">
+    <button id="leaveBtn" type="button" title="Leave this room and go back to game and lobby select">‹ Back to lobby</button>
+    <div class="sw-title">SNAKEWAR <span id="roomName"></span></div>
+    <div id="players"></div>
+    <div id="modeInfo"></div>
+    <button id="startBtn" class="hidden">Start round</button>
+    <button id="teamBtn" class="hidden" type="button"></button>
+    <div id="score" class="hidden"></div>
+    <div id="tokens" class="hidden"></div>
+    <div id="status"></div>
+  </div>
+  <div id="chatBox" class="sw-panel">
+    <div id="log"></div>
+    <input id="chat" placeholder="Enter to chat · Esc to play" maxlength="200" autocomplete="off">
+  </div>
 </div>
 
-<div id="chatBox" class="sw-panel">
-  <div id="log"></div>
-  <input id="chat" placeholder="Enter to chat · Esc to play" maxlength="200" autocomplete="off">
+<!-- top center: team revives and the shrinking-board warning -->
+<div id="topBar">
+  <div id="teamRevives" class="hidden"></div>
+  <div id="shrinkMsg" class="hidden"></div>
 </div>
 
-<div id="corner">
+<!-- right column: theme/help, then your held items as big icons -->
+<div id="rightCol">
   <label id="themeBar">Theme
     <select id="theme">
       <option value="system">System</option>
@@ -35,12 +47,13 @@
   </label>
   <details id="snakeHelp" class="sw-panel">
     <summary>How to play</summary>
-    <p><b>Arrows / WASD</b> steer · <b>Space</b> start (host) · <b>Enter</b> chat</p>
-    <p>Playing alone is classic snake: small board, solid walls, +1 per food, and your score (food eaten) is your high score. With 2+ players: each food grows you by 2, food gets more plentiful as the round goes on, and the field is smaller with 2–3 players. The edges wrap around to the other side. Hitting any snake (yourself
-      included) kills you, and your body breaks into food. Last snake alive wins the round.</p>
-    <p>Chat is hidden while you're alive in a round; press <b>Enter</b> to open it.</p>
+    <p><b>Arrows / WASD</b> steer · <b>Space</b> use your next held item (host: start round) · <b>Enter</b> chat</p>
+    <p>Playing alone is classic snake: small board, solid walls, +1 per food, and your score (food eaten) is your high score.</p>
+    <p>With 2+ players: each food grows you by 2 (tiny yellow food by 1), food gets more plentiful as the round goes on, and the edges wrap around. Hitting any snake or blockade kills you and your body breaks into food. If two heads meet face to face both die; if you turn into someone's head from the side, only you die. After 2 minutes, or soon after someone dies, the board starts shrinking (10 s warning, new edge in red); anything left outside is cut off. Last snake (or team) alive wins.</p>
+    <p>Team mode (host's choice): random Red vs Blue. Reds are warm colors, blues are cool colors. Collect revive tokens: every 3 brings a fallen teammate back.</p>
     <ul id="specialList"></ul>
   </details>
+  <div id="itemsWrap"><div class="itemsLabel">Items</div><div id="items"></div></div>
 </div>
 <script src="snakewar.js"></script>
 </body>

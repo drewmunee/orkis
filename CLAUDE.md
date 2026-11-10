@@ -45,23 +45,37 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 
 ## Snakewar
 - Server-authoritative: `snake.js` moves every snake each tick (110 ms), resolves collisions and food,
-  and broadcasts the whole field. Clients only send direction changes and draw.
-- One shared 16:9 field scaled to fill the window. Its size depends on the players in the room when the
-  round starts: 2 players 56x32 (quarter area), 3 players 79x45 (half), 4+ 112x63 (full).
+  and broadcasts the whole field. Clients only send direction changes / item use and draw.
+- Layout: left column (Back to lobby, scoreboard, mode buttons, revive tokens, chat), right column
+  (theme, help, held items as big icons), top center (team revives, shrink warning). The field sizes
+  itself into the space between (`PAD` in `public/snakewar.js` must match `snake.css`).
+- One shared 16:9 field. Its size depends on the players in the room when the round starts:
+  2 players 56x32 (quarter area), 3 players 79x45 (half), 4+ 112x63 (full). Up to 12 per room;
+  lobby code defaults to `lobby` (rooms are separate from Stackwar's).
 - **Solo is classic snake**: 32x18 board, solid walls (no wrap), one food at a time, +1 per food, no
-  special foods. Score = food eaten; best per username goes to `leaderboard.snake` (`snake_leaderboard`
-  table, `GET /api/leaderboard?game=snake`). Not shown on the homepage yet (same as Stackwar's).
-  Up to 12 players per room; lobby code defaults to `lobby` (rooms are separate from Stackwar's).
-- Battle rounds (2+ players) wrap at every edge. Any snake body (including your own) kills; head-on collisions kill both. A dead snake
-  leaves food on every other segment. Last snake alive wins.
-- In battle rounds every food (including what dead snakes leave) grows a snake by 2. Regular food starts at one per
-  player and rises as the round goes on (x2 after 1 min, x3 after 2 min, max x5 / 100).
-- Special foods spawn randomly (max 3, vanish after 15 s): Speed (2 steps/tick for 5 s), Ghost (pass
-  through snakes for 6 s), Feast (+5 length), Shears (every other snake loses 4 segments, never below 3),
-  Double (all growth x2 for 20 s), Slow (every other snake moves at half speed for 5 s).
-  Owner said more special abilities are TBD.
+  special foods, no shrinking. Score = food eaten; best per username goes to `leaderboard.snake`
+  (`snake_leaderboard` table, `GET /api/leaderboard?game=snake`). Not shown on the homepage yet.
+- Battle rounds (2+ players) wrap at the play-area edge. Any snake body or blockade kills; a dead snake
+  leaves food on every other segment. Head contests: face to face both die; if one turned into the
+  other's head from the side, only the turner dies; running into the side of a head kills the mover.
+- Food: regular food and dead-snake drops +2, "tiny food" (cut tails) +1. Regular food starts at one per
+  player and rises through the round (x2 after 1 min, x3 after 2 min, max x5 / 100).
+- **Shrinking board**: 10 s warning (new edge shown in red) starts 2 min in or 3 s after a death; each
+  shrink keeps the middle ~80% (min 24x14), then the next warning comes 30 s later or 3 s after a death.
+  A snake loses everything from its first segment outside the new edge to its tail (that cut part's
+  inside cells become tiny food); a snake whose head is outside dies.
+- Special foods (max 3, vanish after 15 s): Speed (2 steps/tick 5 s; also clears Slow), Ghost (held),
+  Feast (+5), Shears (enemies lose 1/4 of their length, min 3; cut tail -> tiny food), Double (growth x2
+  20 s), Slow (enemies half speed 5 s; an enemy with Speed just loses it), Extendo (8 s tongue 3 squares
+  ahead; enemies whose head touches it die, never hurts you or teammates), Blockade (held: drops 5 tail
+  segments as a permanent wall that kills anyone, ghosts included).
+- Held items (Ghost, Blockade) go into a 3-slot queue shown on the right; Space uses the oldest.
+- **Team mode** (host toggle between rounds): random Red vs Blue each round. Red team = warm shades,
+  blue team = cool shades, plus a team-colored ring on each head. Shears/Slow/Extendo hit the other team
+  only. Revive tokens spawn only in team rounds, rarer as the round goes on; every 3 a team collects =
+  1 revive, used automatically to respawn a dead teammate. Team out = nobody alive. No team score yet.
 - Chat/log is hidden from players who are alive in a round (Enter opens it); it shows for
-  spectators, eliminated players, and between rounds.
+  spectators, eliminated players, and between rounds. It auto-scrolls unless you scrolled up.
 - **The two games must stay isolated.** Each connection belongs to one game for its life (Snakewar
   joins send `game: 'snake'`); they share only `base.css` (theme + base elements) and the `sw-name` /
   `sw-theme` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.

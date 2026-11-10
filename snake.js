@@ -10,7 +10,8 @@ function fieldFor(n) {
   const k = n === 2 ? 0.5 : n === 3 ? Math.SQRT1_2 : 1; // side scale: area 1/4, 1/2, full
   return { w: Math.round(GW * k), h: Math.round(GH * k) };
 }
-const FOOD_GROWTH = 2;              // every food (incl. what dead snakes leave) adds 2 segments
+const FOOD_GROWTH = 2;              // regular food and what dead snakes leave add 2 segments
+const BIT_GROWTH = 1;               // "tiny food" (cut-off tails from Shears / a shrinking board) adds 1
 // Food on the field: one per player at the start, rising steadily as the round goes on
 // (x2 after 1 minute, x3 after 2 ...), capped at FOOD_MAX_MULT x the start and FOOD_CAP overall.
 const FOOD_RAMP_MS = 60000, FOOD_MAX_MULT = 5, FOOD_CAP = 100;
@@ -21,18 +22,35 @@ const START_LEN = 4;
 const SPECIAL_LIFETIME = 15000;    // uneaten special foods vanish after this
 const MAX_SPECIALS = 3;
 const SPECIAL_CHANCE = 1 / 70;     // per tick, while below MAX_SPECIALS (~ one every 8s)
-// Special foods (value = effect duration in ms): speed (2 steps per tick), ghost (pass through snake bodies),
-// feast (+5 length), shears (every other snake loses SHEARS_CUT segments, never below SHEARS_MIN),
-// double (all growth x2), slow (every other snake moves at half speed)
-const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000 };
-const SHEARS_CUT = 4, SHEARS_MIN = 3;
-const SPECIAL_KEYS = Object.keys(SPECIALS);
+// Special foods. Value = effect duration in ms (0 = instant or no timer).
+//  speed: 2 steps per tick · ghost (held): slide through snakes · feast: +5 · shears: enemies lose 1/4 of
+//  their length · double: all growth x2 · slow: enemies move at half speed (cancels their Speed instead)
+//  extendo: a 3-square tongue that kills enemies who run into it · blockade (held): drop 5 tail segments
+//  as a permanent wall · token (team mode only): every 3 a team collects = 1 revive
+const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000, extendo: 8000, blockade: 0, token: 0 };
+const HELD = new Set(['ghost', 'blockade']);   // these go to the player's item queue and are used with Space
+const ITEM_MAX = 3;                            // queue size; collecting more drops the oldest
+const SHEARS_FRAC = 0.25, MIN_LEN = 3;
+const BLOCKADE_LEN = 5, EXTENDO_REACH = 3, TOKENS_PER_REVIVE = 3;
+// Revive tokens (team matches) have their own spawner: about one every 10 s at the start, getting rarer
+// as the round goes on (chance per tick divided by 1 + minutes played), at most 2 on the field.
+const TOKEN_CHANCE = 1 / 90, MAX_TOKENS = 2;
+// Shrinking board (battle rounds only): a 10 s warning starts 2 minutes in, or 3 s after someone dies,
+// whichever comes first; after each shrink the next warning comes 30 s later (or 3 s after a death).
+const SHRINK_FIRST_MS = 120000, SHRINK_AFTER_DEATH_MS = 3000, SHRINK_WARN_MS = 10000, SHRINK_EVERY_MS = 30000;
+const SHRINK_FACTOR = 0.8, SHRINK_MIN_W = 24, SHRINK_MIN_H = 14;
 const DIRS = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] };
 
 const rooms = new Map();
 const cell = (r, x, y) => y * r.w + x;           // cells are numbered per room, since field sizes differ
 const xy = (r, c) => [c % r.w, (c / r.w) | 0];
 const rnd = n => (Math.random() * n) | 0;
+const inBounds = (r, c) => { const [x, y] = xy(r, c), b = r.bounds; return x >= b.x0 && x < b.x1 && y >= b.y0 && y < b.y1; };
+const isReverse = (a, b) => DIRS[a][0] === -DIRS[b][0] && DIRS[a][1] === -DIRS[b][1];
+const alivePlayers = room => [...room.players.values()].filter(p => p.alive);
+// In a team match, effects aimed at "other snakes" only hit the other team.
+const enemies = (room, a, b) => a !== b && !(room.teamMatch && a.team && a.team === b.team);
+const teamName = t => t === 'red' ? 'Red' : 'Blue';
 
 function send(ws, msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); }
 function broadcast(room, msg) { const s = JSON.stringify(msg); for (const p of room.players.values()) if (p.ws.readyState === 1) p.ws.send(s); }
@@ -42,56 +60,70 @@ function freeSlot(room) {
   return 0;
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null }));
 }
-function sendLobby(room) { broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state }); }
+function sendLobby(room) { broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode }); }
 function log(room, msg) { broadcast(room, { t: 'log', msg }); }
+function setField(room, n) {
+  Object.assign(room, fieldFor(n));
+  room.bounds = { x0: 0, y0: 0, x1: room.w, y1: room.h };
+  room.food.clear(); room.drops.clear(); room.bits.clear(); room.specials.clear(); room.walls.clear(); room.shrink = null;
+}
 
 function occupied(room) {
-  const occ = new Set();
+  const occ = new Set(room.walls);
   for (const p of room.players.values()) if (p.alive) for (const c of p.body) occ.add(c);
   return occ;
 }
 function randomFreeCell(room, occ = occupied(room)) {
+  const b = room.bounds;
   for (let i = 0; i < 500; i++) {
-    const c = cell(room, rnd(room.w), rnd(room.h));
-    if (!occ.has(c) && !room.food.has(c) && !room.drops.has(c) && !room.specials.has(c)) return c;
+    const c = cell(room, b.x0 + rnd(b.x1 - b.x0), b.y0 + rnd(b.y1 - b.y0));
+    if (!occ.has(c) && !room.food.has(c) && !room.drops.has(c) && !room.bits.has(c) && !room.specials.has(c)) return c;
   }
   return -1;
 }
 function spawnSnake(room, p, occ) {
-  // find a spot with room to move, pointing toward the middle of the field
-  for (let tries = 0; tries < 300; tries++) {
-    const W = room.w, H = room.h, mx = Math.min(8, W >> 2), my = Math.min(6, H >> 2);
-    const x = mx + rnd(W - 2 * mx), y = my + rnd(H - 2 * my);
-    const dir = Math.abs(x - W / 2) > Math.abs(y - H / 2) ? (x < W / 2 ? 'R' : 'L') : (y < H / 2 ? 'D' : 'U');
+  // find a spot inside the play area with room to move, pointing toward its middle
+  const b = room.bounds, W = b.x1 - b.x0, H = b.y1 - b.y0;
+  for (let tries = 0; tries < 400; tries++) {
+    const mx = Math.min(8, W >> 2), my = Math.min(6, H >> 2);
+    const x = b.x0 + mx + rnd(W - 2 * mx), y = b.y0 + my + rnd(H - 2 * my);
+    const dir = Math.abs(x - (b.x0 + W / 2)) > Math.abs(y - (b.y0 + H / 2)) ? (x < b.x0 + W / 2 ? 'R' : 'L') : (y < b.y0 + H / 2 ? 'D' : 'U');
     const [dx, dy] = DIRS[dir];
     const body = [];
     for (let i = 0; i < START_LEN; i++) body.push(cell(room, x - dx * i, y - dy * i));
-    // keep a clear zone around the new snake
-    let clear = true;
+    let clear = true; // keep a clear zone around the new snake
     for (const c of body) { const [cx, cy] = xy(room, c); for (let ox = -3; ox <= 3 && clear; ox++) for (let oy = -3; oy <= 3; oy++) if (occ.has(cell(room, cx + ox, cy + oy))) { clear = false; break; } }
     if (!clear) continue;
-    p.body = body; p.dir = dir; p.queue = []; p.grow = 0; p.fx = {}; p.alive = true; p.eaten = 0;
+    p.body = body; p.dir = dir; p.queue = []; p.grow = 0; p.fx = {}; p.alive = true; p.items = [];
     for (const c of body) occ.add(c);
-    return;
+    return true;
   }
-  p.alive = false;
+  return false;
 }
 
 function startRound(room) {
   room.state = 'countdown';
-  room.food = new Set(); room.drops = new Set(); room.specials = new Map();
+  room.food = new Set(); room.drops = new Set(); room.bits = new Set(); room.specials = new Map(); room.walls = new Set();
   room.startCount = room.players.size;
   // Solo rounds are classic snake: walls kill, one food at a time, +1 per food, no special foods,
   // and the score (food eaten) goes on the Snakewar high-score board.
   room.classic = room.startCount === 1;
-  Object.assign(room, fieldFor(room.startCount));
+  setField(room, room.startCount);
   room.tickN = 0; room.playStart = Date.now() + COUNTDOWN_MS;
+  room.nextShrinkAt = room.classic ? Infinity : room.playStart + SHRINK_FIRST_MS;
+  // Team mode: shuffle everyone into red and blue (sizes differ by at most one), new teams every round.
+  room.teamMatch = !!room.teamMode && room.startCount >= 2;
+  const order = [...room.players.values()];
+  for (let i = order.length - 1; i > 0; i--) { const j = rnd(i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  order.forEach((p, i) => { p.team = room.teamMatch ? (i % 2 ? 'blue' : 'red') : null; p.eaten = 0; p.inRound = true; });
+  room.teams = { red: { tokens: 0, revives: 0 }, blue: { tokens: 0, revives: 0 } };
   const occ = new Set();
-  for (const p of room.players.values()) spawnSnake(room, p, occ);
+  for (const p of order) if (!spawnSnake(room, p, occ)) p.alive = false;
   topUpFood(room);
-  broadcast(room, { t: 'start', countdown: COUNTDOWN_MS, players: playerList(room) });
+  broadcast(room, { t: 'start', countdown: COUNTDOWN_MS, players: playerList(room), teamMatch: room.teamMatch });
+  if (room.teamMatch) for (const t of ['red', 'blue']) log(room, `${teamName(t)} team: ${order.filter(p => p.team === t).map(p => p.name).join(', ')}`);
   sendState(room);
   sendLobby(room);
   room.timer = setTimeout(() => {
@@ -111,82 +143,204 @@ function topUpFood(room) {
 }
 
 function kill(room, p, why) {
-  p.alive = false;
-  // a dead snake breaks into food: every other segment is left behind
-  p.body.forEach((c, i) => { if (i % 2 === 0) room.drops.add(c); });
+  p.alive = false; p.items = [];
+  // a dead snake breaks into food: every other segment (inside the play area) is left behind
+  p.body.forEach((c, i) => { if (i % 2 === 0 && inBounds(room, c)) room.drops.add(c); });
   log(room, `${p.name} ${why}`);
+  // a death brings the next board shrink closer
+  if (!room.classic && !room.shrink) room.nextShrinkAt = Math.min(room.nextShrinkAt, Date.now() + SHRINK_AFTER_DEATH_MS);
+}
+// Cut a snake's body from index i to the tail; the cut part turns into tiny food.
+function cutTail(room, p, i) {
+  for (const c of p.body.splice(i)) if (inBounds(room, c) && !room.walls.has(c)) room.bits.add(c);
+  p.grow = 0;
+}
+// The tongue: up to EXTENDO_REACH cells straight ahead of the head (stops at blockades)
+function tongueCells(room, p, head) {
+  const out = [], [dx, dy] = DIRS[p.dir], b = room.bounds, W = b.x1 - b.x0, H = b.y1 - b.y0;
+  let [x, y] = xy(room, head);
+  for (let i = 0; i < EXTENDO_REACH; i++) {
+    x += dx; y += dy;
+    if (room.classic && (x < b.x0 || y < b.y0 || x >= b.x1 || y >= b.y1)) break;
+    x = b.x0 + ((x - b.x0) % W + W) % W; y = b.y0 + ((y - b.y0) % H + H) % H;
+    const c = cell(room, x, y);
+    if (room.walls.has(c)) break;
+    out.push(c);
+  }
+  return out;
 }
 
 function step(room, movers) {
-  const occ = new Map(); // cell -> count of snake segments occupying it after tails move
+  const now = Date.now();
+  const occ = new Map(); // cell -> snake occupying it after tails move (blockades count too)
+  for (const c of room.walls) occ.set(c, 'wall');
   for (const p of room.players.values()) if (p.alive) {
     const keepTail = !movers.includes(p) || p.grow > 0;
-    p.body.forEach((c, i) => { if (i < p.body.length - 1 || keepTail) occ.set(c, (occ.get(c) || 0) + 1); });
+    p.body.forEach((c, i) => { if (i < p.body.length - 1 || keepTail) occ.set(c, p); });
   }
   const heads = new Map(); // new head cell -> snakes moving there
   const plan = [];
+  const b = room.bounds, W = b.x1 - b.x0, H = b.y1 - b.y0;
   for (const p of movers) {
-    if (p.queue.length) { const d = p.queue.shift(); if (!isReverse(p.dir, d)) p.dir = d; }
+    p.turned = false;
+    if (p.queue.length) { const d = p.queue.shift(); if (!isReverse(p.dir, d) && d !== p.dir) { p.dir = d; p.turned = true; } }
     const [hx, hy] = xy(room, p.body[0]), [dx, dy] = DIRS[p.dir];
     const nx = hx + dx, ny = hy + dy;
-    if (room.classic && (nx < 0 || ny < 0 || nx >= room.w || ny >= room.h)) { plan.push([p, -1]); continue; } // classic: walls kill
-    // battle rounds wrap: leaving one edge brings you in on the opposite side
-    const nc = cell(room, (nx + room.w) % room.w, (ny + room.h) % room.h);
+    const off = nx < b.x0 || ny < b.y0 || nx >= b.x1 || ny >= b.y1;
+    if (room.classic && off) { plan.push([p, -1]); continue; } // classic: walls kill
+    // battle rounds wrap: leaving one edge of the play area brings you in on the opposite side
+    const nc = cell(room, b.x0 + ((nx - b.x0) % W + W) % W, b.y0 + ((ny - b.y0) % H + H) % H);
     plan.push([p, nc]);
     heads.set(nc, (heads.get(nc) || []).concat(p));
   }
-  const dead = [];
+  const ghost = p => p.fx.ghost > now;
+  const dead = new Map(); // snake -> reason
   for (const [p, nc] of plan) {
-    const ghost = p.fx.ghost > Date.now();
-    if (nc < 0) { dead.push([p, 'hit the wall']); continue; }
-    if (!ghost && occ.has(nc)) {
-      const owner = [...room.players.values()].find(q => q.alive && q.body.includes(nc));
-      dead.push([p, owner === p ? 'ran into themselves' : `crashed into ${owner ? owner.name : 'a snake'}`]); continue;
+    if (nc < 0) { dead.set(p, 'hit the wall'); continue; }
+    const hit = occ.get(nc);
+    if (hit === 'wall') { dead.set(p, 'hit a blockade'); continue; }
+    if (hit && !ghost(p)) {
+      dead.set(p, hit === p ? 'ran into themselves' : `crashed into ${hit.name}`);
+      // swapping heads with a snake coming straight at you is a true head-on: both go
+      if (hit.body[0] === nc && movers.includes(hit) && isReverse(hit.dir, p.dir)) dead.set(hit, `collided head-on with ${p.name}`);
+      continue;
     }
-    const rivals = heads.get(nc).filter(q => q !== p && !(q.fx.ghost > Date.now()));
-    if (!ghost && rivals.length) { dead.push([p, `collided head-on with ${rivals[0].name}`]); continue; }
+    // two heads arriving at the same square: facing each other, both die; otherwise whoever turned
+    // into the other (hit them from the side) dies and the other carries on
+    for (const q of heads.get(nc)) {
+      if (q === p || ghost(p) || ghost(q)) continue;
+      if (isReverse(p.dir, q.dir) || p.turned === q.turned) dead.set(p, `collided head-on with ${q.name}`);
+      else if (p.turned) dead.set(p, `ran into ${q.name}`);
+    }
   }
-  const deadSet = new Set(dead.map(d => d[0]));
+  // Extendo tongues kill enemies whose head ends up on them (ghosts are safe; never your own tongue)
+  const newHead = p => { const e = plan.find(([q]) => q === p); return e && e[1] >= 0 && !dead.has(p) ? e[1] : p.body[0]; };
+  const tongues = [];
+  for (const q of alivePlayers(room)) if (q.fx.extendo > now && !dead.has(q)) tongues.push([q, new Set(tongueCells(room, q, newHead(q)))]);
+  for (const p of alivePlayers(room)) {
+    if (dead.has(p) || ghost(p)) continue;
+    const h = newHead(p);
+    for (const [q, cells] of tongues) if (enemies(room, q, p) && cells.has(h)) { dead.set(p, `got caught by ${q.name}'s tongue`); break; }
+  }
   for (const [p, nc] of plan) {
-    if (deadSet.has(p)) continue;
+    if (dead.has(p)) continue;
     p.body.unshift(nc);
     if (p.grow > 0) p.grow--; else p.body.pop();
-    const x2 = p.fx.double > Date.now() ? 2 : 1; // Double: all growth counts twice
+    const x2 = p.fx.double > now ? 2 : 1; // Double: all growth counts twice
     if (room.food.has(nc)) { room.food.delete(nc); p.eaten++; p.grow += room.classic ? 1 : FOOD_GROWTH * x2; }
     else if (room.drops.has(nc)) { room.drops.delete(nc); p.grow += FOOD_GROWTH * x2; }
+    else if (room.bits.has(nc)) { room.bits.delete(nc); p.grow += BIT_GROWTH * x2; }
     const sp = room.specials.get(nc);
-    if (sp) {
-      room.specials.delete(nc);
-      if (sp.type === 'feast') p.grow += 5 * x2;
-      else if (sp.type === 'shears') {
-        for (const q of room.players.values()) if (q !== p && q.alive) { q.body.splice(Math.max(SHEARS_MIN, q.body.length - SHEARS_CUT)); q.grow = 0; }
-        log(room, `${p.name} grabbed Shears: everyone else loses ${SHEARS_CUT}`);
-      }
-      else if (sp.type === 'slow') {
-        for (const q of room.players.values()) if (q !== p && q.alive) q.fx.slow = Date.now() + SPECIALS.slow;
-        log(room, `${p.name} grabbed Slow: everyone else is slowed`);
-      }
-      else p.fx[sp.type] = Date.now() + SPECIALS[sp.type];
-      broadcast(room, { t: 'ate', id: p.id, special: sp.type });
+    if (sp) { room.specials.delete(nc); pickUp(room, p, sp.type, x2); }
+  }
+  for (const [p, why] of dead) if (p.alive) kill(room, p, why);
+}
+
+function pickUp(room, p, type, x2) {
+  const now = Date.now();
+  if (HELD.has(type)) {
+    p.items.push(type);
+    if (p.items.length > ITEM_MAX) p.items.splice(0, p.items.length - ITEM_MAX);
+  } else if (type === 'feast') p.grow += 5 * x2;
+  else if (type === 'shears') {
+    for (const q of alivePlayers(room)) if (enemies(room, p, q)) {
+      const keep = Math.max(MIN_LEN, q.body.length - Math.floor(q.body.length * SHEARS_FRAC));
+      if (keep < q.body.length) cutTail(room, q, keep);
+    }
+    log(room, `${p.name} grabbed Shears: ${room.teamMatch ? `team ${teamName(p.team === 'red' ? 'blue' : 'red')}` : 'everyone else'} loses a quarter`);
+  } else if (type === 'slow') {
+    // Slow cancels an enemy's Speed instead of slowing them
+    for (const q of alivePlayers(room)) if (enemies(room, p, q)) { if (q.fx.speed > now) delete q.fx.speed; else q.fx.slow = now + SPECIALS.slow; }
+    log(room, `${p.name} grabbed Slow`);
+  } else if (type === 'speed') { delete p.fx.slow; p.fx.speed = now + SPECIALS.speed; } // Speed always works, even when slowed
+  else if (type === 'token') {
+    const t = room.teams[p.team];
+    if (t) {
+      t.tokens++;
+      if (t.tokens >= TOKENS_PER_REVIVE) { t.tokens -= TOKENS_PER_REVIVE; t.revives++; log(room, `Team ${teamName(p.team)} earned a revive!`); }
+    }
+  } else p.fx[type] = now + SPECIALS[type];
+  broadcast(room, { t: 'ate', id: p.id, special: type });
+}
+
+// Use the oldest held item (Space).
+function useItem(room, p) {
+  if (!p.alive || room.state !== 'playing' || !p.items.length) return;
+  const type = p.items[0], now = Date.now();
+  if (type === 'ghost') p.fx.ghost = now + SPECIALS.ghost;
+  else if (type === 'blockade') {
+    const n = Math.min(BLOCKADE_LEN, p.body.length - MIN_LEN);
+    if (n < 1) return send(p.ws, { t: 'note', msg: 'Too short to drop a blockade' });
+    for (const c of p.body.splice(p.body.length - n)) room.walls.add(c);
+    p.grow = Math.max(0, p.grow - n);
+    log(room, `${p.name} dropped a blockade`);
+  }
+  p.items.shift();
+  broadcast(room, { t: 'used', id: p.id, item: type });
+}
+
+// Revives (team mode): a team with a revive banked brings a dead teammate straight back.
+function revive(room) {
+  if (!room.teamMatch) return;
+  for (const t of ['red', 'blue']) {
+    const team = room.teams[t];
+    while (team.revives > 0) {
+      const p = [...room.players.values()].find(q => q.inRound && q.team === t && !q.alive);
+      if (!p || !spawnSnake(room, p, occupied(room))) break;
+      team.revives--;
+      log(room, `${p.name} was revived by team ${teamName(t)}`);
     }
   }
-  for (const [p, why] of dead) kill(room, p, why);
 }
-const isReverse = (a, b) => DIRS[a][0] === -DIRS[b][0] && DIRS[a][1] === -DIRS[b][1];
+
+function shrinkTick(room) {
+  if (room.classic) return;
+  const now = Date.now(), b = room.bounds;
+  if (!room.shrink && now >= room.nextShrinkAt) {
+    const W = b.x1 - b.x0, H = b.y1 - b.y0;
+    const nw = Math.max(SHRINK_MIN_W, Math.round(W * SHRINK_FACTOR)), nh = Math.max(SHRINK_MIN_H, Math.round(H * SHRINK_FACTOR));
+    if (nw >= W && nh >= H) { room.nextShrinkAt = Infinity; return; } // already as small as it gets
+    const x0 = b.x0 + ((W - nw) >> 1), y0 = b.y0 + ((H - nh) >> 1);
+    room.shrink = { at: now + SHRINK_WARN_MS, bounds: { x0, y0, x1: x0 + nw, y1: y0 + nh } };
+    log(room, 'The board shrinks in 10 seconds!');
+  }
+  if (room.shrink && now >= room.shrink.at) {
+    room.bounds = room.shrink.bounds; room.shrink = null; room.nextShrinkAt = now + SHRINK_EVERY_MS;
+    // anything outside the new edge is gone; a snake loses everything from its first segment outside
+    // the edge to its tail, and whatever of that cut part was still inside turns into tiny food
+    for (const p of alivePlayers(room)) {
+      const i = p.body.findIndex(c => !inBounds(room, c));
+      if (i === 0) kill(room, p, 'was caught outside the shrinking board');
+      else if (i > 0) cutTail(room, p, i);
+    }
+    for (const set of [room.food, room.drops, room.bits, room.walls]) for (const c of [...set]) if (!inBounds(room, c)) set.delete(c);
+    for (const c of [...room.specials.keys()]) if (!inBounds(room, c)) room.specials.delete(c);
+    log(room, 'The board shrank!');
+  }
+}
 
 function tick(room) {
-  const alive = () => [...room.players.values()].filter(p => p.alive);
   const now0 = Date.now(), odd = room.tickN++ % 2 === 1;
   const slowed = p => p.fx.slow > now0;
-  step(room, alive().filter(p => !(slowed(p) && odd)));      // slowed snakes skip every other tick
-  const fast = alive().filter(p => p.fx.speed > Date.now() && !slowed(p));
+  step(room, alivePlayers(room).filter(p => !(slowed(p) && odd)));      // slowed snakes skip every other tick
+  const fast = alivePlayers(room).filter(p => p.fx.speed > Date.now() && !slowed(p));
   if (fast.length) step(room, fast);
-  // special foods come and go
+  revive(room);
+  shrinkTick(room);
+  // special foods come and go (revive tokens only appear in team matches)
   const now = Date.now();
   for (const [c, sp] of room.specials) if (sp.until < now) room.specials.delete(c);
-  if (!room.classic && room.specials.size < MAX_SPECIALS && Math.random() < SPECIAL_CHANCE) {
+  const counts = { token: 0, other: 0 };
+  for (const sp of room.specials.values()) counts[sp.type === 'token' ? 'token' : 'other']++;
+  if (!room.classic && counts.other < MAX_SPECIALS && Math.random() < SPECIAL_CHANCE) {
+    const pool = Object.keys(SPECIALS).filter(k => k !== 'token');
     const c = randomFreeCell(room);
-    if (c >= 0) room.specials.set(c, { type: SPECIAL_KEYS[rnd(SPECIAL_KEYS.length)], until: now + SPECIAL_LIFETIME });
+    if (c >= 0) room.specials.set(c, { type: pool[rnd(pool.length)], until: now + SPECIAL_LIFETIME });
+  }
+  const minutes = Math.max(0, now - room.playStart) / 60000;
+  if (room.teamMatch && counts.token < MAX_TOKENS && Math.random() < TOKEN_CHANCE / (1 + minutes)) {
+    const c = randomFreeCell(room);
+    if (c >= 0) room.specials.set(c, { type: 'token', until: now + SPECIAL_LIFETIME });
   }
   topUpFood(room);
   sendState(room);
@@ -196,12 +350,15 @@ function tick(room) {
 function sendState(room) {
   const now = Date.now();
   broadcast(room, {
-    t: 'state', w: room.w, h: room.h, classic: !!room.classic,
-    snakes: [...room.players.values()].filter(p => p.alive).map(p => ({
-      id: p.id, body: p.body, dir: p.dir, eaten: p.eaten || 0,
+    t: 'state', w: room.w, h: room.h, classic: !!room.classic, bounds: room.bounds,
+    shrink: room.shrink ? { left: room.shrink.at - now, bounds: room.shrink.bounds } : null,
+    teams: room.teamMatch && room.state !== 'lobby' ? room.teams : null, // only during a team round
+    snakes: alivePlayers(room).map(p => ({
+      id: p.id, body: p.body, dir: p.dir, eaten: p.eaten || 0, items: p.items,
       fx: Object.fromEntries(Object.entries(p.fx).filter(([, u]) => u > now).map(([k, u]) => [k, u - now])),
+      tongue: p.fx.extendo > now ? tongueCells(room, p, p.body[0]) : undefined,
     })),
-    food: [...room.food], drops: [...room.drops],
+    food: [...room.food], drops: [...room.drops], bits: [...room.bits], walls: [...room.walls],
     specials: [...room.specials].map(([c, sp]) => [c, sp.type, sp.until - now]),
   });
 }
@@ -215,31 +372,46 @@ function recordClassic(room, p = [...room.players.values()][0]) {
     ({ best, rank }) => send(p.ws, { t: 'classic', score, best, rank }),
     err => { console.error('snake leaderboard write failed:', err.message); send(p.ws, { t: 'classic', score, error: true }); });
 }
-function checkRoundOver(room) {
-  if (room.state !== 'playing' && room.state !== 'countdown') return;
-  const alive = [...room.players.values()].filter(p => p.alive);
-  const over = room.startCount > 1 ? alive.length <= 1 : alive.length === 0;
-  if (!over) return;
+function endRound(room, msg) {
   stopRound(room);
   room.state = 'lobby';
-  const winner = room.startCount > 1 ? alive[0] : null;
-  if (winner) { winner.wins++; winner.alive = false; }
-  if (room.classic) recordClassic(room);
-  broadcast(room, { t: 'gameover', winnerId: winner ? winner.id : null, winnerName: winner ? winner.name : null, len: winner ? winner.body.length : 0 });
+  for (const p of room.players.values()) { p.alive = false; p.inRound = false; }
+  broadcast(room, { t: 'gameover', ...msg });
   sendState(room);
   sendLobby(room);
+}
+function checkRoundOver(room) {
+  if (room.state !== 'playing' && room.state !== 'countdown') return;
+  const alive = alivePlayers(room);
+  if (room.teamMatch) {
+    // a team is still in while it has a snake alive (revives are spent the moment someone dies)
+    const teams = new Set(alive.map(p => p.team));
+    if (teams.size > 1) return;
+    const winnerTeam = alive.length ? alive[0].team : null;
+    return endRound(room, { winnerTeam });
+  }
+  const over = room.startCount > 1 ? alive.length <= 1 : alive.length === 0;
+  if (!over) return;
+  const winner = room.startCount > 1 ? alive[0] : null;
+  const len = winner ? winner.body.length : 0;
+  if (winner) winner.wins++;
+  if (room.classic) recordClassic(room);
+  endRound(room, { winnerId: winner ? winner.id : null, winnerName: winner ? winner.name : null, len });
 }
 
 // Called by server.js when a connection joins Snakewar. Returns handlers for that connection.
 function join(ws, id, m) {
   const code = String(m.room || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
   let room = rooms.get(code);
-  if (!room) { room = { code, players: new Map(), hostId: id, state: 'lobby', food: new Set(), drops: new Set(), specials: new Map(), startCount: 0, ...fieldFor(1) }; rooms.set(code, room); }
+  if (!room) {
+    room = { code, players: new Map(), hostId: id, state: 'lobby', food: new Set(), drops: new Set(), bits: new Set(), specials: new Map(), walls: new Set(), startCount: 0, teamMode: false };
+    setField(room, 1); rooms.set(code, room);
+  }
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
-  const me = { id, ws, slot, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, wins: 0 };
+  const me = { id, ws, slot, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null };
   room.players.set(id, me);
-  if (room.state === 'lobby') { Object.assign(room, fieldFor(room.players.size)); room.food.clear(); room.drops.clear(); room.specials.clear(); } // preview the size the next round will use
+  if (room.state === 'lobby') setField(room, room.players.size); // preview the size the next round will use
   send(ws, { t: 'welcome', id, room: code, w: room.w, h: room.h, tick: TICK_MS, specials: SPECIALS });
   sendLobby(room);
   sendState(room);
@@ -250,8 +422,14 @@ function join(ws, id, m) {
       if (m.t === 'dir' && DIRS[m.d] && me.alive && me.queue.length < 3) {
         const last = me.queue.length ? me.queue[me.queue.length - 1] : me.dir;
         if (m.d !== last && !isReverse(last, m.d)) me.queue.push(m.d);
+      } else if (m.t === 'use') {
+        useItem(room, me);
       } else if (m.t === 'start' && me.id === room.hostId && room.state === 'lobby') {
         startRound(room);
+      } else if (m.t === 'teammode' && me.id === room.hostId && room.state === 'lobby') {
+        room.teamMode = !!m.on;
+        for (const p of room.players.values()) p.team = null; // last round's teams no longer apply
+        sendLobby(room);
       } else if (m.t === 'chat') {
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
       }
@@ -261,13 +439,13 @@ function join(ws, id, m) {
       room.players.delete(me.id);
       if (!room.players.size) { stopRound(room); rooms.delete(room.code); return; }
       if (room.hostId === me.id) room.hostId = room.players.values().next().value.id;
-      if (me.alive) { me.alive = false; }
-      log(room, `${me.name} left`);
+      if (me.alive) kill(room, me, 'left');
+      else log(room, `${me.name} left`);
       checkRoundOver(room);
-      if (room.state === 'lobby') { Object.assign(room, fieldFor(room.players.size)); room.food.clear(); room.drops.clear(); room.specials.clear(); sendState(room); }
+      if (room.state === 'lobby') { setField(room, room.players.size); sendState(room); }
       sendLobby(room);
     },
   };
 }
 
-module.exports = { join, _rooms: rooms, _tick: tick }; // _rooms/_tick are for tests
+module.exports = { join, _rooms: rooms, _tick: tick, _useItem: useItem }; // underscored exports are for tests
