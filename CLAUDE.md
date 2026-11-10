@@ -217,9 +217,10 @@ New games must call the same `leaveRoom()` pattern.
   (5 s, stacks: each block a ball breaks also breaks the blocks touching its 4 sides, no chain; a bit
   rarer, weight 2 like Q), S Slow Ball / F Fast Ball (half /
   double speed 10 s), B Big Paddle / T Tiny Paddle (double / half width 10 s; in solo every timed special
-  lasts twice as long, 20 s, except Explosivo which is 7 s), Q Earthquake (shuffles
-  the board, buries specials away from the exposed edge).
-- Solo runs never spawn R (Random), T (Tiny Paddle) or F (Fast Ball) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
+  lasts twice as long, 20 s, except Explosivo which is 10 s), Q Earthquake (shuffles
+  the board, buries specials away from the exposed edge, then knocks 4-6 blocks with open space under them
+  down 1-2 rows toward the paddle, never into the bottom two rows).
+- Solo runs never spawn R (Random), T (Tiny Paddle), F (Fast Ball) or Q (Earthquake) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
   it removes like a break (10, stone 5) and counts toward blocks broken, in every mode; in solo it doesn't
   advance the new-row counter.
 

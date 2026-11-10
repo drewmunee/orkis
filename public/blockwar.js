@@ -23,8 +23,8 @@ const SPECIALS = {
   F: ['Fast Ball', '#ff7b7b', 'doubles ball speed for 10 seconds', 3],
   B: ['Big Paddle', '#4cde6c', 'doubles paddle width for 10 seconds (20 in solo)', 3],
   T: ['Tiny Paddle', '#ff9a3c', 'halves paddle width for 10 seconds', 3],
-  Q: ['Earthquake', '#c8a2ff', 'shuffles the board and buries its specials away from the edge', 2],
-  E: ['Explosivo', '#ff5aa0', 'for 5 seconds (7 in solo) every block the ball breaks also breaks the blocks touching its sides', 2],
+  Q: ['Earthquake', '#c8a2ff', 'shuffles the board, buries its specials away from the edge, and shakes a few blocks down a row or two', 2],
+  E: ['Explosivo', '#ff5aa0', 'for 5 seconds (10 in solo) every block the ball breaks also breaks the blocks touching its sides', 2],
 };
 const SP_KEYS = Object.keys(SPECIALS);
 const SLOT_COLORS = ['', '#ff5470', '#30d5ff', '#4cde6c', '#ffd23f', '#b45cff', '#ff9a3c'];
@@ -57,8 +57,8 @@ const nameOf = id => (players.find(p => p.id === id) || {}).name || '?';
 
 // ---------- seeded random (clear races start on the same board) ----------
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-// Solo runs never spawn Random (stone), Tiny Paddle or Fast Ball blocks; multiplayer gets them all.
-const SOLO_EXCLUDED = 'RTF';
+// Solo runs never spawn Random (stone), Tiny Paddle, Fast Ball or Earthquake blocks; multiplayer gets them all.
+const SOLO_EXCLUDED = 'RTFQ';
 function pickSpecial(rand = Math.random) {
   const keys = mode === 'solo' ? SP_KEYS.filter(k => !SOLO_EXCLUDED.includes(k)) : SP_KEYS;
   const total = keys.reduce((s, k) => s + SPECIALS[k][3], 0);
@@ -144,8 +144,8 @@ const levelMul = () => mode === 'solo' ? 1 + 0.05 * (level - speedLevel) : 1; //
 const now = () => performance.now();
 const paddleW = () => PADDLE_W * (fx.paddle && fx.paddle.until > now() ? fx.paddle.mul : 1);
 const speedMul = () => (fx.speed && fx.speed.until > now() ? fx.speed.mul : 1) * levelMul();
-// solo: timed specials last twice as long (Explosivo 7 s instead of 5)
-const fxMs = () => mode === 'solo' ? FX_MS * 2 : FX_MS, boomMs = () => mode === 'solo' ? 7000 : BOOM_MS;
+// solo: timed specials last twice as long (Explosivo 10 s instead of 5)
+const fxMs = () => mode === 'solo' ? FX_MS * 2 : FX_MS, boomMs = () => mode === 'solo' ? 10000 : BOOM_MS;
 const stackFx = (cur, mul, ms = fxMs()) => ({ mul, until: (cur && cur.mul === mul && cur.until > now() ? cur.until : now()) + ms });
 const exploding = () => !!(fx.boom && fx.boom.until > now());
 function applySpecial(s) {
@@ -212,6 +212,17 @@ function earthquake() {
   const inner = filled.filter(i => !exposed(i) && !SPECIALS[grid[i]]);
   for (const i of filled) if (exposed(i) && SPECIALS[grid[i]] && inner.length) {
     const j = inner.splice((Math.random() * inner.length) | 0, 1)[0]; [grid[i], grid[j]] = [grid[j], grid[i]];
+  }
+  // then the shaking knocks a few loose: 4-6 blocks with open space under them fall 1-2 rows toward the
+  // paddle (never into the bottom two rows)
+  const loose = [];
+  grid.forEach((ch, i) => { const r = (i / COLS) | 0; if (ch !== '.' && r < ROWS - 3 && grid[i + COLS] === '.') loose.push(i); });
+  for (let n = 4 + ((Math.random() * 3) | 0); n > 0 && loose.length; n--) {
+    const i = loose.splice((Math.random() * loose.length) | 0, 1)[0];
+    if (grid[i] === '.' || grid[i + COLS] !== '.') continue; // something already moved here
+    let to = i + COLS;
+    if (Math.random() < 0.5 && ((to / COLS) | 0) < ROWS - 3 && grid[to + COLS] === '.') to += COLS;
+    grid[to] = grid[i]; grid[i] = '.';
   }
 }
 function useSpecial(num) {
