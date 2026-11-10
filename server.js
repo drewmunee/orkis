@@ -134,6 +134,8 @@ wss.on('connection', ws => {
       case 'teammode':
         if (me.id !== room.hostId || room.state !== 'lobby') return;
         room.teamMode = !!m.on;
+        // drop last match's Red/Blue labels so the lobby never shows teams that won't be used
+        for (const p of room.players.values()) p.team = null;
         sendLobby(room);
         break;
       case 'board':

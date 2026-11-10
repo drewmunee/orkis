@@ -356,11 +356,13 @@ function renderPlayers() {
   $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''} ${teamTag(p.team)}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
   const hostInLobby = myId === hostId && roomState === 'lobby';
   $('startBtn').classList.toggle('hidden', !hostInLobby);
-  $('startBtn').textContent = teamMode ? 'Start team game' : 'Start game';
+  const teamReady = teamMode && players.length >= 2; // team mode with one player is just a solo run
+  $('startBtn').textContent = players.length === 1 ? 'Start solo run' : teamReady ? 'Start team game' : 'Start game';
   $('teamBtn').classList.toggle('hidden', !hostInLobby);
   $('teamBtn').textContent = teamMode ? 'Team mode: ON (switch to free-for-all)' : 'Switch to team mode';
   $('teamBtn').classList.toggle('on', teamMode);
-  $('modeInfo').textContent = roomState === 'lobby' ? (teamMode ? 'Next game: Red vs Blue (teams picked at random)' : '') : '';
+  $('modeInfo').textContent = roomState !== 'lobby' ? '' : teamReady ? 'Next game: Red vs Blue (teams picked at random)'
+    : teamMode ? 'Team mode needs 2+ players; starting now is a solo run' : '';
   renderOpps();
 }
 function updateStats() { $('lines').textContent = lines; $('level').textContent = level; }
@@ -396,6 +398,7 @@ function connect(name, room) {
         board = newBoard(); renderInv(); setStatus('Waiting for the host to start…');
         break;
       case 'lobby':
+        if (!!m.teamMode !== teamMode && m.state === 'lobby' && !playing) setStatus(''); // mode switched: last result no longer applies
         players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; renderPlayers();
         if (roomState === 'lobby' && !playing) setStatus($('status').textContent || 'Waiting for the host to start…');
         break;
