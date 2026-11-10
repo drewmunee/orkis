@@ -126,8 +126,9 @@ New games must call the same `leaveRoom()` pattern.
 - Special foods (max 3, vanish after 15 s): Speed (2 steps/tick 5 s; also clears Slow), Ghost (held: 6 s
   through snakes and blockades, immune to other players' Shears/Slow/Bomb/Extendo), Feast (worth +5, +5
   more per minute played when it appears; grows +1 every 3 s; never vanishes; max 2, outside the 3-cap), Shears (enemies lose 1/4 of their length, min 3; cut tail -> tiny food), Double (growth x2
-  20 s), Slow (enemies half speed 5 s; an enemy with Speed just loses it), Extendo (8 s tongue 3 squares
-  ahead; enemies whose head touches it die, never hurts you or teammates), Blockade (held: drops 5 tail
+  20 s), Slow (enemies half speed 5 s; an enemy with Speed just loses it), Extendo (12 s tongue 5 squares
+  ahead; enemies whose head touches it die, never hurts you or teammates; it also eats food, remains and
+  tiny food it touches, not special items), Blockade (held: drops 5 tail
   segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
   Bomb (held: dropped out of your tail, explodes after 5 s with radius 5, the exact squares shown on the field: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).

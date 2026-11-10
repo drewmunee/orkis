@@ -30,15 +30,15 @@ const SPECIAL_CHANCE = 1 / 70;     // per tick, while below MAX_SPECIALS (~ one 
 //  feast: worth 5 more for every minute the round has run when it appears (+5, +10, +15 ...), grows +1 every
 //  3 s while it waits, and never vanishes · shears: enemies lose 1/4 of
 //  their length · double: all growth x2 · slow: enemies move at half speed (cancels their Speed instead)
-//  extendo: a 3-square tongue that kills enemies who run into it · blockade (held): drop 5 tail segments
+//  extendo: a 5-square tongue that kills enemies who run into it and eats food it touches · blockade (held): drop 5 tail segments
 //  as a permanent wall · token (team mode only): every 3 a team collects = 1 revive
 //  bomb (held): dropped at your head, explodes after 5 s; everything within its radius is destroyed
 //  (food, specials, blockades) and every snake with any part inside loses a quarter of its length
-const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000, extendo: 8000, blockade: 0, bomb: 0, token: 0 };
+const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000, extendo: 12000, blockade: 0, bomb: 0, token: 0 };
 const HELD = new Set(['ghost', 'blockade', 'bomb']);   // these go to the player's item queue and are used with Space
 const ITEM_MAX = 3;                            // queue size; collecting more drops the oldest
 const SHEARS_FRAC = 0.25, MIN_LEN = 3;
-const BLOCKADE_LEN = 5, EXTENDO_REACH = 3, TOKENS_PER_REVIVE = 3;
+const BLOCKADE_LEN = 5, EXTENDO_REACH = 5, TOKENS_PER_REVIVE = 3;
 const MAX_BLOCKADES = 5;                       // placing a 6th removes the oldest
 const BOMB_FUSE_MS = 5000, BOMB_RADIUS = 5;
 const FFA_COLORS = 12, TEAM_SHADES = 6;        // palette sizes (the colors themselves live in the client)
@@ -281,6 +281,17 @@ function step(room, movers) {
     p.maxLen = Math.max(p.maxLen || 0, p.body.length + p.grow);
     const sp = room.specials.get(nc);
     if (sp) { room.specials.delete(nc); pickUp(room, p, sp, x2); }
+  }
+  // Extendo also slurps up any food its tongue touches (food, remains and tiny food; not special items),
+  // exactly as if the snake had eaten it
+  for (const p of alivePlayers(room)) {
+    if (!(p.fx.extendo > now) || dead.has(p)) continue;
+    const x2 = p.fx.double > now ? 2 : 1;
+    for (const c of tongueCells(room, p, p.body[0])) {
+      if (room.food.has(c)) { room.food.delete(c); p.eaten++; p.grow += FOOD_GROWTH * x2; stats.add(p, 'snakewar', { food: 1, tongue_food: 1 }); }
+      else if (room.drops.has(c)) { room.drops.delete(c); p.grow += FOOD_GROWTH * x2; stats.add(p, 'snakewar', { food: 1, remains_eaten: 1, tongue_food: 1 }); }
+      else if (room.bits.has(c)) { room.bits.delete(c); p.grow += BIT_GROWTH * x2; stats.add(p, 'snakewar', { food: 1, tiny_food: 1, tongue_food: 1 }); }
+    }
   }
   for (const [p, d] of dead) if (p.alive) kill(room, p, d.why, d);
 }

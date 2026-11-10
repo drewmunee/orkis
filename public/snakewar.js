@@ -16,7 +16,7 @@ const SPECIAL_INFO = {
   shears: { name: 'Shears', icon: '✂', color: '#ff7b7b', desc: 'enemy snakes lose a quarter of their length; the cut tails become tiny food' },
   double: { name: 'Double', icon: 'x2', color: '#7bffb0', desc: 'all growth counts double for 20 seconds' },
   slow: { name: 'Slow', icon: '🐌', color: '#a0c4ff', desc: 'enemies move at half speed for 5 seconds (a sped-up enemy just loses its Speed)' },
-  extendo: { name: 'Extendo', icon: '👅', color: '#ff8fb1', desc: 'an 8-second tongue reaching 3 squares ahead; enemies who touch it die' },
+  extendo: { name: 'Extendo', icon: '👅', color: '#ff8fb1', desc: 'a 12-second tongue reaching 5 squares ahead: enemies who run into it die, and it eats any food it touches' },
   blockade: { name: 'Blockade', icon: '▦', color: '#aab0c4', desc: 'held item: press Space to drop 5 tail segments as a wall (max 5 on the board; ghosts pass through)' },
   bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 5 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
   token: { name: 'Revive token', icon: '♥', color: '#ff4d6d', desc: 'team mode only: every 3 your team collects earns a revive' },

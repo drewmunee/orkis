@@ -15,7 +15,7 @@ const LAYOUT = {
     ['Games', [['played', 'Games played'], ['wins_ffa', 'Free-for-all wins'], ['wins_team', 'Team wins'], ['ffa_games', 'Free-for-all games'], ['team_games', 'Team games'], ['classic_runs', 'Classic solo runs']]],
     ['Hunting', [['kills', 'Kills'], [s => s.deaths ? (s.kills || 0) / s.deaths : (s.kills || 0), 'Kills per death', 'ratio'], ['tongue_kills', 'Tongue kills'], ['blockade_kills', 'Blockade kills'], ['bomb_hits', 'Snakes bombed'], ['longest', 'Longest snake', 'best']]],
     ['Deaths', [['deaths', 'Deaths'], ['deaths_self', 'Ran into yourself'], ['deaths_snake', 'Killed by a snake'], ['deaths_head_on', 'Head-on crashes'], ['deaths_tongue', 'Caught by a tongue'], ['deaths_blockade', 'Hit a blockade'], ['deaths_shrink', 'Caught by the shrink'], ['deaths_wall', 'Hit the wall (classic)'], ['bombed', 'Times bombed']]],
-    ['Eating & items', [['food', 'Food eaten'], ['remains_eaten', 'Snake remains eaten'], ['tiny_food', 'Tiny food eaten'], ['specials', 'Specials picked up'], ['ghosts_used', 'Ghosts used'], ['blockades_placed', 'Blockades placed'], ['bombs_dropped', 'Bombs dropped'], ['best_classic', 'Best classic score', 'best']]],
+    ['Eating & items', [['food', 'Food eaten'], ['remains_eaten', 'Snake remains eaten'], ['tiny_food', 'Tiny food eaten'], ['tongue_food', 'Food licked up (Extendo)'], ['specials', 'Specials picked up'], ['ghosts_used', 'Ghosts used'], ['blockades_placed', 'Blockades placed'], ['bombs_dropped', 'Bombs dropped'], ['best_classic', 'Best classic score', 'best']]],
     ['Team play', [['tokens', 'Revive tokens'], ['revives_earned', 'Revives earned'], ['times_revived', 'Times revived']]],
   ] },
   blockwar: { title: 'BLOCKWAR', sections: [
