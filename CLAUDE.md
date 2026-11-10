@@ -149,8 +149,10 @@ New games must call the same `leaveRoom()` pattern.
 - One shared 16:9 field. Its size depends on the players in the room when the round starts:
   2 players 56x32 (quarter area), 3 players 79x45 (half), 4+ 112x63 (full). Up to 12 per room;
   lobby code defaults to `lobby` (rooms are separate from Stackwar's).
-- **Solo is classic snake**: 32x18 board, solid walls (no wrap), one food at a time, +1 per food, no
-  special foods, no shrinking. Score = food eaten; best per username goes to `leaderboard.snake`
+- **Solo is classic snake**: 32x18 board, solid walls (no wrap), +1 per food, no special foods, no
+  shrinking. Starts with one food on the board; every 30 eaten adds one more (max 3), and every 45 eaten
+  speeds the game up 1.25x (compounding, tick never under 30 ms; the server restarts its tick timer and
+  logs "Speed up!"). Score = food eaten; best per username goes to `leaderboard.snake`
   (`GET /api/leaderboard?game=snakewar`).
 - Battle rounds (2+ players) wrap at the play-area edge. Any snake body or blockade kills; a dead snake
   leaves food on every other segment. Head contests: face to face both die; if one turned into the

@@ -19,6 +19,10 @@ const BIT_GROWTH = 1;               // "tiny food" (cut-off tails from Shears / 
 // (x2 after 1 minute, x3 after 2 ...), capped at FOOD_MAX_MULT x the start and FOOD_CAP overall.
 const FOOD_RAMP_MS = 60000, FOOD_MAX_MULT = 5, FOOD_CAP = 100;
 const TICK_MS = 110;               // one step per tick (two while Speed is active)
+// Classic solo ramps up: one more food on the board per 30 eaten (max 3), and 1.25x game speed per 45 eaten
+const CLASSIC_FOOD_EVERY = 30, CLASSIC_FOOD_MAX = 3, CLASSIC_SPEED_EVERY = 45, CLASSIC_SPEED_MUL = 1.25, MIN_TICK_MS = 30;
+const soloEaten = room => Math.max(0, ...[...room.players.values()].map(p => (p.inRound && p.eaten) || 0));
+const tickMs = room => room.classic ? Math.max(MIN_TICK_MS, TICK_MS / CLASSIC_SPEED_MUL ** Math.floor(soloEaten(room) / CLASSIC_SPEED_EVERY)) : TICK_MS;
 const COUNTDOWN_MS = 3000;
 const MAX_PLAYERS = 12;
 const START_LEN = 4;
@@ -158,13 +162,18 @@ function startRound(room) {
   sendLobby(room);
   room.timer = setTimeout(() => {
     room.state = 'playing';
-    room.timer = setInterval(() => tick(room), TICK_MS);
+    room.tickMs = tickMs(room);
+    room.timer = setInterval(() => tick(room), room.tickMs);
   }, COUNTDOWN_MS);
 }
 function stopRound(room) { clearTimeout(room.timer); clearInterval(room.timer); room.timer = null; }
 
 function topUpFood(room) {
-  if (room.classic) { if (!room.food.size) { const c = randomFreeCell(room); if (c >= 0) room.food.add(c); } return; }
+  if (room.classic) {
+    const want = Math.min(CLASSIC_FOOD_MAX, 1 + Math.floor(soloEaten(room) / CLASSIC_FOOD_EVERY));
+    while (room.food.size < want) { const c = randomFreeCell(room); if (c < 0) break; room.food.add(c); }
+    return;
+  }
   const base = Math.max(1, room.startCount || room.players.size);
   const mult = Math.min(FOOD_MAX_MULT, 1 + Math.max(0, Date.now() - (room.playStart || Date.now())) / FOOD_RAMP_MS);
   const want = Math.min(FOOD_CAP, Math.floor(base * mult));
@@ -422,6 +431,13 @@ function tick(room) {
   step(room, alivePlayers(room).filter(p => !(slowed(p) && odd)));      // slowed snakes skip every other tick
   const fast = alivePlayers(room).filter(p => p.fx.speed > Date.now() && !slowed(p));
   if (fast.length) step(room, fast);
+  // classic solo speeds up as you eat: restart the timer at the new pace
+  if (room.timer && room.state === 'playing' && tickMs(room) !== room.tickMs) {
+    clearInterval(room.timer);
+    room.tickMs = tickMs(room);
+    room.timer = setInterval(() => tick(room), room.tickMs);
+    if (room.classic) log(room, `Speed up! (${(TICK_MS / room.tickMs).toFixed(2).replace(/\.?0+$/, '')}x)`);
+  }
   revive(room);
   bombTick(room);
   shrinkTick(room);
