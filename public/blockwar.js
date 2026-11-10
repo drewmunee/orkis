@@ -227,7 +227,7 @@ function earthquake() {
     grid[to] = grid[i]; grid[i] = '.';
   }
 }
-// Multiplayer attacks (Add Line, and a row for every 12 blocks an opponent breaks): everything moves down
+// Multiplayer attacks (Add Line, and a row for every 24 blocks an opponent breaks): everything moves down
 // and new rows come in at the top. Blocks never get pushed past the bottom row: a board already full to
 // the bottom takes no more rows.
 let rowsReceived = 0;
@@ -491,7 +491,7 @@ function connect() {
         startMatch(m.seed, m.mode); renderPlayers(); break;
       case 'board': others.set(m.id, m); drawOpps(); break;
       case 'special': applySpecial(m.special); break;
-      case 'addrows': addRows(Math.min(5, m.n | 0)); break; // an opponent broke another 12 blocks
+      case 'addrows': addRows(Math.min(5, m.n | 0)); break; // an opponent broke another 24 blocks
       case 'used': { const sp = SPECIALS[m.special]; log(`${nameOf(m.from)} → ${m.from === m.to ? 'self' : nameOf(m.to)}: ${sp ? sp[0] : m.special}`); flash(m.to); break; }
       case 'dead': { const p = players.find(q => q.id === m.id); if (p) p.alive = false; renderPlayers(); break; }
       case 'gameover': {

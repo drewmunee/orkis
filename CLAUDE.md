@@ -206,7 +206,7 @@ New games must call the same `leaveRoom()` pattern.
   losing a life resets the ball to its starting speed in every mode, and in solo the level stays but only
   levels gained after that speed it up again). From level 2, new solo rows mix in stone: 6% of blocks,
   +3% per level, max 30% (`soloRockRate`); over when blocks reach the bottom row or lives run out.
-  **Multiplayer (both modes)**: every 12 blocks a player breaks adds a row to every other living player's
+  **Multiplayer (both modes)**: every 24 blocks a player breaks adds a row to every other living player's
   board (server counts from the snapshot `broken` totals, `ROW_EVERY` in `block.js`, sends `addrows`);
   rows push everything down and come in at the top; a board already full to the bottom row takes no more.
   **Clear race**: identical boards, first to clear every block wins, unlimited lives (misses just cost

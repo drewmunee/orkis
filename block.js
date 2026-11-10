@@ -3,14 +3,14 @@
 //   solo  (1 player): endless; the client reports when it's over
 //   clear (2+): everyone gets the same board; the first to clear every block wins
 //   lives (2+): 3 lives each; the last player with lives left wins
-// In both multiplayer modes every 12 blocks a player breaks adds a row to everyone else's board.
+// In both multiplayer modes every 24 blocks a player breaks adds a row to everyone else's board.
 const leaderboard = require('./leaderboard');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
 const stats = require('./stats');
 const MAX_PLAYERS = 6;
 const MODES = ['clear', 'lives'];
-const ROW_EVERY = 12; // blocks broken per row added to opponents' boards
+const ROW_EVERY = 24; // blocks broken per row added to opponents' boards
 const rooms = new Map();
 
 function send(ws, msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); }
@@ -108,7 +108,7 @@ function join(ws, id, m) {
             if (broken) stats.add(me, 'blockwar', 'blocks', broken);
             if (lost) stats.add(me, 'blockwar', 'lives_lost', lost);
             me.tally = { broken: me.tally.broken + broken, lost: me.tally.lost + lost };
-            // multiplayer: every 12 blocks you break adds a row to every other living player's board
+            // multiplayer: every 24 blocks you break adds a row to every other living player's board
             const rows = room.matchMode !== 'solo' && me.alive ? Math.floor(me.tally.broken / ROW_EVERY) - me.rowsSent : 0;
             if (rows > 0) {
               me.rowsSent += rows;
