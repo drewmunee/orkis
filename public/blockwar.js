@@ -56,10 +56,13 @@ const nameOf = id => (players.find(p => p.id === id) || {}).name || '?';
 
 // ---------- seeded random (clear races start on the same board) ----------
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// Solo runs never spawn Random (stone) or Tiny Paddle blocks; multiplayer gets them all.
+const SOLO_EXCLUDED = 'RT';
 function pickSpecial(rand = Math.random) {
-  const total = SP_KEYS.reduce((s, k) => s + SPECIALS[k][3], 0);
+  const keys = mode === 'solo' ? SP_KEYS.filter(k => !SOLO_EXCLUDED.includes(k)) : SP_KEYS;
+  const total = keys.reduce((s, k) => s + SPECIALS[k][3], 0);
   let r = rand() * total;
-  for (const k of SP_KEYS) { r -= SPECIALS[k][3]; if (r < 0) return k; }
+  for (const k of keys) { r -= SPECIALS[k][3]; if (r < 0) return k; }
   return SP_KEYS[0];
 }
 
@@ -136,8 +139,11 @@ function applySpecial(s) {
   if (!playing) return;
   switch (s) {
     case 'R': addRock(); break;
-    case 'C': { // lowest row with anything in it
-      for (let r = ROWS - 1; r >= 0; r--) if (grid.slice(idx(r, 0), idx(r, COLS)).some(ch => ch !== '.')) { for (let c = 0; c < COLS; c++) grid[idx(r, c)] = '.'; break; }
+    case 'C': { // lowest row with anything in it; its blocks score as if you'd broken them
+      for (let r = ROWS - 1; r >= 0; r--) if (grid.slice(idx(r, 0), idx(r, COLS)).some(ch => ch !== '.')) {
+        for (let c = 0; c < COLS; c++) { const ch = grid[idx(r, c)]; if (ch !== '.') { score += ch === 'z' ? 5 : 10; brokenCount++; } grid[idx(r, c)] = '.'; }
+        break;
+      }
       if (!blocksLeft()) boardCleared();
       break;
     }

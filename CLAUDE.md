@@ -179,6 +179,9 @@ New games must call the same `leaveRoom()` pattern.
   stalactite), C Clear Line (lowest row), M Multiball (doubles balls), S Slow Ball / F Fast Ball (half /
   double speed 10 s), B Big Paddle / T Tiny Paddle (double / half width 10 s), Q Earthquake (shuffles
   the board, buries specials away from the exposed edge).
+- Solo runs never spawn R (Random) or T (Tiny Paddle) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
+  it removes like a break (10, stone 5) and counts toward blocks broken, in every mode; in solo it doesn't
+  advance the new-row counter.
 
 ## Roadmap (from the owner)
 **Planned**
