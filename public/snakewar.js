@@ -182,6 +182,13 @@ function fit() {
 }
 const cx = c => view.ox + (c % GW) * view.cs, cy = c => view.oy + ((c / GW) | 0) * view.cs;
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
+// Squares a bomb at cell c hits: within radius r (squared distance, like the server), inside the field
+function blastTiles(c, r) {
+  const bx = c % GW, by = (c / GW) | 0, out = [];
+  for (let y = by - r; y <= by + r; y++) for (let x = bx - r; x <= bx + r; x++)
+    if ((x - bx) ** 2 + (y - by) ** 2 <= r * r && x >= 0 && y >= 0 && x < GW && y < GH) out.push([x, y]);
+  return out;
+}
 const rectOf = b => [view.ox + b.x0 * view.cs, view.oy + b.y0 * view.cs, (b.x1 - b.x0) * view.cs, (b.y1 - b.y0) * view.cs];
 
 function draw() {
@@ -221,9 +228,19 @@ function draw() {
   // bombs: blast radius and fuse countdown
   for (const [c, left, r] of state.bombs || []) {
     const bx = cx(c) + cs / 2, by = cy(c) + cs / 2, urgent = left < 1500;
-    ctx.fillStyle = `rgba(255,70,40,${urgent ? 0.18 + 0.12 * Math.sin(now / 60) : 0.14})`;
-    ctx.beginPath(); ctx.arc(bx, by, (r + 0.5) * cs, 0, 7); ctx.fill();
-    ctx.strokeStyle = '#ff4628'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+    // exactly the squares the blast will hit (same rule as the server), tinted, with a solid outline
+    const tiles = blastTiles(c, r), hitSet = new Set(tiles.map(([x, y]) => x + ',' + y));
+    ctx.fillStyle = `rgba(255,70,40,${urgent ? 0.3 + 0.15 * Math.sin(now / 60) : 0.24})`;
+    for (const [x, y] of tiles) ctx.fillRect(view.ox + x * cs, view.oy + y * cs, cs, cs);
+    ctx.strokeStyle = '#ff3b1f'; ctx.lineWidth = 2; ctx.beginPath();
+    for (const [x, y] of tiles) {
+      const X = view.ox + x * cs, Y = view.oy + y * cs;
+      if (!hitSet.has(x + ',' + (y - 1))) { ctx.moveTo(X, Y); ctx.lineTo(X + cs, Y); }
+      if (!hitSet.has(x + ',' + (y + 1))) { ctx.moveTo(X, Y + cs); ctx.lineTo(X + cs, Y + cs); }
+      if (!hitSet.has((x - 1) + ',' + y)) { ctx.moveTo(X, Y); ctx.lineTo(X, Y + cs); }
+      if (!hitSet.has((x + 1) + ',' + y)) { ctx.moveTo(X + cs, Y); ctx.lineTo(X + cs, Y + cs); }
+    }
+    ctx.stroke();
     // icon and countdown keep a readable size even when the field's squares are small
     const icon = Math.max(22, cs * 1.6), num = Math.max(20, cs * 1.5);
     { // drawn bomb (not an emoji, so it looks the same everywhere): black ball, fuse, flickering spark
@@ -240,7 +257,8 @@ function draw() {
   }
   for (const f of booms) {
     const k = (now - f.t) / 450; if (k > 1) continue;
-    ctx.fillStyle = `rgba(255,190,60,${0.6 * (1 - k)})`; ctx.beginPath(); ctx.arc(cx(f.cell) + cs / 2, cy(f.cell) + cs / 2, (f.r + 0.5) * cs * (0.6 + 0.4 * k), 0, 7); ctx.fill();
+    ctx.fillStyle = `rgba(255,190,60,${0.75 * (1 - k)})`;
+    for (const [x, y] of blastTiles(f.cell, f.r)) ctx.fillRect(view.ox + x * cs, view.oy + y * cs, cs, cs);
   }
   // special foods pulse, and blink during their last 3 seconds
   for (const [c, type, left] of state.specials) {

@@ -69,7 +69,7 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
   20 s), Slow (enemies half speed 5 s; an enemy with Speed just loses it), Extendo (8 s tongue 3 squares
   ahead; enemies whose head touches it die, never hurts you or teammates), Blockade (held: drops 5 tail
   segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
-  Bomb (held: dropped at your head, explodes after 5 s with radius 4: destroys food, specials and
+  Bomb (held: dropped at your head, explodes after 5 s with radius 4, the exact squares shown on the field: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
 - Held items (Ghost, Blockade, Bomb) go into a 3-slot queue shown on the right; Space uses the oldest.
 - Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
