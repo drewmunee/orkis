@@ -95,7 +95,9 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #titleText.slide-l { animation:slideL .25s ease-out; }
 @keyframes slideR { from { transform:translateX(40%); opacity:0; } to { transform:none; opacity:1; } }
 @keyframes slideL { from { transform:translateX(-40%); opacity:0; } to { transform:none; opacity:1; } }
-.pick { font-size:34px; line-height:1; width:48px; height:48px; border-radius:50%; padding:0; background:var(--panel); color:var(--text); border:1px solid var(--line); }
+/* arrows are drawn as SVG chevrons so they sit exactly in the middle of the circle */
+.pick { width:48px; height:48px; border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center; flex:none; background:var(--panel); color:var(--text); border:1px solid var(--line); }
+.pick svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
 .pick:hover { border-color:var(--accent); }
 #gameDots { display:flex; justify-content:center; gap:8px; margin-top:8px; }
 #gameDots span { width:8px; height:8px; border-radius:50%; background:var(--line); }

@@ -32,6 +32,8 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and saves their best
   run per username to the leaderboard shown on the homepage (`GET /api/leaderboard`, top 10).
+  The homepage leaderboard is **hidden for now** (`SHOW_LEADERBOARD = false` in `public/game.js`) until
+  the Neon database is set up; scores are still recorded. Flip it to `true` to show it again.
 - **Leaderboard storage** (`leaderboard.js`): Postgres when `DATABASE_URL` is set (required on Render,
   whose filesystem is wiped on every restart/redeploy); otherwise `data/leaderboard.json` for local play.
 - The light/dark theme is chosen with the Theme dropdown (System/Dark/Light), saved per browser.

@@ -42,6 +42,9 @@ let board, piece, queue, rng, playing = false;
 const COUNTDOWN_MS = 3000;
 let countdownEnd = 0; // game is frozen until this time while 3-2-1 shows on every board
 const countingDown = () => performance.now() < countdownEnd;
+// The solo leaderboard keeps recording scores, but stays off screen until a database (Neon) is set up.
+// Flip this to true to show it on the homepage and mention ranks after solo runs.
+const SHOW_LEADERBOARD = false;
 let soloRun = false; // game started with only this player: score goes to the leaderboard
 let held = null, holdUsed = false; // saved piece index; hold allowed once per piece
 let inventory = [], lines = 0, level = 1, hasteUntil = 0, darkUntil = 0;
@@ -416,7 +419,8 @@ function connect(name, room) {
       } break;
       case 'solo': {
         const nl = n => `${n} line${n === 1 ? '' : 's'}`;
-        const msg = m.error ? `Solo run over: ${nl(m.lines)} (couldn't save to the leaderboard)`
+        const msg = !SHOW_LEADERBOARD ? `Solo run over: ${nl(m.lines)}` + (m.lines && m.lines >= m.best ? ', a personal best!' : m.best > m.lines ? `. Your best is ${m.best}` : '')
+          : m.error ? `Solo run over: ${nl(m.lines)} (couldn't save to the leaderboard)`
           : !m.lines ? 'Solo run over: no lines cleared'
           : m.lines >= m.best ? `Solo run over: ${nl(m.lines)}, a personal best! #${m.rank} on the leaderboard`
           : `Solo run over: ${nl(m.lines)}. Your best is ${m.best} (#${m.rank} on the leaderboard)`;
@@ -455,7 +459,7 @@ function showGame(dir) {
   t.textContent = g.title; t.dataset.game = g.id;
   if (dir) { t.classList.remove('slide-l', 'slide-r'); void t.offsetWidth; t.classList.add(dir < 0 ? 'slide-l' : 'slide-r'); }
   $('gameDots').innerHTML = GAMES.map((_, i) => `<span class="${i === gameIdx ? 'on' : ''}"></span>`).join('');
-  $('leaderboard').classList.toggle('hidden', g.id !== 'stackwar'); // the leaderboard is Stackwar's solo mode
+  $('leaderboard').classList.toggle('hidden', !SHOW_LEADERBOARD || g.id !== 'stackwar'); // Stackwar's solo mode
   $('help').classList.toggle('hidden', g.id !== 'stackwar');
   document.title = g.title[0] + g.title.slice(1).toLowerCase();
   try { localStorage.setItem('sw-game', g.id); } catch {}
