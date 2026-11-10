@@ -49,7 +49,7 @@ body.snake-page { overflow:hidden; height:100vh; }
 #shrinkMsg { color:#fff; background:#d9263b; border-color:#d9263b; }
 
 #rightCol { position:fixed; z-index:6; top:8px; right:8px; bottom:8px; width:140px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
-#rightCol #themeBar { position:static; justify-content:flex-end; }
+#rightCol #themeBar { position:relative; display:flex; justify-content:flex-end; }
 #snakeHelp { font-size:12px; }
 #snakeHelp[open] { position:absolute; top:34px; right:0; width:340px; max-height:calc(100vh - 60px); overflow-y:auto; z-index:7; background:var(--panel); }
 #snakeHelp summary { cursor:pointer; }

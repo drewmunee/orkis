@@ -54,7 +54,21 @@ let held = null, holdUsed = false; // saved piece index; hold allowed once per p
 let inventory = [], lines = 0, level = 1, hasteUntil = 0, darkUntil = 0, invertUntil = 0;
 const INVERT_MS = 5000;
 // Inverted: while active, each key does something else (hard drop stays put so nobody gets force-dropped)
-const INVERT_KEYS = { ArrowLeft: 'ArrowRight', ArrowRight: 'ArrowLeft', ArrowUp: 'ArrowDown', ArrowDown: 'ArrowUp', x: 'z', X: 'z', z: 'x', Z: 'x' };
+const INVERT = { left: 'right', right: 'left', rotate: 'soft', soft: 'rotate', rotateAlt: 'rotateBack', rotateBack: 'rotateAlt' };
+// Control schemes (⚙ Settings): keys -> actions. Space, C/Shift and 1-6 are the same in both.
+const SCHEMES = {
+  arrows: { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'rotate', ArrowDown: 'soft', x: 'rotateAlt', z: 'rotateBack', d: 'discard' },
+  wasd: { a: 'left', d: 'right', w: 'rotate', s: 'soft', e: 'rotateAlt', q: 'rotateBack', x: 'discard' },
+};
+const scheme = () => SCHEMES[SW.controls() || 'arrows'];
+function renderKeysHelp() {
+  const w = (SW.controls() || 'arrows') === 'wasd';
+  $('keysHelp').innerHTML = (w
+    ? '<b>A / D</b> move · <b>W / E</b> rotate · <b>Q</b> rotate back · <b>S</b> soft drop'
+    : '<b>← / →</b> move · <b>↑ / X</b> rotate · <b>Z</b> rotate back · <b>↓</b> soft drop')
+    + ' · <b>Space</b> hard drop · <b>C / Shift</b> save piece (or swap with the saved one)<br><b>1–6</b> fire your next special at that numbered player (your own number = yourself) · <b>'
+    + (w ? 'X' : 'D') + '</b> discard · or click a board · change keys in ⚙ Settings';
+}
 let dropAcc = 0, lockAcc = 0, lockResets = 0, lastTime = 0, sendPending = false;
 
 const $ = id => document.getElementById(id);
@@ -473,16 +487,18 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !$('game').classList.contains('hidden')) { $('chat').focus(); e.preventDefault(); return; }
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
   if (!playing || !piece || countingDown()) return;
-  const inverted = performance.now() < invertUntil;
-  switch (inverted ? INVERT_KEYS[e.key] || e.key : e.key) {
-    case 'ArrowLeft': tryMove(-1, 0); break;
-    case 'ArrowRight': tryMove(1, 0); break;
-    case 'ArrowDown': if (tryMove(0, 1)) dropAcc = 0; break;
-    case 'ArrowUp': case 'x': case 'X': tryRotate(1); break;
-    case 'z': case 'Z': tryRotate(-1); break;
-    case 'c': case 'C': case 'Shift': hold(); break;
-    case ' ': while (tryMove(0, 1)); lock(); break;
-    case 'd': case 'D': if (inventory.length) { inventory.shift(); renderInv(); } break;
+  // the chosen scheme turns keys into actions; Inverted swaps those actions around
+  let act = scheme()[e.key.length === 1 ? e.key.toLowerCase() : e.key] || { c: 'hold', Shift: 'hold', ' ': 'hardDrop' }[e.key.length === 1 && e.key !== ' ' ? e.key.toLowerCase() : e.key];
+  if (performance.now() < invertUntil) act = INVERT[act] || act;
+  switch (act) {
+    case 'left': tryMove(-1, 0); break;
+    case 'right': tryMove(1, 0); break;
+    case 'soft': if (tryMove(0, 1)) dropAcc = 0; break;
+    case 'rotate': case 'rotateAlt': tryRotate(1); break;
+    case 'rotateBack': tryRotate(-1); break;
+    case 'hold': hold(); break;
+    case 'hardDrop': while (tryMove(0, 1)); lock(); break;
+    case 'discard': if (inventory.length) { inventory.shift(); renderInv(); } break;
     default: return;
   }
   e.preventDefault();
@@ -568,7 +584,8 @@ $('prevGame').onclick = () => pickGame(-1);
 $('nextGame').onclick = () => pickGame(1);
 document.addEventListener('keydown', e => {
   if ($('join').classList.contains('hidden') || /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
-  if (e.key === 'ArrowLeft') pickGame(-1); else if (e.key === 'ArrowRight') pickGame(1);
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key, w = SW.controls() === 'wasd';
+  if (k === 'ArrowLeft' || (w && k === 'a')) pickGame(-1); else if (k === 'ArrowRight' || (w && k === 'd')) pickGame(1);
 });
 showGame(0);
 $('joinForm').onsubmit = async e => {
@@ -601,9 +618,9 @@ $('chat').addEventListener('keydown', e => {
 });
 $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]};color:${SPECIALS[k][4] || '#111'}">${k}</span><span><b>${SPECIALS[k][0]}</b> – ${SPECIALS[k][2]}</span></li>`).join('');
 try { $('name').value = localStorage.getItem('sw-name') || ''; } catch {}
-$('theme').value = document.documentElement.dataset.theme || 'system';
-$('theme').addEventListener('change', e => { SW.set('theme', e.target.value); e.target.blur(); }); // saved per browser (locally and on the server)
-SW.onChange(s => { if (s.theme) $('theme').value = s.theme; readTheme(); });
+SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
+SW.onChange(() => { readTheme(); renderKeysHelp(); });
+renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 readTheme();
 $('name').addEventListener('change', e => { try { localStorage.setItem('sw-name', e.target.value); } catch {} });

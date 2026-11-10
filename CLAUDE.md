@@ -37,8 +37,14 @@ New games must call the same `leaveRoom()` pattern.
   Stackwar/Blockwar scores still come from the browser, so a determined cheat is possible; Snakewar is
   server-run.
 - **Settings** (`settings.js`, table `settings`): one small JSON object per browser ID, `GET/POST
-  /api/settings`, max 4 KB. `SW.get/SW.set` keep them in localStorage too and sync to the server. The
-  theme is stored there now; controls and other preferences should go there too.
+  /api/settings`, max 4 KB. `SW.get/SW.set` keep them in localStorage too and sync to the server.
+  Every page has a ⚙ Settings button (`SW.mountSettings`, styles in `base.css`) in place of the old theme
+  dropdown, with **Theme** (system/dark/light) and **Controls** (`arrows` | `wasd`). Add future preferences there.
+- **Control schemes**: `SW.controls()` is 'arrows', 'wasd', or null (not chosen yet). Stackwar maps keys to
+  actions per scheme (arrows: ←/→, ↑/X rotate, Z back, ↓ soft, D discard; WASD: A/D, W/E rotate, Q back,
+  S soft, X discard; Space/C/Shift/1-6 in both) and Inverted swaps actions, not keys. Snakewar steers and
+  Blockwar moves with the chosen keys; before a player chooses, both sets work there. Help text follows
+  the chosen scheme. New games must honor `SW.controls()`.
 - Storage: Postgres (Neon) when `DATABASE_URL` is set (`db.js`), else JSON files in `data/` for local play.
   Production's `DATABASE_URL` lives in Render's Environment settings (never commit it).
 

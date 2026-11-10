@@ -425,11 +425,18 @@ function connect() {
 }
 
 // ---------- input ----------
-const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right' };
+// paddle keys for each control scheme (⚙ Settings); before a player picks one, both work
+const ARROW_KEYS = { ArrowLeft: 'left', ArrowRight: 'right' }, WASD_KEYS = { a: 'left', d: 'right' };
+const moveKey = key => {
+  const c = SW.controls(), k = key.length === 1 ? key.toLowerCase() : key;
+  return (c !== 'wasd' && ARROW_KEYS[k]) || (c !== 'arrows' && WASD_KEYS[k]) || null;
+};
+const renderKeysHelp = () => { $('keysHelp').innerHTML = `<b>${{ wasd: 'A / D', arrows: '← / →' }[SW.controls()] || '← / → or A / D'}</b> move · <b>Space</b> launch (host: start) · <b>1–6</b> fire your next special at that player (1 = you) · <b>X</b> discard · or click a board · change keys in ⚙ Settings`; };
 document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
   if (e.key === 'Enter') { $('chat').focus(); e.preventDefault(); return; }
-  if (KEYMAP[e.key]) { keys.add(KEYMAP[e.key]); e.preventDefault(); return; }
+  const mv = moveKey(e.key);
+  if (mv) { keys.add(mv); e.preventDefault(); return; }
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
   if (e.key === 'x' || e.key === 'X') { if (queue && queue.length) { queue.shift(); renderQueue(); } return; }
   if (e.key === ' ') {
@@ -440,7 +447,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); // up/down do nothing (for now)
 });
-document.addEventListener('keyup', e => { if (KEYMAP[e.key]) keys.delete(KEYMAP[e.key]); });
+document.addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys.delete(ARROW_KEYS[k]); keys.delete(WASD_KEYS[k]); });
 window.addEventListener('blur', () => keys.clear());
 $('chat').addEventListener('keydown', e => {
   e.stopPropagation();
@@ -456,9 +463,9 @@ $('leaveBtn').onclick = e => {
   if (playing && !confirm('Leave this game? You will be counted as out.')) { e.target.blur(); return; }
   leaveRoom(); location.href = '/';
 };
-$('theme').value = document.documentElement.dataset.theme || 'system';
-$('theme').addEventListener('change', e => { SW.set('theme', e.target.value); e.target.blur(); }); // saved per browser (locally and on the server)
-SW.onChange(s => { if (s.theme) $('theme').value = s.theme; readTheme(); });
+SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
+SW.onChange(() => { readTheme(); renderKeysHelp(); keys.clear(); });
+renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]}">${k}</span><span><b>${SPECIALS[k][0]}</b> – ${SPECIALS[k][2]}</span></li>`).join('');
 

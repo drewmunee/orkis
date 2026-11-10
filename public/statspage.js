@@ -45,7 +45,6 @@ function render(d) {
 fetch('/api/stats?bid=' + encodeURIComponent(SW.bid)).then(r => r.json()).then(render)
   .catch(() => { $('who').textContent = 'Stats are unavailable right now. Try again in a moment.'; });
 
-$('theme').value = document.documentElement.dataset.theme || 'system';
-$('theme').addEventListener('change', e => { SW.set('theme', e.target.value); e.target.blur(); });
-SW.onChange(s => { if (s.theme) $('theme').value = s.theme; });
+SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
+
 })();

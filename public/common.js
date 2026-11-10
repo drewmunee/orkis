@@ -46,11 +46,49 @@ window.SW = (() => {
     return `Not on the leaderboard yet: top 10 needs ${r.cutoff + 1} ${unit}`;
   }
 
+  // ---------- settings menu (replaces the old theme dropdown on every page) ----------
+  const OPTIONS = {
+    theme: [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']],
+    controls: [['arrows', 'Arrow keys'], ['wasd', 'WASD']],
+  };
+  // Controls: 'arrows' or 'wasd'. Until someone picks, games that always took both (Snakewar, Blockwar)
+  // keep accepting both, so nobody's keys stop working; Stackwar defaults to the arrow-key layout.
+  const controls = () => settings.controls || null;
+  function mountSettings(host) {
+    if (!host) return;
+    host.classList.add('settings-host');
+    host.innerHTML = `<button type="button" class="settings-btn" aria-haspopup="dialog" aria-expanded="false">⚙ Settings</button>
+      <div class="settings-pop hidden" role="dialog" aria-label="Settings">
+        <div class="settings-row"><div class="settings-label">Theme</div><div class="seg" data-key="theme"></div></div>
+        <div class="settings-row"><div class="settings-label">Controls</div><div class="seg" data-key="controls"></div><div class="settings-hint" data-hint="controls"></div></div>
+        <div class="settings-note">Saved for this browser.</div>
+      </div>`;
+    const btn = host.querySelector('.settings-btn'), pop = host.querySelector('.settings-pop');
+    const render = () => {
+      for (const seg of host.querySelectorAll('.seg')) {
+        const key = seg.dataset.key, cur = key === 'theme' ? (settings.theme || 'system') : (controls() || 'arrows');
+        seg.innerHTML = OPTIONS[key].map(([v, l]) => `<button type="button" data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('');
+        for (const b of seg.children) b.onclick = () => { SW.set(key, b.dataset.v); };
+      }
+      host.querySelector('[data-hint="controls"]').textContent = (controls() || 'arrows') === 'wasd'
+        ? 'WASD to move / steer (Stackwar: W/E rotate, Q rotate back, S soft drop, X discard)'
+        : 'Arrow keys to move / steer (Stackwar: ↑/X rotate, Z rotate back, ↓ soft drop, D discard)';
+    };
+    const open = on => { pop.classList.toggle('hidden', !on); btn.setAttribute('aria-expanded', on); if (on) render(); };
+    btn.onclick = e => { e.stopPropagation(); open(pop.classList.contains('hidden')); btn.blur(); };
+    pop.addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('click', () => open(false));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') open(false); });
+    listeners.push(render);
+  }
+
   return {
     bid,
     get: (k, d) => settings[k] ?? d,
     set(k, v) { apply({ [k]: v }); saveRemote(); },
     onChange(fn) { listeners.push(fn); },
+    controls,
+    mountSettings,
     leaderboardText,
   };
 })();

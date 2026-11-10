@@ -9,7 +9,7 @@ body.block-page { overflow:hidden; height:100vh; display:flex; flex-direction:co
 .bw-stats { display:flex; gap:22px; margin-left:auto; font-size:15px; color:var(--dim); }
 .bw-stats b { color:var(--text); font-size:18px; margin-left:4px; font-variant-numeric:tabular-nums; }
 #lives { color:#ff4d5e !important; letter-spacing:2px; }
-#bwBar #themeBar { position:static; margin-left:12px; }
+#bwBar #themeBar { position:relative; margin-left:12px; }
 
 #bwGame { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:14px; padding:10px 14px; }
 #side { justify-self:end; width:250px; display:flex; flex-direction:column; gap:8px; min-height:0; }

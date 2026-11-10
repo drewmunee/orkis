@@ -13,3 +13,16 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 .err { color:#ff6b6b; }
 #themeBar { position:absolute; top:8px; right:12px; z-index:5; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim); }
 #theme { font:inherit; padding:4px 6px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer; }
+
+/* settings menu (common.js): the button sits where the theme dropdown used to be */
+.settings-host { position:relative; }
+.settings-btn { background:var(--panel); color:var(--text); border:1px solid var(--line); padding:5px 10px; font-size:12px; font-weight:700; border-radius:6px; cursor:pointer; }
+.settings-btn:hover { border-color:var(--accent); }
+.settings-pop { position:absolute; top:calc(100% + 6px); right:0; z-index:50; width:300px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; box-shadow:0 8px 28px rgba(0,0,0,.25); text-align:left; color:var(--text); font-size:13px; }
+.settings-row + .settings-row { margin-top:12px; }
+.settings-label { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+.seg { display:flex; gap:4px; }
+.seg button { flex:1; padding:6px 8px; background:transparent; color:var(--text); border:1px solid var(--line); border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; }
+.seg button.on { background:var(--accent); color:#111; border-color:var(--accent); }
+.settings-hint { color:var(--dim); font-size:11.5px; margin-top:6px; line-height:1.35; }
+.settings-note { color:var(--dim); font-size:11px; margin-top:12px; }

@@ -9,13 +9,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<label id="themeBar">Theme
-  <select id="theme">
-    <option value="system">System</option>
-    <option value="dark">Dark</option>
-    <option value="light">Light</option>
-  </select>
-</label>
+<div id="themeBar"></div> <!-- settings menu, built by common.js -->
 <div id="join" class="screen">
   <nav id="topTabs"><a href="/" class="on" aria-current="page">Play</a><a href="stats.html">Stats</a></nav>
   <div id="picker">
@@ -84,8 +78,7 @@
 
 <details id="help">
   <summary>Controls &amp; specials</summary>
-  <p><b>←/→</b> move · <b>↑ / X</b> rotate · <b>Z</b> rotate back · <b>↓</b> soft drop · <b>Space</b> hard drop · <b>C / Shift</b> save piece (or swap with the saved one)<br>
-  <b>1–6</b> fire your next special at that numbered player (your own number = yourself) · <b>D</b> discard · or click a board</p>
+  <p id="keysHelp"></p> <!-- filled in by game.js for the chosen control scheme -->
   <ul id="specialList"></ul>
 </details>
 <script src="common.js"></script>

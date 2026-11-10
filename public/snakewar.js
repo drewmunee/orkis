@@ -21,7 +21,14 @@ const SPECIAL_INFO = {
   bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 5 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
   token: { name: 'Revive token', icon: '♥', color: '#ff4d6d', desc: 'team mode only: every 3 your team collects earns a revive' },
 };
-const KEYS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R', w: 'U', s: 'D', a: 'L', d: 'R', W: 'U', S: 'D', A: 'L', D: 'R' };
+// steering keys for each control scheme (⚙ Settings); before a player picks one, both work
+const ARROW_KEYS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R' };
+const WASD_KEYS = { w: 'U', s: 'D', a: 'L', d: 'R' };
+const steerKey = key => {
+  const c = SW.controls(), k = key.length === 1 ? key.toLowerCase() : key;
+  return (c !== 'wasd' && ARROW_KEYS[k]) || (c !== 'arrows' && WASD_KEYS[k]) || null;
+};
+const renderKeysHelp = () => { $('keysHelp').innerHTML = `<b>${{ wasd: 'WASD', arrows: 'Arrow keys' }[SW.controls()] || 'Arrows / WASD'}</b> steer · <b>Space</b> use your next held item (host: start round) · <b>Enter</b> chat · change keys in ⚙ Settings`; };
 const ITEM_SLOTS = 3;
 // screen space kept free around the field for the side panels and the top bar
 const PAD = { left: 252, right: 156, top: 52, bottom: 10 };
@@ -348,7 +355,7 @@ document.addEventListener('keydown', e => {
     else net({ t: 'use' });
     e.preventDefault(); return;
   }
-  const d = KEYS[e.key];
+  const d = steerKey(e.key);
   if (d) { net({ t: 'dir', d }); e.preventDefault(); }
 });
 $('chat').addEventListener('keydown', e => {
@@ -368,9 +375,9 @@ $('leaveBtn').onclick = e => {
   if (alive && !confirm('Leave this round? Your snake will be out.')) { e.target.blur(); return; }
   leaveRoom(); location.href = '/';
 };
-$('theme').value = document.documentElement.dataset.theme || 'system';
-$('theme').addEventListener('change', e => { SW.set('theme', e.target.value); e.target.blur(); }); // saved per browser (locally and on the server)
-SW.onChange(s => { if (s.theme) $('theme').value = s.theme; readTheme(); });
+SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
+SW.onChange(() => { readTheme(); renderKeysHelp(); });
+renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 $('specialList').innerHTML = Object.values(SPECIAL_INFO).map(s => `<li><span class="ic" style="background:${s.color}">${s.icon}</span><span><b>${s.name}</b> – ${s.desc}</span></li>`).join('');
 
