@@ -5,6 +5,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const leaderboard = require('./leaderboard');
 const snake = require('./snake');
+const block = require('./block');
 
 const PORT = process.env.PORT || 3000;
 const PUB = path.join(__dirname, 'public');
@@ -14,10 +15,10 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/api/lobbies') {
-    // homepage lobby browser: every open lobby per game (Blockwar is single-player for now)
+    // homepage lobby browser: every open lobby per game
     const stackwar = [...rooms.values()].map(r => ({ room: r.code, players: r.players.size, names: [...r.players.values()].map(q => q.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify({ stackwar, snakewar: snake.lobbies(), blockwar: [] }));
+    return res.end(JSON.stringify({ stackwar, snakewar: snake.lobbies(), blockwar: block.lobbies() }));
   }
   if (p === '/api/leaderboard') {
     const board = /[?&]game=snake\b/.test(req.url) ? leaderboard.snake : leaderboard;
@@ -92,13 +93,14 @@ function checkGameOver(room) {
 wss.on('connection', ws => {
   const me = { id: nextId++, ws, name: '', slot: 0, alive: false, board: '', wins: 0, lines: 0 };
   let room = null;
-  let snakeConn = null; // set when this connection plays Snakewar instead of Stackwar
+  let snakeConn = null; // set when this connection plays Snakewar (or Blockwar) instead of Stackwar
 
   ws.on('message', raw => {
     let m;
     try { m = JSON.parse(raw); } catch { return; }
     if (snakeConn) return snakeConn.message(m);
     if (m.t === 'join' && m.game === 'snake') { if (!room) snakeConn = snake.join(ws, me.id, m) || { message() {}, close() {} }; return; } // a Snakewar connection never falls through to Stackwar
+    if (m.t === 'join' && m.game === 'block') { if (!room) snakeConn = block.join(ws, me.id, m) || { message() {}, close() {} }; return; } // same for Blockwar
 
     if (m.t === 'join') {
       if (room) return;

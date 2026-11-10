@@ -10,9 +10,10 @@
 </head>
 <body class="block-page">
 <header id="bwBar">
-  <button id="leaveBtn" type="button" title="Back to game select">‹ Back to lobby</button>
-  <div class="bw-title">BLOCKWAR</div>
+  <button id="leaveBtn" type="button" title="Leave this room and go back to game and lobby select">‹ Back to lobby</button>
+  <div class="bw-title">BLOCKWAR <span id="roomName"></span></div>
   <div class="bw-stats">
+    <span id="levelStat" class="hidden">Level <b id="level">1</b></span>
     <span>Score <b id="score">0</b></span>
     <span>Blocks <b id="blocks">0</b></span>
     <span>Lives <b id="lives"></b></span>
@@ -25,8 +26,45 @@
     </select>
   </label>
 </header>
-<main id="stage"><canvas id="board"></canvas></main>
-<p id="bwHelp"><b>← / →</b> or <b>A / D</b> move · <b>Space</b> launch the ball</p>
+
+<main id="bwGame">
+  <!-- left: room, modes, chat -->
+  <aside id="side">
+    <div class="bw-panel">
+      <div class="label">Players</div>
+      <div id="players"></div>
+      <div id="modeBox" class="hidden">
+        <div class="label">Mode</div>
+        <div id="modes">
+          <button type="button" data-mode="clear" title="Everyone gets the same board; first to clear every block wins">Clear race</button>
+          <button type="button" data-mode="lives" title="3 lives each; the last player with lives left wins">Lives</button>
+        </div>
+      </div>
+      <div id="modeInfo"></div>
+      <button id="startBtn" class="hidden" type="button">Start game</button>
+      <div id="status"></div>
+    </div>
+    <div class="bw-panel" id="chatPanel">
+      <div class="label">Chat &amp; log <small>Enter to type</small></div>
+      <div id="log"></div>
+      <input id="chat" placeholder="Say something…" maxlength="200" autocomplete="off">
+    </div>
+    <details id="bwHelp" class="bw-panel">
+      <summary>Controls &amp; specials</summary>
+      <p><b>← / →</b> or <b>A / D</b> move · <b>Space</b> launch (host: start) · <b>1–6</b> fire your next special at that player (1 = you) · <b>X</b> discard · or click a board</p>
+      <ul id="specialList"></ul>
+    </details>
+  </aside>
+
+  <!-- center: your board, with your special queue right above it -->
+  <section id="center">
+    <div id="meBar"><span id="meName"></span><div id="queue"></div><div id="effects"></div></div>
+    <canvas id="board"></canvas>
+  </section>
+
+  <!-- right: everyone else -->
+  <section id="opps"></section>
+</main>
 <script src="blockwar.js"></script>
 </body>
 </html>

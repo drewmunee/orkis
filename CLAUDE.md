@@ -10,8 +10,8 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 
 - **Stackwar**: multiplayer falling-block battle game (`public/index.html`, `public/game.js`).
 - **Snakewar**: battle-royale snake (`snake.js` on the server, `public/snake.html` + `public/snakewar.js`).
-- **Blockwar**: block breaker (`public/block.html`, `public/blockwar.js`, `public/block.css`). Single-player
-  and client-only for now.
+- **Blockwar**: multiplayer block breaker (`block.js` on the server, `public/block.html` + `public/blockwar.js`
+  + `public/block.css`).
 
 **Every game on this site will eventually be multiplayer** (owner's direction). Build new games and
 features with rooms/lobbies in mind, even while a game is single-player.
@@ -99,13 +99,26 @@ without moving the picker. When a game gets lobbies, add it to `/api/lobbies` in
   `sw-theme` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.
 
 ## Blockwar
-- 800x600 logical board (4:3) scaled to fit under a top bar. A 12x8 grid of touching blocks; 3 lives.
-- ←/→ or A/D move the paddle (up/down do nothing yet); Space launches the ball from a centered paddle
-  in a random upward direction (within 60° of straight up), and restarts after a win or game over.
-- The paddle is drawn flat but bounces like a half circle: the hit point alone decides the new
-  direction (center = straight up, ends = 60° out to that side), whatever direction the ball came from.
-- Breaking a block bounces off the side it hit; the ball speeds up slightly with each block (max 720 px/s).
-  Higher rows score more.
+- Like Stackwar: each player's game runs in their own browser; `block.js` handles rooms, the host's mode
+  choice, starts matches (one shared seed), relays board snapshots (~4/s) and specials, and decides winners.
+- Layout: room panel + chat on the left, your board centered with your 3-slot special queue above it,
+  other players' boards (half size) on the right. Numbers are per viewer like Stackwar (1 = you).
+- 800x600 logical board, 12 columns x 18 rows of space, starting with 8 touching rows; ←/→ or A/D move,
+  up/down do nothing yet; Space launches from a centered paddle (host: Space also starts a match).
+- Paddle bounces like a half circle: the hit point alone decides the new direction (center = straight up,
+  ends = 60° to that side). Blocks bounce off the side hit; the ball speeds up a little per block.
+- Losing your last ball costs a life (Multiball: only when every ball is gone), then a 5 s wait before
+  the ball is back on a centered paddle.
+- Modes: **solo** (1 player): endless; each row's worth of blocks broken brings a new row in at the top,
+  level up every 5 rows (+8% ball speed each); over when blocks reach the bottom row or lives run out.
+  **Clear race**: identical boards, first to clear every block wins, unlimited lives (misses just cost
+  the 5 s wait). **Lives**: 3 lives, a cleared board refills, last player with lives left wins.
+  Team mode is planned. Solo will later get random artifacts/shapes at higher stages.
+- Specials: ~7% of blocks carry a letter; breaking one adds it to your queue (max 3, oldest dropped);
+  1-6 fires it at that player (1 = you), X discards, or click a board. R Random (stone boulder or
+  stalactite), C Clear Line (lowest row), M Multiball (doubles balls), S Slow Ball / F Fast Ball (half /
+  double speed 10 s), B Big Paddle / T Tiny Paddle (double / half width 10 s), Q Earthquake (shuffles
+  the board, buries specials away from the exposed edge).
 
 ## Roadmap (from the owner)
 **Planned**

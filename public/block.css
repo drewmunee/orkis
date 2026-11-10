@@ -1,13 +1,66 @@
-/* Blockwar: a top bar, then the board scaled to fit the rest of the window (blockwar.js sizes the canvas) */
+/* Blockwar: top bar, then three columns: room/chat | your board (centered) | other players.
+   blockwar.js sizes the board canvas to the space it gets. */
 body.block-page { overflow:hidden; height:100vh; display:flex; flex-direction:column; }
 #bwBar { flex:none; display:flex; align-items:center; gap:18px; padding:8px 14px; border-bottom:1px solid var(--line); background:var(--panel); }
 #leaveBtn { padding:7px 12px; font-size:13px; font-weight:700; background:transparent; color:var(--text); border:1px solid var(--line); border-radius:6px; cursor:pointer; }
 #leaveBtn:hover { border-color:#e0702f; }
-.bw-title { font-weight:900; letter-spacing:4px; color:#e0702f; }
+.bw-title { font-weight:900; letter-spacing:4px; color:#e0702f; white-space:nowrap; }
+#roomName { color:var(--dim); font-weight:600; letter-spacing:0; font-size:13px; margin-left:6px; }
 .bw-stats { display:flex; gap:22px; margin-left:auto; font-size:15px; color:var(--dim); }
 .bw-stats b { color:var(--text); font-size:18px; margin-left:4px; font-variant-numeric:tabular-nums; }
 #lives { color:#ff4d5e !important; letter-spacing:2px; }
 #bwBar #themeBar { position:static; margin-left:12px; }
-#stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; }
+
+#bwGame { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:14px; padding:10px 14px; }
+#side { justify-self:end; width:250px; display:flex; flex-direction:column; gap:8px; min-height:0; }
+.bw-panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; }
+.label { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+.label small { text-transform:none; letter-spacing:0; }
+#players > div { display:flex; align-items:center; gap:6px; padding:2px 0; min-width:0; }
+#players .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#players .info { color:var(--dim); font-size:12px; white-space:nowrap; }
+#players .dead { opacity:.4; }
+.slot { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; color:#111; font-weight:900; font-size:12px; flex:none; }
+.slot.big { width:28px; height:28px; font-size:16px; }
+#modeBox { margin-top:10px; }
+#modes { display:flex; gap:6px; }
+#modes button { flex:1; padding:6px; background:transparent; color:var(--text); border:1px solid var(--line); font-weight:700; font-size:12px; }
+#modes button.on { border-color:#e0702f; background:color-mix(in srgb, #e0702f 18%, transparent); }
+#modeInfo { color:var(--dim); font-size:12px; margin-top:6px; }
+#modeInfo:empty { display:none; }
+#startBtn { width:100%; margin-top:8px; }
+#status { color:var(--title); font-weight:700; margin-top:6px; }
+#status:empty { display:none; }
+#chatPanel { flex:1; min-height:120px; display:flex; flex-direction:column; }
+#log { flex:1; min-height:0; overflow-y:auto; font-size:12px; margin-bottom:6px; }
+#log div { padding:1px 0; overflow-wrap:anywhere; }
+#log .ev { color:var(--dim); font-style:italic; }
+#log .who { font-weight:700; margin-right:5px; }
+#chat { width:100%; padding:5px 8px; font-size:12px; }
+#bwHelp { font-size:12px; flex:none; }
+#bwHelp summary { cursor:pointer; }
+#bwHelp ul { list-style:none; padding:0; margin:6px 0 0; }
+#bwHelp li { display:flex; gap:6px; align-items:center; margin:3px 0; }
+#bwHelp .sp { width:20px; height:20px; border-radius:4px; flex:none; display:inline-flex; align-items:center; justify-content:center; font-weight:900; color:#111; box-shadow:inset 0 0 0 1px rgba(0,0,0,.25); }
+
+#center { display:flex; flex-direction:column; align-items:center; min-height:0; }
+#meBar { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:8px; min-height:44px; }
+#meName { display:flex; align-items:center; gap:8px; font-weight:800; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#queue { display:flex; gap:6px; margin-left:auto; }
+#queue .q { width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; color:#111; }
+#queue .q.next { outline:3px solid var(--ring); outline-offset:2px; transform:scale(1.08); }
+#queue .q.empty { border:2px dashed var(--line); }
+#effects { display:flex; gap:4px; }
+#effects span { font-size:11px; font-weight:800; padding:3px 7px; border-radius:10px; color:#111; white-space:nowrap; }
 #board { display:block; border:2px solid var(--line); border-radius:6px; background:var(--well); }
-#bwHelp { flex:none; margin:0 0 8px; text-align:center; color:var(--dim); font-size:12px; }
+
+#opps { justify-self:start; display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; align-content:start; width:100%; max-width:560px; overflow-y:auto; min-height:0; }
+.opp { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px; cursor:pointer; }
+.opp:hover { border-color:#e0702f; }
+.opp .oname { display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:4px; min-width:0; }
+.opp .oname .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+.opp .oname .info { color:var(--dim); font-size:12px; white-space:nowrap; }
+.opp canvas { display:block; width:100%; border-radius:4px; background:var(--well); }
+.opp.dead canvas { opacity:.3; }
+.opp.flash { animation:flash .4s; }
+@keyframes flash { 0% { box-shadow:0 0 0 4px #e0702f; } 100% { box-shadow:none; } }
