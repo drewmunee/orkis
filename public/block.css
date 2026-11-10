@@ -6,10 +6,10 @@ body.block-page { overflow:hidden; height:100vh; display:flex; flex-direction:co
 #leaveBtn:hover { border-color:#e0702f; }
 .bw-title { font-weight:900; letter-spacing:4px; color:#e0702f; white-space:nowrap; }
 #roomName { color:var(--dim); font-weight:600; letter-spacing:0; font-size:13px; margin-left:6px; }
-.bw-stats { display:flex; gap:22px; margin-left:auto; font-size:15px; color:var(--dim); }
+.bw-stats { flex:1; display:flex; justify-content:center; gap:18px; font-size:14px; color:var(--dim); white-space:nowrap; }
 .bw-stats b { color:var(--text); font-size:18px; margin-left:4px; font-variant-numeric:tabular-nums; }
 #lives { color:#ff4d5e !important; letter-spacing:2px; }
-#bwBar #themeBar { position:relative; margin-left:12px; }
+#bwBar #themeBar { position:relative; margin-left:auto; }
 
 #bwGame { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:14px; padding:10px 14px; }
 #side { justify-self:end; width:250px; display:flex; flex-direction:column; gap:8px; min-height:0; }
@@ -45,8 +45,8 @@ body.block-page { overflow:hidden; height:100vh; display:flex; flex-direction:co
 
 #center { display:flex; flex-direction:column; align-items:center; min-height:0; }
 #meBar { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:8px; min-height:44px; }
-#meName { display:flex; align-items:center; gap:8px; font-weight:800; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-#queue { display:flex; gap:6px; margin-left:auto; }
+#meName { display:flex; align-items:center; gap:8px; font-weight:800; min-width:0; max-width:30%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#queue { display:flex; gap:6px; }
 #queue .q { width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; color:#111; }
 #queue .q.next { outline:3px solid var(--ring); outline-offset:2px; transform:scale(1.08); }
 #queue .q.empty { border:2px dashed var(--line); }
@@ -64,3 +64,10 @@ body.block-page { overflow:hidden; height:100vh; display:flex; flex-direction:co
 .opp.dead canvas { opacity:.3; }
 .opp.flash { animation:flash .4s; }
 @keyframes flash { 0% { box-shadow:0 0 0 4px #e0702f; } 100% { box-shadow:none; } }
+/* smaller windows: tighten the stats between your name and the special queue so the bar fits the board */
+@media (max-width:1300px) {
+  .bw-stats { gap:10px; font-size:12px; }
+  .bw-stats b { font-size:15px; margin-left:2px; }
+  #queue .q { width:34px; height:34px; font-size:19px; }
+  #meBar { gap:8px; }
+}

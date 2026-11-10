@@ -42,10 +42,6 @@
   <header id="swBar">
     <button id="leaveBtn" type="button" title="Leave this room and go back to game and lobby select">‹ Back to lobby</button>
     <div class="sw-title">STACKWAR <span id="roomName"></span></div>
-    <div class="sw-stats">
-      <span>Lines <b id="lines">0</b></span>
-      <span>Level <b id="level">1</b></span>
-    </div>
     <!-- the ⚙ Settings menu moves in here when the game screen opens -->
   </header>
   <main id="swGame">
@@ -74,11 +70,18 @@
     <section id="center">
       <div id="meBar" class="label me"><span id="mySlot"></span><div id="inv" title="Your specials (leftmost fires next)"></div></div>
       <div id="playArea">
-        <div id="pieces">
-          <div class="label">Saved <small>C / Shift</small></div>
-          <canvas id="hold" width="100" height="70"></canvas>
-          <div class="label nextLabel">Next</div>
-          <canvas id="next" width="100" height="204"></canvas>
+        <div id="pieceCol">
+          <div id="pieces">
+            <div class="label">Saved <small>C / Shift</small></div>
+            <canvas id="hold" width="100" height="70"></canvas>
+            <div class="label nextLabel">Next</div>
+            <canvas id="next" width="100" height="204"></canvas>
+          </div>
+          <!-- lines and level float under the piece queue -->
+          <div id="runStats">
+            <div><span>Lines</span><b id="lines">0</b></div>
+            <div><span>Level</span><b id="level">1</b></div>
+          </div>
         </div>
         <canvas id="board" width="300" height="690"></canvas>
       </div>

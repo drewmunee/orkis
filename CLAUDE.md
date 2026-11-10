@@ -84,9 +84,9 @@ New games must call the same `leaveRoom()` pattern.
   Optimize for people at a computer with a keyboard.
 - Gamepad/controller support would be welcome later, but it is low priority.
 - Boards are 10 wide x 23 tall. The game must fit on screen without scrolling (tested at 1152x720 up to 1920x1080).
-- Stackwar game screen uses Blockwar's layout: top bar (Back to lobby, title + room, Lines/Level,
-  ⚙ Settings moved into the bar), then players/chat/Controls & specials on the left, your name + specials
-  hand above Saved/Next and your centered board, and opponent boards (3 columns, sized by window height
+- Stackwar game screen uses Blockwar's layout: top bar (Back to lobby, title + room, ⚙ Settings moved
+  into the bar), then players/chat/Controls & specials on the left, your name + specials hand above
+  Saved/Next (with Lines and Level floating underneath) and your centered board, and opponent boards (3 columns, sized by window height
   and width) on the right. The homepage no longer has the Controls & specials box.
 - Every player gets the same piece queue (shared seed from the server).
 - Players can save one piece (C or Shift). Bringing it back swaps it with the current piece; allowed once per piece.
@@ -159,8 +159,10 @@ New games must call the same `leaveRoom()` pattern.
 ## Blockwar
 - Like Stackwar: each player's game runs in their own browser; `block.js` handles rooms, the host's mode
   choice, starts matches (one shared seed), relays board snapshots (~4/s) and specials, and decides winners.
-- Layout: room panel + chat on the left, your board centered with your 3-slot special queue above it,
-  other players' boards (half size) on the right. Numbers are per viewer like Stackwar (1 = you).
+- Layout: room panel + chat on the left, your board centered with a bar above it (your name, then
+  Lives/Score/Blocks (+Level in solo) in the middle, then your 3-slot special queue and active effects),
+  other players' boards (half size) on the right. Block rows use a calm plum-to-orange gradient
+  (`ROW_COLORS`) so the bright special blocks stand out. Numbers are per viewer like Stackwar (1 = you).
 - 800x600 logical board, 12 columns x 18 rows of space, starting with 8 touching rows; ←/→ or A/D move,
   up/down do nothing yet; Space launches from a centered paddle (host: Space also starts a match).
 - Paddle bounces like a half circle: the hit point alone decides the new direction (center = straight up,

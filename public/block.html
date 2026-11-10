@@ -12,12 +12,6 @@
 <header id="bwBar">
   <button id="leaveBtn" type="button" title="Leave this room and go back to game and lobby select">‹ Back to lobby</button>
   <div class="bw-title">BLOCKWAR <span id="roomName"></span></div>
-  <div class="bw-stats">
-    <span id="levelStat" class="hidden">Level <b id="level">1</b></span>
-    <span>Score <b id="score">0</b></span>
-    <span>Blocks <b id="blocks">0</b></span>
-    <span>Lives <b id="lives"></b></span>
-  </div>
   <div id="themeBar"></div> <!-- settings menu, built by common.js -->
 </header>
 
@@ -52,7 +46,17 @@
 
   <!-- center: your board, with your special queue right above it -->
   <section id="center">
-    <div id="meBar"><span id="meName"></span><div id="queue"></div><div id="effects"></div></div>
+    <div id="meBar">
+      <span id="meName"></span>
+      <!-- your lives, score and blocks, right where you're looking -->
+      <div class="bw-stats">
+        <span id="levelStat" class="hidden">Level <b id="level">1</b></span>
+        <span>Lives <b id="lives"></b></span>
+        <span>Score <b id="score">0</b></span>
+        <span>Blocks <b id="blocks">0</b></span>
+      </div>
+      <div id="queue"></div><div id="effects"></div>
+    </div>
     <canvas id="board"></canvas>
   </section>
 

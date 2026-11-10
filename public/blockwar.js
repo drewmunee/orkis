@@ -5,7 +5,9 @@ const $ = id => document.getElementById(id);
 const W = 800, H = 600;                         // logical board size (4:3), scaled to fit
 const COLS = 12, ROWS = 18, TOP = 40, BH = 24;  // block grid; rows below the starting 8 fill up in solo / from Random
 const BW = W / COLS, START_ROWS = 8;
-const ROW_COLORS = ['#ff4d5e', '#ff8a3d', '#ffc93d', '#9be15d', '#3ccf6e', '#30d5ff', '#3d7bff', '#b45cff'];
+// one calm sunset gradient (deep plum at the top through rose to warm orange at the bottom), so the
+// brightly colored special blocks still stand out
+const ROW_COLORS = ['#4a3470', '#5d3a7c', '#743f84', '#8c4686', '#a44f80', '#ba5b73', '#cc6d62', '#da834f'];
 const STONE = '#8d8478';
 const PADDLE_W = 110, PADDLE_H = 14, PADDLE_Y = H - 40, PADDLE_SPEED = 640;
 const BALL_R = 8, START_SPEED = 380, SPEED_UP = 3, MAX_SPEED = 700;
