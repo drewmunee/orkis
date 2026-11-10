@@ -28,7 +28,8 @@ New games must call the same `leaveRoom()` pattern.
   falling back to username), best score kept, shown under the most recent name; top 10 only.
   stackwar = lines in a solo run, snakewar = food in classic solo, blockwar = solo points.
   `GET /api/leaderboard?game=...`. Shown on the homepage next to the lobby list for the selected game
-  (`SHOW_LEADERBOARD` in `public/game.js`), and the top 3 drift across the homepage background.
+  (`SHOW_LEADERBOARD` in `public/game.js`). The top 3 names tile the homepage background in a moving
+  checkerboard (gold/silver/bronze text, each row offset by one name, neighbouring rows drifting opposite ways).
   Old per-username tables (`leaderboard`, `snake_leaderboard`) are copied in on start; such a row merges
   into a browser's spot the first time that name submits from a browser.
 - After a solo run the result line says whether it made the leaderboard (`SW.leaderboardText`).

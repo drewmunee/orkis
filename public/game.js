@@ -486,7 +486,6 @@ document.addEventListener('keydown', e => {
 });
 // Leaderboard for the selected game (top 10, one spot per player), plus its top 3 drifting in the background
 const LB_WHAT = { stackwar: 'most lines in one solo run', snakewar: 'most food in classic solo', blockwar: 'best solo score' };
-const LB_UNIT = { stackwar: 'lines', snakewar: 'food', blockwar: 'pts' };
 let lbGame = null;
 function loadLeaderboard() {
   const g = GAMES[gameIdx].id;
@@ -498,13 +497,24 @@ function loadLeaderboard() {
     $('lbList').innerHTML = rows.length
       ? rows.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><b>${r.score}</b></li>`).join('')
       : '<li class="empty">No solo scores yet. Join an empty lobby and start a game to set the first one!</li>';
-    renderMarquee(rows.slice(0, 3), LB_UNIT[g]);
+    renderMarquee(rows.slice(0, 3));
   }).catch(() => { $('lbList').innerHTML = '<li class="empty">Leaderboard unavailable right now.</li>'; renderMarquee([]); });
 }
 let lastMarquee = '';
-function renderMarquee(top, unit) {
-  // each row repeats its name so the drift loops seamlessly (the animation moves it half its width)
-  const html = top.map((r, i) => { const t = `${['🥇', '🥈', '🥉'][i]} ${esc(r.name)} · ${r.score} ${unit}`, once = Array(6).fill(`<span>${t}</span>`).join(''); return `<div class="row r${i + 1}">${once}${once}</div>`; }).join('');
+const MARQUEE_ROWS = 9;
+function renderMarquee(top) {
+  // The top 3 names tile the whole background: each row cycles 1st, 2nd, 3rd (gold, silver, bronze),
+  // and each row starts one name further along than the row above, so the colors checkerboard both
+  // across and down. Rows drift constantly, neighbours in opposite directions. Each row's content is
+  // doubled so the drift (half its width) loops seamlessly.
+  const names = top.map((r, i) => `<span class="m${i + 1}">${esc(r.name)}</span>`);
+  let html = '';
+  if (names.length) for (let row = 0; row < MARQUEE_ROWS; row++) {
+    const cells = [];
+    for (let k = 0; k < 18; k++) cells.push(names[(row + k) % names.length]);
+    const once = cells.join('');
+    html += `<div class="row${row % 2 ? ' rev' : ''}" style="animation-duration:${70 + (row % 3) * 12}s">${once}${once}</div>`;
+  }
   if (html !== lastMarquee) { lastMarquee = html; $('marquee').innerHTML = html; }
 }
 setInterval(() => { if (!$('join').classList.contains('hidden')) loadLeaderboard(); }, 15000);
