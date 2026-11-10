@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const leaderboard = require('./leaderboard');
+const settings = require('./settings');
 const snake = require('./snake');
 const block = require('./block');
 
@@ -20,12 +21,27 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ stackwar, snakewar: snake.lobbies(), blockwar: block.lobbies() }));
   }
+  const q = new URL(req.url, 'http://x').searchParams;
+  const json = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
   if (p === '/api/leaderboard') {
-    const board = /[?&]game=snake\b/.test(req.url) ? leaderboard.snake : leaderboard;
-    board.top().then(
-      rows => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(rows)); },
-      err => { console.error('leaderboard read failed:', err.message); res.writeHead(500); res.end('[]'); });
+    // top 10 for one game: ?game=stackwar | snakewar | blockwar (default stackwar)
+    const game = leaderboard.GAMES.includes(q.get('game')) ? q.get('game') : q.get('game') === 'snake' ? 'snakewar' : 'stackwar';
+    leaderboard.top(game).then(rows => json(200, rows), err => { console.error('leaderboard read failed:', err.message); json(500, []); });
     return;
+  }
+  if (p === '/api/settings') {
+    // per-browser settings: GET ?bid=<browser id>, POST {bid, settings}
+    if (req.method === 'GET') { settings.get(q.get('bid')).then(d => json(200, d), e => json(400, { error: e.message })); return; }
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', c => { body += c; if (body.length > settings.MAX_BYTES * 2) req.destroy(); });
+      req.on('end', () => {
+        let m; try { m = JSON.parse(body); } catch { return json(400, { error: 'bad json' }); }
+        settings.set(m.bid, m.settings).then(() => json(200, { ok: true }), e => json(400, { error: e.message }));
+      });
+      return;
+    }
+    return json(405, { error: 'method not allowed' });
   }
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(PUB, p));
@@ -62,8 +78,11 @@ function finishSolo(room, p) {
   if (room.state !== 'playing' || room.startCount !== 1 || !p.alive) return;
   const lines = p.lines;
   if (lines < 1) return send(p.ws, { t: 'solo', lines: 0 });
-  leaderboard.submit(p.name, lines).then(
-    ({ best, rank }) => send(p.ws, { t: 'solo', lines, best, rank }),
+  // sanity check: nobody clears more than ~3 lines a second over a whole run
+  const secs = (Date.now() - (room.startedAt || Date.now())) / 1000;
+  if (lines > Math.max(8, secs * 3)) { console.warn(`ignored implausible Stackwar score ${lines} in ${secs.toFixed(0)} s from ${p.name}`); return send(p.ws, { t: 'solo', lines, error: true }); }
+  leaderboard.submit('stackwar', p, lines).then(
+    r => send(p.ws, { t: 'solo', lines, ...r }),
     err => { console.error('leaderboard write failed:', err.message); send(p.ws, { t: 'solo', lines, error: true }); });
 }
 function checkGameOver(room) {
@@ -125,6 +144,7 @@ wss.on('connection', ws => {
       const slot = freeSlot(room);
       if (!slot) { send(ws, { t: 'error', msg: 'Room is full (6 players max).' }); room = null; return; }
       me.name = String(m.name || 'Player').trim().slice(0, 14) || 'Player';
+      me.bid = typeof m.bid === 'string' ? m.bid.slice(0, 40) : null; // browser ID: one leaderboard spot per browser
       me.slot = slot;
       room.players.set(me.id, me);
       send(ws, { t: 'welcome', id: me.id, room: code });
@@ -140,6 +160,7 @@ wss.on('connection', ws => {
         if (me.id !== room.hostId || room.state !== 'lobby') return;
         room.state = 'playing';
         room.startCount = room.players.size;
+        room.startedAt = Date.now();
         const seed = (Math.random() * 2 ** 31) | 0;
         for (const p of room.players.values()) { p.alive = true; p.board = ''; p.lines = 0; }
         room.firstFourDone = false; // first 4-line clear of each match earns a bonus

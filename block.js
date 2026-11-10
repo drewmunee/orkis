@@ -3,6 +3,7 @@
 //   solo  (1 player): endless; the client reports when it's over
 //   clear (2+): everyone gets the same board; the first to clear every block wins
 //   lives (2+): 3 lives each; the last player with lives left wins
+const leaderboard = require('./leaderboard');
 const MAX_PLAYERS = 6;
 const MODES = ['clear', 'lives'];
 const rooms = new Map();
@@ -40,13 +41,24 @@ function checkOver(room) {
   if (alive.length <= 1) endMatch(room, alive[0] || null, room.matchMode === 'lives' ? 'last one with lives left' : 'last one standing');
 }
 
+// Solo runs go on the Blockwar leaderboard (best score per browser). The score comes from the player's
+// browser, so reject anything impossible: no more than ~150 points a second over the whole run.
+function recordSolo(room, p, score) {
+  if (score < 1) return send(p.ws, { t: 'solo', score: 0 });
+  const secs = (Date.now() - (room.startedAt || Date.now())) / 1000;
+  if (score > Math.max(500, secs * 150)) { console.warn(`ignored implausible Blockwar score ${score} in ${secs.toFixed(0)} s from ${p.name}`); return send(p.ws, { t: 'solo', score, error: true }); }
+  leaderboard.submit('blockwar', p, score).then(
+    r => send(p.ws, { t: 'solo', score, ...r }),
+    err => { console.error('blockwar leaderboard write failed:', err.message); send(p.ws, { t: 'solo', score, error: true }); });
+}
+
 function join(ws, id, m) {
   const code = String(m.room || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
   let room = rooms.get(code);
   if (!room) { room = { code, players: new Map(), hostId: id, state: 'lobby', mode: 'clear', matchMode: null }; rooms.set(code, room); }
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
-  const me = { id, ws, slot, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, wins: 0, board: null };
+  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, wins: 0, board: null };
   room.players.set(id, me);
   send(ws, { t: 'welcome', id, room: code });
   sendLobby(room);
@@ -60,6 +72,7 @@ function join(ws, id, m) {
           if (me.id !== room.hostId || room.state !== 'lobby') return;
           room.state = 'playing';
           room.matchMode = room.players.size === 1 ? 'solo' : room.mode;
+          room.startedAt = Date.now();
           for (const p of room.players.values()) { p.alive = true; p.board = null; }
           // one seed for everyone so clear races start on identical boards
           broadcast(room, { t: 'start', seed: (Math.random() * 2 ** 31) | 0, mode: room.matchMode, players: playerList(room) });
@@ -96,7 +109,10 @@ function join(ws, id, m) {
           if (!me.alive || room.state !== 'playing') return;
           me.alive = false;
           broadcast(room, { t: 'dead', id: me.id });
-          if (room.matchMode === 'solo') log(room, `Game over: ${m.score | 0} points, level ${m.level | 0}`);
+          if (room.matchMode === 'solo') {
+            log(room, `Game over: ${m.score | 0} points, level ${m.level | 0}`);
+            recordSolo(room, me, m.score | 0);
+          }
           else log(room, `${me.name} is out of lives`);
           checkOver(room);
           break;

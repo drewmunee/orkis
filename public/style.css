@@ -77,7 +77,7 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 .opp .slot.big { width:24px; height:24px; font-size:14px; }
 .opp .name { gap:4px; font-size:13px; }
 
-#leaderboard { width:340px; margin-top:28px; text-align:left; }
+#leaderboard { width:300px; text-align:left; }
 #lbList { list-style:none; margin:0; padding:0; }
 #lbList li { display:flex; align-items:center; gap:10px; padding:5px 2px; border-bottom:1px solid var(--line); }
 #lbList li:last-child { border-bottom:none; }
@@ -126,7 +126,7 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #titleText[data-game="blockwar"] { color:#e0702f; text-shadow:0 0 24px #e0702f40; }
 
 /* homepage lobby browser */
-#lobbies { width:min(560px, 92vw); margin-top:22px; text-align:left; }
+#lobbies { width:440px; text-align:left; }
 #lobbyList { list-style:none; margin:0; padding:0; max-height:42vh; overflow-y:auto; }
 #lobbyList li { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:12px; padding:8px 10px; border-radius:6px; }
 #lobbyList li + li { border-top:1px solid var(--line); }
@@ -139,3 +139,24 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #lobbyList .lstate.waiting { background:#3ccf6e22; color:#2fb85e; }
 #lobbyList .lstate.playing { background:#ffcc3326; color:#c98a00; }
 #lobbyList .empty { display:block; color:var(--dim); cursor:default; }
+
+/* homepage: lobbies and the leaderboard side by side under the picker */
+#boards { display:flex; gap:16px; align-items:flex-start; justify-content:center; flex-wrap:wrap; margin-top:22px; }
+#lbList b { font-variant-numeric:tabular-nums; }
+#lbList li:nth-child(2) .rk { color:#9aa3b5; }
+#lbList li:nth-child(3) .rk { color:#c98a5a; }
+#lbList li.me .nm { font-weight:800; }
+
+/* the top 3 names drifting across the homepage background */
+#join { position:relative; z-index:1; }
+#marquee { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+#marquee .row { position:absolute; left:0; white-space:nowrap; font-weight:900; letter-spacing:.08em; line-height:1; opacity:.07; animation:drift linear infinite; will-change:transform; }
+#marquee .row span { padding-right:.8em; }
+#marquee .r1 { top:6vh; font-size:16vh; color:#e0a800; animation-duration:60s; }
+#marquee .r2 { top:44vh; font-size:13vh; color:#8f9bb3; animation-duration:75s; animation-direction:reverse; }
+#marquee .r3 { top:76vh; font-size:11vh; color:#c06a35; animation-duration:90s; }
+:root[data-theme="dark"] #marquee .row { opacity:.1; }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] #marquee .row { opacity:.1; } }
+#join.hidden ~ #marquee { display:none; }
+@keyframes drift { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { #marquee .row { animation:none; } }

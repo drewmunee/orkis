@@ -28,15 +28,19 @@
     <button id="joinBtn">Join</button>
   </form>
   <p id="joinErr" class="err"></p>
-  <section id="lobbies" class="panel">
-    <div class="label">Open lobbies <small id="lobbyCount"></small></div>
-    <ul id="lobbyList"><li class="empty">Loading…</li></ul>
-  </section>
-  <section id="leaderboard" class="panel hidden">
-    <div class="label">Solo leaderboard <small>most lines in one run</small></div>
-    <ol id="lbList"><li class="empty">Loading…</li></ol>
-  </section>
+  <div id="boards">
+    <section id="lobbies" class="panel">
+      <div class="label">Open lobbies <small id="lobbyCount"></small></div>
+      <ul id="lobbyList"><li class="empty">Loading…</li></ul>
+    </section>
+    <section id="leaderboard" class="panel">
+      <div class="label">Top 10 <small id="lbWhat"></small></div>
+      <ol id="lbList"><li class="empty">Loading…</li></ol>
+    </section>
+  </div>
 </div>
+<!-- the selected game's top 3 players, in huge letters drifting across the background -->
+<div id="marquee" aria-hidden="true"></div>
 
 <div id="game" class="screen hidden">
   <div id="mid">
@@ -83,6 +87,7 @@
   <b>1–6</b> fire your next special at that numbered player (your own number = yourself) · <b>D</b> discard · or click a board</p>
   <ul id="specialList"></ul>
 </details>
+<script src="common.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

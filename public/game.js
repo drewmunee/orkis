@@ -45,7 +45,7 @@ let countdownEnd = 0; // game is frozen until this time while 3-2-1 shows on eve
 const countingDown = () => performance.now() < countdownEnd;
 // The solo leaderboard keeps recording scores, but stays off screen until a database (Neon) is set up.
 // Flip this to true to show it on the homepage and mention ranks after solo runs.
-const SHOW_LEADERBOARD = false;
+const SHOW_LEADERBOARD = true;
 let soloRun = false;
 let teamMode = false; // host's toggle for the next match; players' .team is set per match ('red' | 'blue' | null)
 const TEAM_COLORS = { red: '#ff4d5e', blue: '#3d7bff' };
@@ -400,7 +400,7 @@ function flash(id) { const el = document.querySelector(`.opp[data-id="${id}"]`);
 function net(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function connect(name, room) {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', name, room });
+  ws.onopen = () => net({ t: 'join', name, room, bid: SW.bid });
   ws.onclose = () => { setStatus('Disconnected from server.'); playing = false; };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
@@ -454,11 +454,9 @@ function connect(name, room) {
       } break;
       case 'solo': {
         const nl = n => `${n} line${n === 1 ? '' : 's'}`;
-        const msg = !SHOW_LEADERBOARD ? `Solo run over: ${nl(m.lines)}` + (m.lines && m.lines >= m.best ? ', a personal best!' : m.best > m.lines ? `. Your best is ${m.best}` : '')
-          : m.error ? `Solo run over: ${nl(m.lines)} (couldn't save to the leaderboard)`
-          : !m.lines ? 'Solo run over: no lines cleared'
-          : m.lines >= m.best ? `Solo run over: ${nl(m.lines)}, a personal best! #${m.rank} on the leaderboard`
-          : `Solo run over: ${nl(m.lines)}. Your best is ${m.best} (#${m.rank} on the leaderboard)`;
+        // the yellow result line says whether this run made the leaderboard
+        const msg = !m.lines ? 'Solo run over: no lines cleared'
+          : `Solo run over: ${nl(m.lines)}. ` + (!m.error && !m.onBoard && m.best > m.prevBest ? 'New personal best! ' : '') + SW.leaderboardText(m, 'lines');
         setStatus(msg); log(msg);
         break;
       }
@@ -486,6 +484,31 @@ document.addEventListener('keydown', e => {
   }
   e.preventDefault();
 });
+// Leaderboard for the selected game (top 10, one spot per player), plus its top 3 drifting in the background
+const LB_WHAT = { stackwar: 'most lines in one solo run', snakewar: 'most food in classic solo', blockwar: 'best solo score' };
+const LB_UNIT = { stackwar: 'lines', snakewar: 'food', blockwar: 'pts' };
+let lbGame = null;
+function loadLeaderboard() {
+  const g = GAMES[gameIdx].id;
+  if (!SHOW_LEADERBOARD || !$('lbList')) return;
+  if (g !== lbGame) { lbGame = g; $('lbList').innerHTML = '<li class="empty">Loading…</li>'; }
+  $('lbWhat').textContent = LB_WHAT[g];
+  fetch('/api/leaderboard?game=' + g).then(r => r.json()).then(rows => {
+    if (GAMES[gameIdx].id !== g) return; // switched games while loading
+    $('lbList').innerHTML = rows.length
+      ? rows.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><b>${r.score}</b></li>`).join('')
+      : '<li class="empty">No solo scores yet. Join an empty lobby and start a game to set the first one!</li>';
+    renderMarquee(rows.slice(0, 3), LB_UNIT[g]);
+  }).catch(() => { $('lbList').innerHTML = '<li class="empty">Leaderboard unavailable right now.</li>'; renderMarquee([]); });
+}
+let lastMarquee = '';
+function renderMarquee(top, unit) {
+  // each row repeats its name so the drift loops seamlessly (the animation moves it half its width)
+  const html = top.map((r, i) => { const t = `${['🥇', '🥈', '🥉'][i]} ${esc(r.name)} · ${r.score} ${unit}`, once = Array(6).fill(`<span>${t}</span>`).join(''); return `<div class="row r${i + 1}">${once}${once}</div>`; }).join('');
+  if (html !== lastMarquee) { lastMarquee = html; $('marquee').innerHTML = html; }
+}
+setInterval(() => { if (!$('join').classList.contains('hidden')) loadLeaderboard(); }, 15000);
+
 // ---------- homepage game picker ----------
 const GAMES = [{ id: 'stackwar', title: 'STACKWAR' }, { id: 'snakewar', title: 'SNAKEWAR' }, { id: 'blockwar', title: 'BLOCKWAR' }];
 let gameIdx = 0;
@@ -495,7 +518,8 @@ function showGame(dir) {
   t.textContent = g.title; t.dataset.game = g.id;
   if (dir) { t.classList.remove('slide-l', 'slide-r'); void t.offsetWidth; t.classList.add(dir < 0 ? 'slide-l' : 'slide-r'); }
   $('gameDots').innerHTML = GAMES.map((_, i) => `<span class="${i === gameIdx ? 'on' : ''}"></span>`).join('');
-  $('leaderboard').classList.toggle('hidden', !SHOW_LEADERBOARD || g.id !== 'stackwar'); // Stackwar's solo mode
+  $('leaderboard').classList.toggle('hidden', !SHOW_LEADERBOARD);
+  loadLeaderboard();
   $('help').classList.toggle('hidden', g.id !== 'stackwar');
   renderLobbies();
   document.title = g.title[0] + g.title.slice(1).toLowerCase();
@@ -551,14 +575,6 @@ $('leaveBtn').onclick = e => {
   leaveRoom(); location.href = '/';
 };
 $('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
-function loadLeaderboard() {
-  fetch('/api/leaderboard').then(r => r.json()).then(rows => {
-    $('lbList').innerHTML = rows.length
-      ? rows.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm">${esc(r.name)}</span><b>${r.lines}</b></li>`).join('')
-      : '<li class="empty">No solo runs yet. Join an empty room and press Start to set the first score.</li>';
-  }).catch(() => { $('lbList').innerHTML = '<li class="empty">Leaderboard unavailable right now.</li>'; });
-}
-loadLeaderboard();
 $('chat').addEventListener('keydown', e => {
   // Enter sends (or just leaves the box if empty); Esc leaves without sending. Either way, focus returns to the game.
   e.stopPropagation(); // keep chat keys away from the game controls
@@ -568,11 +584,8 @@ $('chat').addEventListener('keydown', e => {
 $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]};color:${SPECIALS[k][4] || '#111'}">${k}</span><span><b>${SPECIALS[k][0]}</b> – ${SPECIALS[k][2]}</span></li>`).join('');
 try { $('name').value = localStorage.getItem('sw-name') || ''; } catch {}
 $('theme').value = document.documentElement.dataset.theme || 'system';
-$('theme').addEventListener('change', e => {
-  document.documentElement.dataset.theme = e.target.value;
-  try { localStorage.setItem('sw-theme', e.target.value); } catch {}
-  readTheme(); e.target.blur();
-});
+$('theme').addEventListener('change', e => { SW.set('theme', e.target.value); e.target.blur(); }); // saved per browser (locally and on the server)
+SW.onChange(s => { if (s.theme) $('theme').value = s.theme; readTheme(); });
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 readTheme();
 $('name').addEventListener('change', e => { try { localStorage.setItem('sw-name', e.target.value); } catch {} });

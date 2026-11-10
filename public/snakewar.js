@@ -56,7 +56,7 @@ const myTeam = () => (playerOf(myId) || {}).team;
 function net(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', game: 'snake', name, room });
+  ws.onopen = () => net({ t: 'join', game: 'snake', name, room, bid: SW.bid });
   ws.onclose = () => setStatus('Disconnected. Reload to rejoin.');
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
@@ -87,8 +87,10 @@ function connect() {
       }
       case 'classic': {
         if (m.best != null) best = m.best;
-        const txt = m.error ? `Score ${m.score} (couldn't save)` : !m.score ? 'Score 0' : m.score >= m.best ? `Score ${m.score}: new high score!` : `Score ${m.score} · best ${m.best}`;
-        flashBanner(txt, 4000); setStatus(txt + ' Press Space to play again.'); log(txt); renderScore();
+        const board = m.score ? SW.leaderboardText(m, 'food') : '';
+        const txt = `Score ${m.score}` + (m.score && !m.error && !m.onBoard && m.best > m.prevBest ? ': new personal best!' : '');
+        flashBanner(m.score && m.onBoard && m.best > m.prevBest ? `🏅 #${m.rank} on the leaderboard!` : txt, 4000);
+        setStatus(txt + (board ? '. ' + board : '') + '. Press Space to play again.'); log(txt + (board ? '. ' + board : '')); renderScore();
         break;
       }
       case 'log': log(m.msg); break;
@@ -365,7 +367,8 @@ $('leaveBtn').onclick = e => {
   leaveRoom(); location.href = '/';
 };
 $('theme').value = document.documentElement.dataset.theme || 'system';
-$('theme').addEventListener('change', e => { document.documentElement.dataset.theme = e.target.value; try { localStorage.setItem('sw-theme', e.target.value); } catch {} readTheme(); e.target.blur(); });
+$('theme').addEventListener('change', e => { SW.set('theme', e.target.value); e.target.blur(); }); // saved per browser (locally and on the server)
+SW.onChange(s => { if (s.theme) $('theme').value = s.theme; readTheme(); });
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 $('specialList').innerHTML = Object.values(SPECIAL_INFO).map(s => `<li><span class="ic" style="background:${s.color}">${s.icon}</span><span><b>${s.name}</b> – ${s.desc}</span></li>`).join('');
 

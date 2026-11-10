@@ -37,6 +37,7 @@ const others = new Map();     // id -> latest board snapshot
 let mode = null;              // this match: 'solo' | 'clear' | 'lives' (null between matches)
 let playing = false;          // my game is running
 let grid, balls = [], paddleX, lives, score = 0, level = 1, brokenSinceRow, rowsAdded, phase, phaseUntil, pendingBalls, ballSpeed;
+let soloResult = '';      // leaderboard line after a solo run
 let queue = [], fx = {};  // held specials and active effects (start empty so drawing works before the first match)
 // phase: 'ready' (ball on paddle, Space to launch) | 'play' | 'wait' (5 s after losing a life) | 'done'
 const keys = new Set();
@@ -72,7 +73,7 @@ const cellColor = ch => ch === 'z' ? STONE : ch >= 'a' && ch <= 'h' ? ROW_COLORS
 
 // ---------- match flow ----------
 function startMatch(seed, m) {
-  mode = m; playing = true;
+  mode = m; playing = true; soloResult = '';
   newGrid(seed);
   lives = START_LIVES; score = 0; level = 1; brokenSinceRow = 0; rowsAdded = 0; queue = []; fx = {}; pendingBalls = 1; ballSpeed = START_SPEED;
   toReady();
@@ -284,6 +285,7 @@ function draw() {
   if (!playing && !mode) msg = [roomState === 'lobby' ? (myId === hostId ? 'Press Space to start' : 'Waiting for the host…') : 'Game in progress, you\'re watching', ''];
   else if (phase === 'ready') msg = ['Press Space to launch', mode === 'clear' ? 'Clear every block first to win' : `${lives} ${lives === 1 ? 'life' : 'lives'} left`];
   else if (phase === 'wait') msg = [`Back in ${Math.ceil((phaseUntil - now()) / 1000)}`, mode === 'clear' ? 'Missed!' : `${lives} ${lives === 1 ? 'life' : 'lives'} left`];
+  else if (phase === 'done' && mode === 'solo') msg = [`Game over: ${score} points`, soloResult || (myId === hostId ? 'Press Space for a new game' : '')];
   else if (phase === 'done' && $('status').textContent) msg = [$('status').textContent, myId === hostId ? 'Press Space for a new game' : ''];
   if (msg) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -382,7 +384,7 @@ function sync(force) {
 setInterval(() => { if (playing) sync(); }, SYNC_MS);
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', game: 'block', name, room: roomCode });
+  ws.onopen = () => net({ t: 'join', game: 'block', name, room: roomCode, bid: SW.bid });
   ws.onclose = () => setStatus('Disconnected. Reload to rejoin.');
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
@@ -407,6 +409,10 @@ function connect() {
         phase = 'done'; mode = mode || null; renderPlayers();
         break;
       }
+      case 'solo': // solo run saved: did it make the leaderboard?
+        soloResult = (m.score && !m.error && !m.onBoard && m.best > m.prevBest ? 'New personal best! ' : '') + SW.leaderboardText(m, 'points');
+        setStatus(`Game over: ${score} points. ${soloResult}`); log(`Game over: ${score} points. ${soloResult}`);
+        break;
       case 'log': log(m.msg); break;
       case 'chat': chatLine(m.id, m.msg); break;
     }
@@ -446,7 +452,8 @@ $('leaveBtn').onclick = e => {
   leaveRoom(); location.href = '/';
 };
 $('theme').value = document.documentElement.dataset.theme || 'system';
-$('theme').addEventListener('change', e => { document.documentElement.dataset.theme = e.target.value; try { localStorage.setItem('sw-theme', e.target.value); } catch {} readTheme(); e.target.blur(); });
+$('theme').addEventListener('change', e => { SW.set('theme', e.target.value); e.target.blur(); }); // saved per browser (locally and on the server)
+SW.onChange(s => { if (s.theme) $('theme').value = s.theme; readTheme(); });
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]}">${k}</span><span><b>${SPECIALS[k][0]}</b> – ${SPECIALS[k][2]}</span></li>`).join('');
 

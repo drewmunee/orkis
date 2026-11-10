@@ -1,66 +1,88 @@
-// Solo leaderboards: best score per username. Stackwar counts lines cleared (this module's default
-// export); Snakewar's classic solo mode counts food eaten (`.snake`). Each board is its own table/file.
-// Uses Postgres when DATABASE_URL is set (needed on Render, whose disk is wiped on every restart);
-// otherwise falls back to a JSON file for local play.
-const fs = require('fs');
-const path = require('path');
+// Solo leaderboards for every game: each player's best score, one spot per player (per browser ID, so a
+// new username doesn't earn a second spot), shown under the name they used most recently.
+//   stackwar: lines cleared in a solo run · snakewar: food eaten in classic solo · blockwar: solo points
+const { getPool, jsonFile, playerKey } = require('./db');
 
+const GAMES = ['stackwar', 'snakewar', 'blockwar'];
 const TOP_N = 10;
-const keyOf = name => name.trim().toLowerCase();
 
-let pool = null; // one connection pool shared by every board
-function postgresStore(url, table) {
-  const { Pool } = require('pg');
-  pool = pool || new Pool({ connectionString: url, max: 3 });
-  const ready = pool.query(`CREATE TABLE IF NOT EXISTS ${table} (
-    name_key    text PRIMARY KEY,
-    name        text NOT NULL,
-    lines       integer NOT NULL,
-    achieved_at timestamptz NOT NULL DEFAULT now()
-  )`);
+function postgresBoards(pool) {
+  const ready = (async () => {
+    await pool.query(`CREATE TABLE IF NOT EXISTS scores (
+      game        text NOT NULL,
+      player_key  text NOT NULL,
+      name        text NOT NULL,
+      score       integer NOT NULL,
+      achieved_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (game, player_key)
+    )`);
+    // carry over scores from the old per-username tables (keyed by name; they merge into a browser's
+    // spot the first time that name submits from a browser)
+    for (const [table, game] of [['leaderboard', 'stackwar'], ['snake_leaderboard', 'snakewar']]) {
+      const exists = (await pool.query('SELECT to_regclass($1) AS t', [table])).rows[0].t;
+      if (exists) await pool.query(
+        `INSERT INTO scores (game, player_key, name, score, achieved_at)
+         SELECT $1, 'name:' || name_key, name, lines, achieved_at FROM ${table}
+         ON CONFLICT DO NOTHING`, [game]);
+    }
+  })();
   return {
-    kind: 'postgres',
-    async submit(name, lines) {
+    async submit(game, key, name, score) {
       await ready;
-      // keep only each name's best run
+      const legacy = 'name:' + name.trim().toLowerCase();
+      if (key !== legacy) {
+        // a score saved under this name before browser IDs existed becomes this browser's
+        const old = (await pool.query('DELETE FROM scores WHERE game = $1 AND player_key = $2 RETURNING score, achieved_at', [game, legacy])).rows[0];
+        if (old) await pool.query(
+          `INSERT INTO scores (game, player_key, name, score, achieved_at) VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (game, player_key) DO UPDATE SET score = GREATEST(scores.score, EXCLUDED.score)`, [game, key, name, old.score, old.achieved_at]);
+      }
+      const prev = (await pool.query('SELECT score FROM scores WHERE game = $1 AND player_key = $2', [game, key])).rows[0];
+      // keep the best score; always show the latest name
       await pool.query(
-        `INSERT INTO ${table} (name_key, name, lines) VALUES ($1, $2, $3)
-         ON CONFLICT (name_key) DO UPDATE SET name = EXCLUDED.name, lines = EXCLUDED.lines, achieved_at = now()
-         WHERE ${table}.lines < EXCLUDED.lines`,
-        [keyOf(name), name, lines]);
-      const best = (await pool.query(`SELECT lines FROM ${table} WHERE name_key = $1`, [keyOf(name)])).rows[0].lines;
-      const rank = +(await pool.query(`SELECT count(*) + 1 AS r FROM ${table} WHERE lines > $1`, [best])).rows[0].r; // rank of their best run
-      return { best, rank };
+        `INSERT INTO scores (game, player_key, name, score) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (game, player_key) DO UPDATE SET name = EXCLUDED.name,
+           score = GREATEST(scores.score, EXCLUDED.score),
+           achieved_at = CASE WHEN EXCLUDED.score > scores.score THEN now() ELSE scores.achieved_at END`,
+        [game, key, name, score]);
+      const best = (await pool.query('SELECT score FROM scores WHERE game = $1 AND player_key = $2', [game, key])).rows[0].score;
+      const rank = +(await pool.query('SELECT count(*) + 1 AS r FROM scores WHERE game = $1 AND score > $2', [game, best])).rows[0].r;
+      const tenth = (await pool.query('SELECT score FROM scores WHERE game = $1 ORDER BY score DESC, achieved_at ASC OFFSET $2 LIMIT 1', [game, TOP_N - 1])).rows[0];
+      return { best, rank, prevBest: prev ? prev.score : 0, onBoard: rank <= TOP_N, cutoff: tenth ? tenth.score : 0 };
     },
-    async top() {
+    async top(game) {
       await ready;
-      const { rows } = await pool.query(`SELECT name, lines, achieved_at FROM ${table} ORDER BY lines DESC, achieved_at ASC LIMIT $1`, [TOP_N]);
-      return rows.map(r => ({ name: r.name, lines: r.lines, at: r.achieved_at }));
+      const { rows } = await pool.query('SELECT name, score, achieved_at FROM scores WHERE game = $1 ORDER BY score DESC, achieved_at ASC LIMIT $2', [game, TOP_N]);
+      return rows.map(r => ({ name: r.name, score: r.score, at: r.achieved_at }));
     },
   };
 }
 
-function fileStore(file) {
-  let data = {};
-  try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
-  const save = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(data, null, 1)); };
-  const sorted = () => Object.values(data).sort((a, b) => b.lines - a.lines || a.at.localeCompare(b.at));
+function fileBoards() {
+  const f = jsonFile('scores.json');
+  for (const g of GAMES) f.data[g] = f.data[g] || {};
+  const sorted = g => Object.values(f.data[g]).sort((a, b) => b.score - a.score || a.at.localeCompare(b.at));
   return {
-    kind: 'file',
-    async submit(name, lines) {
-      const k = keyOf(name), cur = data[k];
-      if (!cur || cur.lines < lines) { data[k] = { name, lines, at: new Date().toISOString() }; save(); }
-      const best = data[k].lines;
-      return { best, rank: Object.values(data).filter(e => e.lines > best).length + 1 };
+    async submit(game, key, name, score) {
+      const board = f.data[game], legacy = 'name:' + name.trim().toLowerCase();
+      if (key !== legacy && board[legacy]) { const old = board[legacy]; delete board[legacy]; if (!board[key] || board[key].score < old.score) board[key] = { ...old }; }
+      const prev = board[key];
+      board[key] = !prev || score > prev.score ? { name, score, at: new Date().toISOString() } : { ...prev, name };
+      f.save();
+      const best = board[key].score, list = sorted(game);
+      const rank = list.filter(e => e.score > best).length + 1;
+      return { best, rank, prevBest: prev ? prev.score : 0, onBoard: rank <= TOP_N, cutoff: list[TOP_N - 1] ? list[TOP_N - 1].score : 0 };
     },
-    async top() { return sorted().slice(0, TOP_N); },
+    async top(game) { return sorted(game).slice(0, TOP_N); },
   };
 }
 
-// The score column is called `lines` in both tables; for Snakewar it holds food eaten.
-const board = (table, file) => process.env.DATABASE_URL
-  ? postgresStore(process.env.DATABASE_URL, table)
-  : fileStore(path.join(__dirname, 'data', file));
+const pool = getPool();
+const boards = pool ? postgresBoards(pool) : fileBoards();
 
-module.exports = board('leaderboard', 'leaderboard.json');
-module.exports.snake = board('snake_leaderboard', 'snake-leaderboard.json');
+// submit(game, { bid, name }, score) -> { best, rank, prevBest, onBoard, cutoff }
+module.exports = {
+  GAMES, TOP_N,
+  submit: (game, p, score) => boards.submit(game, playerKey(p.bid, p.name), p.name, score),
+  top: game => boards.top(game),
+};

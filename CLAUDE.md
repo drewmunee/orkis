@@ -20,6 +20,27 @@ every connection every 20 s and drops ones that don't answer, so stale players n
 New games must call the same `leaveRoom()` pattern.
  Deployed on Render, which auto-deploys from `main`.
 
+## Players, leaderboards and settings
+- **Browser ID**: `public/common.js` (loaded by every page) gives each browser a random UUID (`sw-bid` in
+  localStorage) and sends it when joining any game. It's how we tell it's the same person across
+  username changes (not bulletproof: another browser or cleared site data gets a new ID).
+- **Leaderboards** (`leaderboard.js`, table `scores`): one spot per player per game (keyed by browser ID,
+  falling back to username), best score kept, shown under the most recent name; top 10 only.
+  stackwar = lines in a solo run, snakewar = food in classic solo, blockwar = solo points.
+  `GET /api/leaderboard?game=...`. Shown on the homepage next to the lobby list for the selected game
+  (`SHOW_LEADERBOARD` in `public/game.js`), and the top 3 drift across the homepage background.
+  Old per-username tables (`leaderboard`, `snake_leaderboard`) are copied in on start; such a row merges
+  into a browser's spot the first time that name submits from a browser.
+- After a solo run the result line says whether it made the leaderboard (`SW.leaderboardText`).
+- Sanity checks reject impossible solo scores (Stackwar > ~3 lines/s, Blockwar > ~150 pts/s over the run).
+  Stackwar/Blockwar scores still come from the browser, so a determined cheat is possible; Snakewar is
+  server-run.
+- **Settings** (`settings.js`, table `settings`): one small JSON object per browser ID, `GET/POST
+  /api/settings`, max 4 KB. `SW.get/SW.set` keep them in localStorage too and sync to the server. The
+  theme is stored there now; controls and other preferences should go there too.
+- Storage: Postgres (Neon) when `DATABASE_URL` is set (`db.js`), else JSON files in `data/` for local play.
+  Production's `DATABASE_URL` lives in Render's Environment settings (never commit it).
+
 ## Product decisions
 - **Desktop + keyboard only.** Do not spend effort on phone/touch support or mobile layouts.
   Optimize for people at a computer with a keyboard.
@@ -39,13 +60,7 @@ New games must call the same `leaveRoom()` pattern.
   D Darkness (target board blacked out ~4s), I Inverted (target's controls scrambled 5s: left/right,
   rotations and up/down swap; hard drop unchanged), S Switch, N Nuke. N/G/S are rarer than the rest.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
-  that player's cleared lines itself (clients report each clear, capped at 4) and saves their best
-  run per username to the leaderboard shown on the homepage (`GET /api/leaderboard`, top 10).
-  The homepage leaderboard is **hidden for now** (`SHOW_LEADERBOARD = false` in `public/game.js`) until
-  the Neon database is set up; scores are still recorded. Flip it to `true` to show it again.
-- **Leaderboard storage** (`leaderboard.js`): Postgres when `DATABASE_URL` is set; otherwise
-  `data/leaderboard.json` for local play. Production uses a free Neon Postgres database; its connection
-  string is set as `DATABASE_URL` in Render's Environment settings (never commit it).
+  that player's cleared lines itself (clients report each clear, capped at 4) and records the run.
 - **Team mode** (host toggles it in the room panel): each match shuffles players into Red and Blue
   (sizes differ by at most 1, e.g. 3v2). Specials can target anyone, teammates included. Garbage to
   teammates is always just 1 line with a 95% chance of a special; opponents get the normal amount.
@@ -64,7 +79,7 @@ New games must call the same `leaveRoom()` pattern.
   lobby code defaults to `lobby` (rooms are separate from Stackwar's).
 - **Solo is classic snake**: 32x18 board, solid walls (no wrap), one food at a time, +1 per food, no
   special foods, no shrinking. Score = food eaten; best per username goes to `leaderboard.snake`
-  (`snake_leaderboard` table, `GET /api/leaderboard?game=snake`). Not shown on the homepage yet.
+  (`GET /api/leaderboard?game=snakewar`).
 - Battle rounds (2+ players) wrap at the play-area edge. Any snake body or blockade kills; a dead snake
   leaves food on every other segment. Head contests: face to face both die; if one turned into the
   other's head from the side, only the turner dies; running into the side of a head kills the mover.
@@ -95,8 +110,8 @@ New games must call the same `leaveRoom()` pattern.
 - Chat/log is hidden from players who are alive in a round (Enter opens it); it shows for
   spectators, eliminated players, and between rounds. It auto-scrolls unless you scrolled up.
 - **The two games must stay isolated.** Each connection belongs to one game for its life (Snakewar
-  joins send `game: 'snake'`); they share only `base.css` (theme + base elements) and the `sw-name` /
-  `sw-theme` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.
+  joins send `game: 'snake'`); they share only `base.css` (theme + base elements), `common.js` (browser ID +
+  settings) and the `sw-name` / `sw-theme` / `sw-bid` / `sw-settings` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.
 
 ## Blockwar
 - Like Stackwar: each player's game runs in their own browser; `block.js` handles rooms, the host's mode

@@ -1,6 +1,6 @@
 // Snakewar: battle-royale snake. The server owns the game: it moves every snake on a fixed tick,
 // resolves collisions and food, and broadcasts the whole field to everyone in the room.
-const leaderboard = require('./leaderboard').snake;
+const leaderboard = require('./leaderboard');
 const GW = 112, GH = 63;           // full-size 16:9 field, fills most laptop/desktop screens
 // Field size depends on how many are in the room when a round starts: solo is classic snake on a small
 // 32x18 board; 2 players get a quarter of the full area, 3 players half, 4+ the full field. All 16:9.
@@ -431,8 +431,8 @@ function recordClassic(room, p = [...room.players.values()][0]) {
   if (!p) return;
   const score = p.eaten || 0;
   if (!score) return send(p.ws, { t: 'classic', score: 0 });
-  leaderboard.submit(p.name, score).then(
-    ({ best, rank }) => send(p.ws, { t: 'classic', score, best, rank }),
+  leaderboard.submit('snakewar', p, score).then(
+    r => send(p.ws, { t: 'classic', score, ...r }),
     err => { console.error('snake leaderboard write failed:', err.message); send(p.ws, { t: 'classic', score, error: true }); });
 }
 function endRound(room, msg) {
@@ -472,7 +472,7 @@ function join(ws, id, m) {
   }
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
-  const me = { id, ws, slot, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null };
+  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null };
   room.players.set(id, me);
   if (room.state === 'lobby') setField(room, room.players.size); // preview the size the next round will use
   send(ws, { t: 'welcome', id, room: code, w: room.w, h: room.h, tick: TICK_MS, specials: SPECIALS });
