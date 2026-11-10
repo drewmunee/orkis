@@ -438,9 +438,12 @@ $('chat').addEventListener('keydown', e => {
 });
 $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
 for (const b of $('modes').children) b.onclick = e => { net({ t: 'mode', mode: b.dataset.mode }); e.currentTarget.blur(); };
+// Leave the room for real: tell the server first (so it drops you immediately), then close.
+function leaveRoom() { try { if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ t: 'leave' })); ws.close(); } } catch {} }
+window.addEventListener('pagehide', leaveRoom); // tab closed, reloaded, browser back, or Back to lobby
 $('leaveBtn').onclick = e => {
   if (playing && !confirm('Leave this game? You will be counted as out.')) { e.target.blur(); return; }
-  location.href = '/';
+  leaveRoom(); location.href = '/';
 };
 $('theme').value = document.documentElement.dataset.theme || 'system';
 $('theme').addEventListener('change', e => { document.documentElement.dataset.theme = e.target.value; try { localStorage.setItem('sw-theme', e.target.value); } catch {} readTheme(); e.target.blur(); });

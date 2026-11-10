@@ -542,10 +542,13 @@ $('joinForm').onsubmit = e => {
   connect($('name').value, $('room').value);
 };
 $('startBtn').onclick = () => net({ t: 'start' });
+// Leave the room for real: tell the server first (so it drops you immediately), then close.
+function leaveRoom() { try { if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ t: 'leave' })); ws.close(); } } catch {} }
+window.addEventListener('pagehide', leaveRoom); // tab closed, reloaded, browser back, or Back to lobby
 // Back to the homepage (game + lobby select). Leaving mid-game counts as being knocked out, so ask first.
 $('leaveBtn').onclick = e => {
   if (playing && !confirm('Leave this game? You will be counted as out.')) { e.target.blur(); return; }
-  location.href = '/';
+  leaveRoom(); location.href = '/';
 };
 $('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
 function loadLeaderboard() {

@@ -19,6 +19,10 @@ features with rooms/lobbies in mind, even while a game is single-player.
 The homepage lists open lobbies for the selected game under the picker (`GET /api/lobbies`, refreshed
 every 3 s; clicking a lobby joins it). Homepage content is anchored near the top so the list can grow
 without moving the picker. When a game gets lobbies, add it to `/api/lobbies` in `server.js`.
+Leaving: every game page sends `{t:'leave'}` and closes its socket on Back to lobby and on `pagehide`
+(tab closed, reload, browser back); the server drops that connection at once. `server.js` also pings
+every connection every 20 s and drops ones that don't answer, so stale players never pile up in lobbies.
+New games must call the same `leaveRoom()` pattern.
  Deployed on Render, which auto-deploys from `main`.
 
 ## Product decisions

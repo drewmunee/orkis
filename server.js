@@ -90,7 +90,19 @@ function checkGameOver(room) {
   sendLobby(room);
 }
 
+// Heartbeat: every 20 s, drop any connection that didn't answer the last ping. This clears out players
+// whose browser went away without the connection closing properly (e.g. through Render's proxy), so
+// they don't linger in lobbies.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) { ws.terminate(); continue; }
+    ws.isAlive = false; ws.ping();
+  }
+}, 20000);
+
 wss.on('connection', ws => {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
   const me = { id: nextId++, ws, name: '', slot: 0, alive: false, board: '', wins: 0, lines: 0 };
   let room = null;
   let snakeConn = null; // set when this connection plays Snakewar (or Blockwar) instead of Stackwar
@@ -98,6 +110,9 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let m;
     try { m = JSON.parse(raw); } catch { return; }
+    // a player leaving on purpose (Back to lobby, closing the tab): drop them right away rather than
+    // waiting for the connection to close; the close handler below does the cleanup for every game
+    if (m.t === 'leave') return ws.terminate();
     if (snakeConn) return snakeConn.message(m);
     if (m.t === 'join' && m.game === 'snake') { if (!room) snakeConn = snake.join(ws, me.id, m) || { message() {}, close() {} }; return; } // a Snakewar connection never falls through to Stackwar
     if (m.t === 'join' && m.game === 'block') { if (!room) snakeConn = block.join(ws, me.id, m) || { message() {}, close() {} }; return; } // same for Blockwar

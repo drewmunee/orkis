@@ -355,11 +355,14 @@ $('chat').addEventListener('keydown', e => {
 $('chat').addEventListener('blur', updateChat);
 $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
 $('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
+// Leave the room for real: tell the server first (so it drops you immediately), then close.
+function leaveRoom() { try { if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ t: 'leave' })); ws.close(); } } catch {} }
+window.addEventListener('pagehide', leaveRoom); // tab closed, reloaded, browser back, or Back to lobby
 // Back to the homepage. Leaving while still alive in a round means dying, so ask first.
 $('leaveBtn').onclick = e => {
   const alive = roomState !== 'lobby' && state.snakes.some(s => s.id === myId);
   if (alive && !confirm('Leave this round? Your snake will be out.')) { e.target.blur(); return; }
-  location.href = '/';
+  leaveRoom(); location.href = '/';
 };
 $('theme').value = document.documentElement.dataset.theme || 'system';
 $('theme').addEventListener('change', e => { document.documentElement.dataset.theme = e.target.value; try { localStorage.setItem('sw-theme', e.target.value); } catch {} readTheme(); e.target.blur(); });
