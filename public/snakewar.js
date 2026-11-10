@@ -7,6 +7,8 @@ const SPECIAL_INFO = {
   ghost: { name: 'Ghost', icon: '👻', color: '#cfd8ff', desc: 'slide through snakes for 6 seconds' },
   feast: { name: 'Feast', icon: '+5', color: '#ff66d9', desc: 'grow 5 segments at once' },
   shears: { name: 'Shears', icon: '✂', color: '#ff7b7b', desc: 'every other snake loses 4 segments (never below 3)' },
+  double: { name: 'Double', icon: 'x2', color: '#7bffb0', desc: 'all growth counts double for 20 seconds' },
+  slow: { name: 'Slow', icon: '🐌', color: '#a0c4ff', desc: 'every other snake moves at half speed for 5 seconds' },
 };
 const KEYS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R', w: 'U', s: 'D', a: 'L', d: 'R', W: 'U', S: 'D', A: 'L', D: 'R' };
 
@@ -44,7 +46,7 @@ function connect() {
         setStatus(players.length === 1 ? 'Solo round: grow as long as you can' : '');
         log('— Round started —');
         break;
-      case 'state': state = m; updateLengths(); updateChat(); break;
+      case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } updateLengths(); updateChat(); break; // field size depends on player count
       case 'ate': if (m.id === myId) flashBanner(`${SPECIAL_INFO[m.special].name}!`, 900); break;
       case 'gameover': {
         const txt = m.winnerId === myId ? '🏆 You win!' : m.winnerName ? `${m.winnerName} wins!` : 'Round over';
@@ -125,6 +127,8 @@ function draw() {
     const col = colorOf(s.id), mine = s.id === myId, fx = s.fx || {};
     ctx.globalAlpha = fx.ghost ? 0.45 : 1;
     if (fx.speed) { ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = cs * 0.8; }
+    else if (fx.slow) { ctx.shadowColor = '#a0c4ff'; ctx.shadowBlur = cs * 0.8; }
+    else if (fx.double) { ctx.shadowColor = '#7bffb0'; ctx.shadowBlur = cs * 0.6; }
     ctx.fillStyle = col;
     s.body.forEach((c, i) => { const pad = i === 0 ? 0 : Math.max(1, cs * 0.08); roundRect(cx(c) + pad, cy(c) + pad, cs - pad * 2, cs - pad * 2, cs * 0.3); });
     ctx.shadowBlur = 0;

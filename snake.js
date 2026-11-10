@@ -1,6 +1,16 @@
 // Snakewar: battle-royale snake. The server owns the game: it moves every snake on a fixed tick,
 // resolves collisions and food, and broadcasts the whole field to everyone in the room.
-const GW = 112, GH = 63;           // 16:9 grid, fills most laptop/desktop screens
+const GW = 112, GH = 63;           // full-size 16:9 field, fills most laptop/desktop screens
+// Field size depends on how many are in the room when a round starts: solo/2 players get a quarter of the
+// area, 3 players half, 4+ the full field. Every size keeps the 16:9 shape.
+function fieldFor(n) {
+  const k = n <= 2 ? 0.5 : n === 3 ? Math.SQRT1_2 : 1; // side scale: area 1/4, 1/2, full
+  return { w: Math.round(GW * k), h: Math.round(GH * k) };
+}
+const FOOD_GROWTH = 2;              // every food (incl. what dead snakes leave) adds 2 segments
+// Food on the field: one per player at the start, rising steadily as the round goes on
+// (x2 after 1 minute, x3 after 2 ...), capped at FOOD_MAX_MULT x the start and FOOD_CAP overall.
+const FOOD_RAMP_MS = 60000, FOOD_MAX_MULT = 5, FOOD_CAP = 100;
 const TICK_MS = 110;               // one step per tick (two while Speed is active)
 const COUNTDOWN_MS = 3000;
 const MAX_PLAYERS = 12;
@@ -8,16 +18,17 @@ const START_LEN = 4;
 const SPECIAL_LIFETIME = 15000;    // uneaten special foods vanish after this
 const MAX_SPECIALS = 3;
 const SPECIAL_CHANCE = 1 / 70;     // per tick, while below MAX_SPECIALS (~ one every 8s)
-// Special foods: speed (2 steps per tick), ghost (pass through snake bodies), feast (+5 length),
-// shears (every other snake loses SHEARS_CUT segments, never below SHEARS_MIN)
-const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0 };
+// Special foods (value = effect duration in ms): speed (2 steps per tick), ghost (pass through snake bodies),
+// feast (+5 length), shears (every other snake loses SHEARS_CUT segments, never below SHEARS_MIN),
+// double (all growth x2), slow (every other snake moves at half speed)
+const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000 };
 const SHEARS_CUT = 4, SHEARS_MIN = 3;
 const SPECIAL_KEYS = Object.keys(SPECIALS);
 const DIRS = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] };
 
 const rooms = new Map();
-const cell = (x, y) => y * GW + x;
-const xy = c => [c % GW, (c / GW) | 0];
+const cell = (r, x, y) => y * r.w + x;           // cells are numbered per room, since field sizes differ
+const xy = (r, c) => [c % r.w, (c / r.w) | 0];
 const rnd = n => (Math.random() * n) | 0;
 
 function send(ws, msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); }
@@ -40,7 +51,7 @@ function occupied(room) {
 }
 function randomFreeCell(room, occ = occupied(room)) {
   for (let i = 0; i < 500; i++) {
-    const c = cell(rnd(GW), rnd(GH));
+    const c = cell(room, rnd(room.w), rnd(room.h));
     if (!occ.has(c) && !room.food.has(c) && !room.drops.has(c) && !room.specials.has(c)) return c;
   }
   return -1;
@@ -48,14 +59,15 @@ function randomFreeCell(room, occ = occupied(room)) {
 function spawnSnake(room, p, occ) {
   // find a spot with room to move, pointing toward the middle of the field
   for (let tries = 0; tries < 300; tries++) {
-    const x = 8 + rnd(GW - 16), y = 6 + rnd(GH - 12);
-    const dir = Math.abs(x - GW / 2) > Math.abs(y - GH / 2) ? (x < GW / 2 ? 'R' : 'L') : (y < GH / 2 ? 'D' : 'U');
+    const W = room.w, H = room.h, mx = Math.min(8, W >> 2), my = Math.min(6, H >> 2);
+    const x = mx + rnd(W - 2 * mx), y = my + rnd(H - 2 * my);
+    const dir = Math.abs(x - W / 2) > Math.abs(y - H / 2) ? (x < W / 2 ? 'R' : 'L') : (y < H / 2 ? 'D' : 'U');
     const [dx, dy] = DIRS[dir];
     const body = [];
-    for (let i = 0; i < START_LEN; i++) body.push(cell(x - dx * i, y - dy * i));
+    for (let i = 0; i < START_LEN; i++) body.push(cell(room, x - dx * i, y - dy * i));
     // keep a clear zone around the new snake
     let clear = true;
-    for (const c of body) { const [cx, cy] = xy(c); for (let ox = -3; ox <= 3 && clear; ox++) for (let oy = -3; oy <= 3; oy++) if (occ.has(cell(cx + ox, cy + oy))) { clear = false; break; } }
+    for (const c of body) { const [cx, cy] = xy(room, c); for (let ox = -3; ox <= 3 && clear; ox++) for (let oy = -3; oy <= 3; oy++) if (occ.has(cell(room, cx + ox, cy + oy))) { clear = false; break; } }
     if (!clear) continue;
     p.body = body; p.dir = dir; p.queue = []; p.grow = 0; p.fx = {}; p.alive = true;
     for (const c of body) occ.add(c);
@@ -68,6 +80,8 @@ function startRound(room) {
   room.state = 'countdown';
   room.food = new Set(); room.drops = new Set(); room.specials = new Map();
   room.startCount = room.players.size;
+  Object.assign(room, fieldFor(room.startCount));
+  room.tickN = 0; room.playStart = Date.now() + COUNTDOWN_MS;
   const occ = new Set();
   for (const p of room.players.values()) spawnSnake(room, p, occ);
   topUpFood(room);
@@ -82,8 +96,9 @@ function startRound(room) {
 function stopRound(room) { clearTimeout(room.timer); clearInterval(room.timer); room.timer = null; }
 
 function topUpFood(room) {
-  // always one regular food on the field per player in the round
-  const want = Math.max(1, room.startCount || room.players.size);
+  const base = Math.max(1, room.startCount || room.players.size);
+  const mult = Math.min(FOOD_MAX_MULT, 1 + Math.max(0, Date.now() - (room.playStart || Date.now())) / FOOD_RAMP_MS);
+  const want = Math.min(FOOD_CAP, Math.floor(base * mult));
   const occ = occupied(room);
   while (room.food.size < want) { const c = randomFreeCell(room, occ); if (c < 0) break; room.food.add(c); }
 }
@@ -105,9 +120,9 @@ function step(room, movers) {
   const plan = [];
   for (const p of movers) {
     if (p.queue.length) { const d = p.queue.shift(); if (!isReverse(p.dir, d)) p.dir = d; }
-    const [hx, hy] = xy(p.body[0]), [dx, dy] = DIRS[p.dir];
+    const [hx, hy] = xy(room, p.body[0]), [dx, dy] = DIRS[p.dir];
     // the field wraps: leaving one edge brings you in on the opposite side
-    const nc = cell((hx + dx + GW) % GW, (hy + dy + GH) % GH);
+    const nc = cell(room, (hx + dx + room.w) % room.w, (hy + dy + room.h) % room.h);
     plan.push([p, nc]);
     heads.set(nc, (heads.get(nc) || []).concat(p));
   }
@@ -126,15 +141,20 @@ function step(room, movers) {
     if (deadSet.has(p)) continue;
     p.body.unshift(nc);
     if (p.grow > 0) p.grow--; else p.body.pop();
-    if (room.food.has(nc)) { room.food.delete(nc); p.grow += 1; }
-    else if (room.drops.has(nc)) { room.drops.delete(nc); p.grow += 1; }
+    const x2 = p.fx.double > Date.now() ? 2 : 1; // Double: all growth counts twice
+    if (room.food.has(nc)) { room.food.delete(nc); p.grow += FOOD_GROWTH * x2; }
+    else if (room.drops.has(nc)) { room.drops.delete(nc); p.grow += FOOD_GROWTH * x2; }
     const sp = room.specials.get(nc);
     if (sp) {
       room.specials.delete(nc);
-      if (sp.type === 'feast') p.grow += 5;
+      if (sp.type === 'feast') p.grow += 5 * x2;
       else if (sp.type === 'shears') {
         for (const q of room.players.values()) if (q !== p && q.alive) { q.body.splice(Math.max(SHEARS_MIN, q.body.length - SHEARS_CUT)); q.grow = 0; }
         log(room, `${p.name} grabbed Shears: everyone else loses ${SHEARS_CUT}`);
+      }
+      else if (sp.type === 'slow') {
+        for (const q of room.players.values()) if (q !== p && q.alive) q.fx.slow = Date.now() + SPECIALS.slow;
+        log(room, `${p.name} grabbed Slow: everyone else is slowed`);
       }
       else p.fx[sp.type] = Date.now() + SPECIALS[sp.type];
       broadcast(room, { t: 'ate', id: p.id, special: sp.type });
@@ -146,8 +166,10 @@ const isReverse = (a, b) => DIRS[a][0] === -DIRS[b][0] && DIRS[a][1] === -DIRS[b
 
 function tick(room) {
   const alive = () => [...room.players.values()].filter(p => p.alive);
-  step(room, alive());
-  const fast = alive().filter(p => p.fx.speed > Date.now());
+  const now0 = Date.now(), odd = room.tickN++ % 2 === 1;
+  const slowed = p => p.fx.slow > now0;
+  step(room, alive().filter(p => !(slowed(p) && odd)));      // slowed snakes skip every other tick
+  const fast = alive().filter(p => p.fx.speed > Date.now() && !slowed(p));
   if (fast.length) step(room, fast);
   // special foods come and go
   const now = Date.now();
@@ -164,7 +186,7 @@ function tick(room) {
 function sendState(room) {
   const now = Date.now();
   broadcast(room, {
-    t: 'state',
+    t: 'state', w: room.w, h: room.h,
     snakes: [...room.players.values()].filter(p => p.alive).map(p => ({
       id: p.id, body: p.body, dir: p.dir,
       fx: Object.fromEntries(Object.entries(p.fx).filter(([, u]) => u > now).map(([k, u]) => [k, u - now])),
@@ -192,12 +214,13 @@ function checkRoundOver(room) {
 function join(ws, id, m) {
   const code = String(m.room || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
   let room = rooms.get(code);
-  if (!room) { room = { code, players: new Map(), hostId: id, state: 'lobby', food: new Set(), drops: new Set(), specials: new Map(), startCount: 0 }; rooms.set(code, room); }
+  if (!room) { room = { code, players: new Map(), hostId: id, state: 'lobby', food: new Set(), drops: new Set(), specials: new Map(), startCount: 0, ...fieldFor(1) }; rooms.set(code, room); }
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
   const me = { id, ws, slot, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, wins: 0 };
   room.players.set(id, me);
-  send(ws, { t: 'welcome', id, room: code, w: GW, h: GH, tick: TICK_MS, specials: SPECIALS });
+  if (room.state === 'lobby') { Object.assign(room, fieldFor(room.players.size)); room.food.clear(); room.drops.clear(); room.specials.clear(); } // preview the size the next round will use
+  send(ws, { t: 'welcome', id, room: code, w: room.w, h: room.h, tick: TICK_MS, specials: SPECIALS });
   sendLobby(room);
   sendState(room);
   log(room, `${me.name} joined`);
@@ -220,6 +243,7 @@ function join(ws, id, m) {
       if (me.alive) { me.alive = false; }
       log(room, `${me.name} left`);
       checkRoundOver(room);
+      if (room.state === 'lobby') { Object.assign(room, fieldFor(room.players.size)); room.food.clear(); room.drops.clear(); room.specials.clear(); sendState(room); }
       sendLobby(room);
     },
   };

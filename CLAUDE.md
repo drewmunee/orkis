@@ -41,13 +41,16 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 ## Snakewar
 - Server-authoritative: `snake.js` moves every snake each tick (110 ms), resolves collisions and food,
   and broadcasts the whole field. Clients only send direction changes and draw.
-- One shared 112x63 (16:9) field scaled to fill the window. Up to 12 players per room; lobby code
-  defaults to `lobby` (rooms are separate from Stackwar's).
+- One shared 16:9 field scaled to fill the window. Its size depends on the players in the room when the
+  round starts: 1-2 players 56x32 (quarter area), 3 players 79x45 (half), 4+ 112x63 (full).
+  Up to 12 players per room; lobby code defaults to `lobby` (rooms are separate from Stackwar's).
 - The field wraps at every edge. Any snake body (including your own) kills; head-on collisions kill both. A dead snake
   leaves food on every other segment. Last snake alive wins (solo: play until you die).
-- Always one regular food per player in the round. Special foods spawn randomly (max 3, vanish
-  after 15 s): Speed (2 steps/tick for 5 s), Ghost (pass through snakes for 6 s), Feast (+5 length),
-  Shears (every other snake loses 4 segments, never below 3).
+- Every food (including what dead snakes leave) grows a snake by 2. Regular food starts at one per
+  player and rises as the round goes on (x2 after 1 min, x3 after 2 min, max x5 / 100).
+- Special foods spawn randomly (max 3, vanish after 15 s): Speed (2 steps/tick for 5 s), Ghost (pass
+  through snakes for 6 s), Feast (+5 length), Shears (every other snake loses 4 segments, never below 3),
+  Double (all growth x2 for 20 s), Slow (every other snake moves at half speed for 5 s).
   Owner said more special abilities are TBD.
 - Chat/log is hidden from players who are alive in a round (Enter opens it); it shows for
   spectators, eliminated players, and between rounds.
