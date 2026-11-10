@@ -133,6 +133,7 @@ New games must call the same `leaveRoom()` pattern.
   Bomb (held: dropped out of your tail, explodes after 5 s with radius 5, the exact squares shown on the field: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
 - Held items (Ghost, Blockade, Bomb) go into a 3-slot queue shown on the right; Space uses the oldest.
+- Snake heads are drawn slightly darker than the body (`darker()` in `public/snakewar.js`) so heads are easy to spot.
 - Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
   scoreboard: any of 12 colors normally, or one of 6 shades of their team's color in team mode.
 - **Team mode** (host toggle between rounds): random Red vs Blue each round; Red spawns on the left facing

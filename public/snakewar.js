@@ -44,7 +44,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const playerOf = id => players.find(q => q.id === id);
 function colorOf(id) {
   const p = playerOf(id);
-  if (!p) return '#888';
+  if (!p) return '#888888';
   if (p.team) { const mates = players.filter(q => q.team === p.team).sort((a, b) => a.slot - b.slot); return TEAM_SHADES[p.team][(p.shade ?? mates.indexOf(p)) % 6]; }
   if (teamMode && roomState === 'lobby') return TEAM_SHADES.red[(p.shade ?? 0) % 6]; // previewing a team shade before teams are drawn
   return SNAKE_COLORS[p.color || p.slot];
@@ -183,6 +183,8 @@ function fit() {
   view = { cs, ox: PAD.left + Math.floor((aw - cs * GW) / 2), oy: PAD.top + Math.floor((ah - cs * GH) / 2), w, h };
 }
 const cx = c => view.ox + (c % GW) * view.cs, cy = c => view.oy + ((c / GW) | 0) * view.cs;
+// a slightly darker version of a #rrggbb color (for snake heads)
+const darker = (hex, k = 0.78) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('');
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
 // Squares a bomb at cell c hits: within radius r (squared distance, like the server), inside the field
 function blastTiles(c, r) {
@@ -303,8 +305,8 @@ function draw() {
     if (fx.speed) { ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = cs * 0.8; }
     else if (fx.slow) { ctx.shadowColor = '#a0c4ff'; ctx.shadowBlur = cs * 0.8; }
     else if (fx.double) { ctx.shadowColor = '#7bffb0'; ctx.shadowBlur = cs * 0.6; }
-    ctx.fillStyle = col;
-    s.body.forEach((c, i) => { const pad = i === 0 ? 0 : Math.max(1, cs * 0.08); roundRect(cx(c) + pad, cy(c) + pad, cs - pad * 2, cs - pad * 2, cs * 0.3); });
+    // the head is drawn a little darker than the body so it's easier to spot
+    s.body.forEach((c, i) => { const pad = i === 0 ? 0 : Math.max(1, cs * 0.08); ctx.fillStyle = i === 0 ? darker(col) : col; roundRect(cx(c) + pad, cy(c) + pad, cs - pad * 2, cs - pad * 2, cs * 0.3); });
     ctx.shadowBlur = 0;
     // team matches: the head carries a ring in the pure team color
     if (team) { ctx.strokeStyle = TEAM_COLOR[team]; ctx.lineWidth = Math.max(2, cs * 0.14); ctx.beginPath(); ctx.roundRect(cx(hc) - 1, cy(hc) - 1, cs + 2, cs + 2, cs * 0.35); ctx.stroke(); }
