@@ -28,7 +28,8 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 - Specials hand is shown in the header right above your board (leftmost fires next). It holds 5; collecting more drops the oldest (next-to-fire) ones. Clearing 3+ lines
   at once collects each special in those lines twice.
 - Specials: A Add Line, C Clear Line, R Random Clear (8 blocks), Q Earthquake, G Gravity, B Blank (3 specials), H Haste,
-  D Darkness (target board blacked out ~4s), S Switch, N Nuke. N/G/S are rarer than the rest.
+  D Darkness (target board blacked out ~4s), I Inverted (target's controls scrambled 5s: left/right,
+  rotations and up/down swap; hard drop unchanged), S Switch, N Nuke. N/G/S are rarer than the rest.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and saves their best
   run per username to the leaderboard shown on the homepage (`GET /api/leaderboard`, top 10).

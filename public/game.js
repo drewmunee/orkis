@@ -21,6 +21,7 @@ const SPECIALS = {
   B: ['Blank',        '#d0d0d0', 'Turns 3 of the target\'s special blocks into junk', 3],
   H: ['Haste',        '#ff66d9', 'Target pieces fall 3x faster for 10 seconds', 3],
   D: ['Darkness',     '#3b3363', 'Blacks out the target board for 4 seconds (only the falling piece stays faintly visible)', 3, '#fff'],
+  I: ['Inverted',     '#19d3b5', 'Scrambles the target\'s controls for 5 seconds: left/right swap, rotations reverse, and up/down swap', 3],
   S: ['Switch',       '#fff36b', 'Switches your whole board with the target', 0.7],
   N: ['Nuke',         '#ffffff', 'Wipes the target board completely clean', 0.7],
 };
@@ -50,7 +51,10 @@ let teamMode = false; // host's toggle for the next match; players' .team is set
 const TEAM_COLORS = { red: '#ff4d5e', blue: '#3d7bff' };
 const teamTag = t => t ? `<span class="team team-${t}">${t === 'red' ? 'Red' : 'Blue'}</span>` : ''; // game started with only this player: score goes to the leaderboard
 let held = null, holdUsed = false; // saved piece index; hold allowed once per piece
-let inventory = [], lines = 0, level = 1, hasteUntil = 0, darkUntil = 0;
+let inventory = [], lines = 0, level = 1, hasteUntil = 0, darkUntil = 0, invertUntil = 0;
+const INVERT_MS = 5000;
+// Inverted: while active, each key does something else (hard drop stays put so nobody gets force-dropped)
+const INVERT_KEYS = { ArrowLeft: 'ArrowRight', ArrowRight: 'ArrowLeft', ArrowUp: 'ArrowDown', ArrowDown: 'ArrowUp', x: 'z', X: 'z', z: 'x', Z: 'x' };
 let dropAcc = 0, lockAcc = 0, lockResets = 0, lastTime = 0, sendPending = false;
 
 const $ = id => document.getElementById(id);
@@ -194,6 +198,7 @@ function applySpecial(s) {
     }
     case 'H': hasteUntil = performance.now() + 10000; break;
     case 'D': darkUntil = performance.now() + DARKNESS_MS; break;
+    case 'I': invertUntil = performance.now() + INVERT_MS; break;
   }
   if (playing) { fixPiece(); syncBoard(); }
 }
@@ -232,7 +237,7 @@ function die() {
   setStatus('You topped out!');
 }
 function startGame(seed) {
-  board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0; darkUntil = 0;
+  board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0; darkUntil = 0; invertUntil = 0;
   held = null; holdUsed = false;
   playing = true; dropAcc = 0; countdownEnd = performance.now() + COUNTDOWN_MS; spawn(); renderInv(); updateStats(); syncBoard();
   boards.clear();
@@ -285,6 +290,15 @@ function draw() {
     const a = Math.min(1, (DARKNESS_MS - dark) / 250, dark / 400);
     ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W * CELL, H * CELL); ctx.restore();
     if (piece) piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(piece.id, piece.x + x, piece.y + y, CELL, ctx, 0.3); }));
+  }
+  // Inverted: teal tint, a flipped arrow and a countdown so the victim knows why nothing works
+  const inv = invertUntil - performance.now();
+  if (playing && inv > 0) {
+    ctx.fillStyle = 'rgba(25,211,181,.13)'; ctx.fillRect(0, 0, W * CELL, H * CELL);
+    // label sits a quarter of the way down, clear of where new pieces appear
+    ctx.save(); ctx.globalAlpha = 0.85; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 30px system-ui';
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.55)'; const t = `⇄ INVERTED ${Math.ceil(inv / 1000)}`, ty = H * CELL * 0.27;
+    ctx.strokeText(t, W * CELL / 2, ty); ctx.fillStyle = '#19d3b5'; ctx.fillText(t, W * CELL / 2, ty); ctx.restore();
   }
   // 3-2-1 countdown, then a brief GO!
   const left = countdownEnd - performance.now();
@@ -458,7 +472,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !$('game').classList.contains('hidden')) { $('chat').focus(); e.preventDefault(); return; }
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
   if (!playing || !piece || countingDown()) return;
-  switch (e.key) {
+  const inverted = performance.now() < invertUntil;
+  switch (inverted ? INVERT_KEYS[e.key] || e.key : e.key) {
     case 'ArrowLeft': tryMove(-1, 0); break;
     case 'ArrowRight': tryMove(1, 0); break;
     case 'ArrowDown': if (tryMove(0, 1)) dropAcc = 0; break;
