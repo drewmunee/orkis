@@ -16,6 +16,7 @@ const START_LIVES = 3, RESPAWN_MS = 5000, FX_MS = 10000, BOOM_MS = 5000, ENDING_
 const SYNC_MS = 250;                            // how often your board is sent to the others
 // Specials (letter blocks you break to collect): [name, color, description, weight]
 const SPECIALS = {
+  A: ['Add Line', '#ff5470', 'pushes the target\'s blocks down and adds 2 new rows on top (multiplayer only)', 3],
   R: ['Random', '#b08968', 'drops a boulder or stalactite of breakable stone onto the board', 4],
   C: ['Clear Line', '#7bffb0', 'instantly removes the lowest row of blocks', 3],
   M: ['Multiball', '#ffd23f', 'doubles the number of balls, triples in solo (a life is only lost when every ball is gone)', 3],
@@ -57,8 +58,8 @@ const nameOf = id => (players.find(p => p.id === id) || {}).name || '?';
 
 // ---------- seeded random (clear races start on the same board) ----------
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-// Solo runs never spawn Random (stone), Tiny Paddle, Fast Ball or Earthquake blocks; multiplayer gets them all.
-const SOLO_EXCLUDED = 'RTFQ';
+// Solo runs never spawn Add Line, Random (stone), Tiny Paddle, Fast Ball or Earthquake blocks; multiplayer gets them all.
+const SOLO_EXCLUDED = 'ARTFQ';
 function pickSpecial(rand = Math.random) {
   const keys = mode === 'solo' ? SP_KEYS.filter(k => !SOLO_EXCLUDED.includes(k)) : SP_KEYS;
   const total = keys.reduce((s, k) => s + SPECIALS[k][3], 0);
@@ -85,7 +86,7 @@ const cellColor = ch => ch === 'z' ? STONE : ch === 'y' ? CRACKED : ch >= 'a' &&
 function startMatch(seed, m) {
   mode = m; playing = true; soloResult = ''; brokenCount = 0; livesLost = 0;
   newGrid(seed);
-  lives = START_LIVES; score = 0; level = 1; brokenSinceRow = 0; rowsAdded = 0; queue = []; fx = {}; pendingBalls = 1; ballSpeed = START_SPEED; speedLevel = 1;
+  lives = START_LIVES; score = 0; level = 1; brokenSinceRow = 0; rowsAdded = 0; rowsReceived = 0; queue = []; fx = {}; pendingBalls = 1; ballSpeed = START_SPEED; speedLevel = 1;
   toReady();
   $('levelStat').classList.toggle('hidden', mode !== 'solo');
   renderQueue(); updateHud(); sync(true);
@@ -151,6 +152,7 @@ const exploding = () => !!(fx.boom && fx.boom.until > now());
 function applySpecial(s) {
   if (!playing) return;
   switch (s) {
+    case 'A': addRows(2); break;
     case 'R': addRock(); break;
     case 'C': { // lowest row with anything in it; its blocks score as if you'd broken them
       for (let r = ROWS - 1; r >= 0; r--) if (grid.slice(idx(r, 0), idx(r, COLS)).some(ch => ch !== '.')) {
@@ -224,6 +226,19 @@ function earthquake() {
     if (Math.random() < 0.5 && ((to / COLS) | 0) < ROWS - 3 && grid[to + COLS] === '.') to += COLS;
     grid[to] = grid[i]; grid[i] = '.';
   }
+}
+// Multiplayer attacks (Add Line, and a row for every 12 blocks an opponent breaks): everything moves down
+// and new rows come in at the top. Blocks never get pushed past the bottom row: a board already full to
+// the bottom takes no more rows.
+let rowsReceived = 0;
+function addRows(n) {
+  if (!playing || phase === 'done') return;
+  for (let k = 0; k < n; k++) {
+    if (grid.slice(idx(ROWS - 1, 0)).some(ch => ch !== '.')) break;
+    grid.splice(idx(ROWS - 1, 0), COLS);
+    grid.unshift(...makeRow(START_ROWS + rowsReceived++, Math.random));
+  }
+  updateHud(); sync(true);
 }
 function useSpecial(num) {
   if (!playing || !queue.length) return;
@@ -476,6 +491,7 @@ function connect() {
         startMatch(m.seed, m.mode); renderPlayers(); break;
       case 'board': others.set(m.id, m); drawOpps(); break;
       case 'special': applySpecial(m.special); break;
+      case 'addrows': addRows(Math.min(5, m.n | 0)); break; // an opponent broke another 12 blocks
       case 'used': { const sp = SPECIALS[m.special]; log(`${nameOf(m.from)} → ${m.from === m.to ? 'self' : nameOf(m.to)}: ${sp ? sp[0] : m.special}`); flash(m.to); break; }
       case 'dead': { const p = players.find(q => q.id === m.id); if (p) p.alive = false; renderPlayers(); break; }
       case 'gameover': {

@@ -206,6 +206,9 @@ New games must call the same `leaveRoom()` pattern.
   losing a life resets the ball to its starting speed in every mode, and in solo the level stays but only
   levels gained after that speed it up again). From level 2, new solo rows mix in stone: 6% of blocks,
   +3% per level, max 30% (`soloRockRate`); over when blocks reach the bottom row or lives run out.
+  **Multiplayer (both modes)**: every 12 blocks a player breaks adds a row to every other living player's
+  board (server counts from the snapshot `broken` totals, `ROW_EVERY` in `block.js`, sends `addrows`);
+  rows push everything down and come in at the top; a board already full to the bottom row takes no more.
   **Clear race**: identical boards, first to clear every block wins, unlimited lives (misses just cost
   the 5 s wait). **Lives**: 3 lives, a cleared board refills, last player with lives left wins.
   Team mode is planned. Solo will later get random artifacts/shapes at higher stages.
@@ -213,14 +216,14 @@ New games must call the same `leaveRoom()` pattern.
   the second breaks it (5 more); only the break counts as a block broken.
 - Specials: ~7% of blocks carry a letter; breaking one adds it to your queue (max 3, oldest dropped);
   1-6 fires it at that player (1 = you), X discards, or click a board. R Random (stone boulder or
-  stalactite), C Clear Line (lowest row), M Multiball (doubles balls; triples in solo), E Explosivo
+  stalactite), A Add Line (2 rows on the target's board, same as row growth), C Clear Line (lowest row), M Multiball (doubles balls; triples in solo), E Explosivo
   (5 s, stacks: each block a ball breaks also breaks the blocks touching its 4 sides, no chain; a bit
   rarer, weight 2 like Q), S Slow Ball / F Fast Ball (half /
   double speed 10 s), B Big Paddle / T Tiny Paddle (double / half width 10 s; in solo every timed special
   lasts twice as long, 20 s, except Explosivo which is 10 s), Q Earthquake (shuffles
   the board, buries specials away from the exposed edge, then knocks 4-6 blocks with open space under them
   down 1-2 rows toward the paddle, never into the bottom two rows).
-- Solo runs never spawn R (Random), T (Tiny Paddle), F (Fast Ball) or Q (Earthquake) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
+- Solo runs never spawn A (Add Line), R (Random), T (Tiny Paddle), F (Fast Ball) or Q (Earthquake) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
   it removes like a break (10, stone 5) and counts toward blocks broken, in every mode; in solo it doesn't
   advance the new-row counter.
 
