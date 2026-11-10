@@ -84,6 +84,10 @@ New games must call the same `leaveRoom()` pattern.
   Optimize for people at a computer with a keyboard.
 - Gamepad/controller support would be welcome later, but it is low priority.
 - Boards are 10 wide x 23 tall. The game must fit on screen without scrolling (tested at 1152x720 up to 1920x1080).
+- Stackwar game screen uses Blockwar's layout: top bar (Back to lobby, title + room, Lines/Level,
+  ⚙ Settings moved into the bar), then players/chat/Controls & specials on the left, your name + specials
+  hand above Saved/Next and your centered board, and opponent boards (3 columns, sized by window height
+  and width) on the right. The homepage no longer has the Controls & specials box.
 - Every player gets the same piece queue (shared seed from the server).
 - Players can save one piece (C or Shift). Bringing it back swaps it with the current piece; allowed once per piece.
 - Clearing 2/3/4 lines sends 1/2/3 garbage lines to every other living player.
@@ -104,7 +108,6 @@ New games must call the same `leaveRoom()` pattern.
   teammates is always just 1 line with a 95% chance of a special; opponents get the normal amount.
   The first 4-line clear gives a bonus special to every living player on that team. A team wins when
   only its players are left. No team score is kept yet.
-- The light/dark theme is chosen with the Theme dropdown (System/Dark/Light), saved per browser.
 
 ## Snakewar
 - Server-authoritative: `snake.js` moves every snake each tick (110 ms), resolves collisions and food,

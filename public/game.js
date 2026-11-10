@@ -426,6 +426,7 @@ function connect(name, room) {
       case 'welcome':
         myId = m.id; $('roomName').textContent = m.room;
         $('join').classList.add('hidden'); $('game').classList.remove('hidden');
+        $('swBar').appendChild($('themeBar')); // ⚙ Settings sits at the end of the game's top bar, like Blockwar
         board = newBoard(); renderInv(); setStatus('Waiting for the host to start…');
         break;
       case 'lobby':
@@ -549,7 +550,6 @@ function showGame(dir) {
   $('gameDots').innerHTML = GAMES.map((_, i) => `<span class="${i === gameIdx ? 'on' : ''}"></span>`).join('');
   $('leaderboard').classList.toggle('hidden', !SHOW_LEADERBOARD);
   loadLeaderboard();
-  $('help').classList.toggle('hidden', g.id !== 'stackwar');
   renderLobbies();
   document.title = g.title[0] + g.title.slice(1).toLowerCase();
   try { localStorage.setItem('sw-game', g.id); } catch {}
