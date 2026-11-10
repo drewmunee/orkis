@@ -197,10 +197,15 @@ New games must call the same `leaveRoom()` pattern.
 - Losing your last ball costs a life (Multiball: only when every ball is gone), then a 5 s wait before
   the ball is back on a centered paddle (solo: no wait, the ball is back at once; Space launches).
 - Modes: **solo** (1 player): endless; each row's worth of blocks broken brings a new row in at the top,
-  level up every 5 rows (+5% ball speed each; solo's per-block speed-up is also half of multiplayer's); over when blocks reach the bottom row or lives run out.
+  level up every 5 rows, i.e. every 60 blocks broken (+5% ball speed each; solo's per-block speed-up is also half of multiplayer's;
+  losing a life resets the ball to its starting speed in every mode, and in solo the level stays but only
+  levels gained after that speed it up again). From level 2, new solo rows mix in stone: 6% of blocks,
+  +3% per level, max 30% (`soloRockRate`); over when blocks reach the bottom row or lives run out.
   **Clear race**: identical boards, first to clear every block wins, unlimited lives (misses just cost
   the 5 s wait). **Lives**: 3 lives, a cleared board refills, last player with lives left wins.
   Team mode is planned. Solo will later get random artifacts/shapes at higher stages.
+- Stone (from Random, and solo rows) takes two hits: the first cracks it ('y', darker with a crack, 5 pts),
+  the second breaks it (5 more); only the break counts as a block broken.
 - Specials: ~7% of blocks carry a letter; breaking one adds it to your queue (max 3, oldest dropped);
   1-6 fires it at that player (1 = you), X discards, or click a board. R Random (stone boulder or
   stalactite), C Clear Line (lowest row), M Multiball (doubles balls; triples in solo), E Explosivo

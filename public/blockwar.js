@@ -8,7 +8,7 @@ const BW = W / COLS, START_ROWS = 8;
 // one calm sunset gradient (deep plum at the top through rose to warm orange at the bottom), so the
 // brightly colored special blocks still stand out
 const ROW_COLORS = ['#4a3470', '#5d3a7c', '#743f84', '#8c4686', '#a44f80', '#ba5b73', '#cc6d62', '#da834f'];
-const STONE = '#8d8478';
+const STONE = '#8d8478', CRACKED = '#6b645b'; // stone takes two hits: the first cracks it (darker)
 const PADDLE_W = 110, PADDLE_H = 14, PADDLE_Y = H - 40, PADDLE_SPEED = 640;
 const BALL_R = 8, START_SPEED = 380, SPEED_UP = 3, SOLO_SPEED_UP = 1.5, MAX_SPEED = 700; // solo speeds up more gently
 const MAX_ANGLE = Math.PI / 3;                  // paddle edge sends the ball out at 60° from straight up
@@ -67,22 +67,25 @@ function pickSpecial(rand = Math.random) {
   return SP_KEYS[0];
 }
 
-// ---------- the grid: '.' empty, 'a'-'h' colored block (by row), 'z' stone, uppercase = special ----------
+// ---------- the grid: '.' empty, 'a'-'h' colored block (by row), 'z' stone, 'y' cracked stone, uppercase = special ----------
 const idx = (r, c) => r * COLS + c;
-function makeRow(r, rand) { const row = []; for (let c = 0; c < COLS; c++) row.push(rand() < SPECIAL_RATE ? pickSpecial(rand) : 'abcdefgh'[r % 8]); return row; }
+// rockRate: chance each block is stone instead (solo rows from level 2 on)
+function makeRow(r, rand, rockRate = 0) { const row = []; for (let c = 0; c < COLS; c++) row.push(rand() < SPECIAL_RATE ? pickSpecial(rand) : rand() < rockRate ? 'z' : 'abcdefgh'[r % 8]); return row; }
+// Solo: no stone at level 1; from level 2 each new block has a 6% chance to be stone, +3% per level, max 30%
+const soloRockRate = () => level < 2 ? 0 : Math.min(0.3, 0.06 + 0.03 * (level - 2));
 function newGrid(seed) {
   const rand = mulberry32(seed);
   grid = Array(ROWS * COLS).fill('.');
   for (let r = 0; r < START_ROWS; r++) makeRow(r, rand).forEach((ch, c) => { grid[idx(r, c)] = ch; });
 }
 const blocksLeft = () => grid.reduce((n, ch) => n + (ch !== '.'), 0);
-const cellColor = ch => ch === 'z' ? STONE : ch >= 'a' && ch <= 'h' ? ROW_COLORS[ch.charCodeAt(0) - 97] : (SPECIALS[ch] || [0, '#888'])[1];
+const cellColor = ch => ch === 'z' ? STONE : ch === 'y' ? CRACKED : ch >= 'a' && ch <= 'h' ? ROW_COLORS[ch.charCodeAt(0) - 97] : (SPECIALS[ch] || [0, '#888'])[1];
 
 // ---------- match flow ----------
 function startMatch(seed, m) {
   mode = m; playing = true; soloResult = ''; brokenCount = 0; livesLost = 0;
   newGrid(seed);
-  lives = START_LIVES; score = 0; level = 1; brokenSinceRow = 0; rowsAdded = 0; queue = []; fx = {}; pendingBalls = 1; ballSpeed = START_SPEED;
+  lives = START_LIVES; score = 0; level = 1; brokenSinceRow = 0; rowsAdded = 0; queue = []; fx = {}; pendingBalls = 1; ballSpeed = START_SPEED; speedLevel = 1;
   toReady();
   $('levelStat').classList.toggle('hidden', mode !== 'solo');
   renderQueue(); updateHud(); sync(true);
@@ -107,6 +110,9 @@ function gameOver(why) {
 function loseLife() {
   // clear races never run out of lives; lives mode and solo do
   livesLost++;
+  // the ball starts at its starting speed again; the level carries on, and only levels gained from
+  // here on speed it up again
+  ballSpeed = START_SPEED; speedLevel = level;
   if (mode !== 'clear') lives--;
   updateHud();
   if (mode !== 'clear' && lives <= 0) return gameOver();
@@ -127,11 +133,12 @@ function soloProgress() {
   brokenSinceRow = 0;
   if (grid.slice(idx(ROWS - 1, 0)).some(ch => ch !== '.')) return gameOver('The blocks reached the bottom!');
   grid.splice(idx(ROWS - 1, 0), COLS);
-  grid.unshift(...makeRow(START_ROWS + rowsAdded, Math.random));
+  grid.unshift(...makeRow(START_ROWS + rowsAdded, Math.random, soloRockRate()));
   rowsAdded++; level = 1 + Math.floor(rowsAdded / 5);
   updateHud();
 }
-const levelMul = () => mode === 'solo' ? 1 + 0.05 * (level - 1) : 1; // +5% ball speed per level
+let speedLevel = 1; // the level the current speed-up started from (reset when a life is lost)
+const levelMul = () => mode === 'solo' ? 1 + 0.05 * (level - speedLevel) : 1; // +5% ball speed per level
 
 // ---------- effects from specials ----------
 const now = () => performance.now();
@@ -145,7 +152,7 @@ function applySpecial(s) {
     case 'R': addRock(); break;
     case 'C': { // lowest row with anything in it; its blocks score as if you'd broken them
       for (let r = ROWS - 1; r >= 0; r--) if (grid.slice(idx(r, 0), idx(r, COLS)).some(ch => ch !== '.')) {
-        for (let c = 0; c < COLS; c++) { const ch = grid[idx(r, c)]; if (ch !== '.') { score += ch === 'z' ? 5 : 10; brokenCount++; } grid[idx(r, c)] = '.'; }
+        for (let c = 0; c < COLS; c++) { const ch = grid[idx(r, c)]; if (ch !== '.') { score += ch === 'z' || ch === 'y' ? 5 : 10; brokenCount++; } grid[idx(r, c)] = '.'; }
         break;
       }
       if (!blocksLeft()) boardCleared();
@@ -233,13 +240,13 @@ function hitBlocks(b) {
     if (d < BALL_R * BALL_R && d < bestD) { best = idx(r, c); bestD = d; bn = [dx, dy]; }
   }
   if (best < 0) return;
-  let n = 1; breakCell(best);
+  let n = breakCell(best) ? 1 : 0;
   // Explosivo: the blocks touching the broken one's four sides go too (no chain reaction)
   if (exploding()) {
     const r = (best / COLS) | 0, c = best % COLS;
     for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
       const rr = r + dr, cc = c + dc;
-      if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[idx(rr, cc)] !== '.') { breakCell(idx(rr, cc)); n++; }
+      if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[idx(rr, cc)] !== '.' && breakCell(idx(rr, cc))) n++;
     }
   }
   ballSpeed = Math.min(MAX_SPEED, ballSpeed + (mode === 'solo' ? SOLO_SPEED_UP : SPEED_UP));
@@ -253,11 +260,15 @@ function hitBlocks(b) {
   if (!blocksLeft()) boardCleared();
   updateHud();
 }
-// one block broken by a ball: score it, count it, collect its special
+// a ball hits a block: stone cracks on the first hit (5 points) and breaks on the second (5 more);
+// anything else breaks, scores, counts and gives its special. Returns true if the block is gone.
 function breakCell(i) {
-  const ch = grid[i]; grid[i] = '.'; brokenCount++;
+  const ch = grid[i];
+  if (ch === 'z') { grid[i] = 'y'; score += 5; return false; }
+  grid[i] = '.'; brokenCount++;
   if (SPECIALS[ch]) { queue.push(ch); if (queue.length > QUEUE_MAX) queue.splice(0, queue.length - QUEUE_MAX); renderQueue(); }
-  score += ch === 'z' ? 5 : 10;
+  score += ch === 'y' ? 5 : 10;
+  return true;
 }
 function update(dt) {
   const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
@@ -293,6 +304,11 @@ function drawBoard(cx, s, { cells, px, pw, balls: bs, ready, scale = 1 }) {
     cx.fillStyle = cellColor(ch); cx.fillRect(x, y, BW, BH);
     cx.fillStyle = 'rgba(255,255,255,.28)'; cx.fillRect(x, y, BW, 3);
     cx.fillStyle = 'rgba(0,0,0,.22)'; cx.fillRect(x, y + BH - 2, BW, 2); cx.fillRect(x + BW - 1, y, 1, BH);
+    if (ch === 'y') { // cracked stone: darker, with a jagged crack across it
+      cx.strokeStyle = 'rgba(0,0,0,.6)'; cx.lineWidth = 2; cx.beginPath();
+      cx.moveTo(x + BW * 0.3, y + 2); cx.lineTo(x + BW * 0.45, y + BH * 0.45); cx.lineTo(x + BW * 0.38, y + BH * 0.6);
+      cx.lineTo(x + BW * 0.6, y + BH - 2); cx.moveTo(x + BW * 0.45, y + BH * 0.45); cx.lineTo(x + BW * 0.72, y + BH * 0.32); cx.stroke();
+    }
     if (ch === 'z') { cx.fillStyle = 'rgba(0,0,0,.18)'; cx.fillRect(x + BW * 0.2, y + BH * 0.35, BW * 0.15, BH * 0.25); cx.fillRect(x + BW * 0.6, y + BH * 0.5, BW * 0.2, BH * 0.2); }
     if (SPECIALS[ch]) {
       cx.fillStyle = '#111'; cx.font = '900 17px system-ui'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
@@ -506,8 +522,8 @@ $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="backg
 
 // test hook: lets automated checks read and steer the game state
 window.__bw = {
-  get state() { return { grid, balls, paddleX, lives, score, level, queue, phase, mode, playing, fx, pendingBalls, paddleW: paddleW(), speedMul: speedMul() }; },
-  set paddle(x) { paddleX = x; }, place(b) { balls = [{ ...b }]; phase = 'play'; }, apply: applySpecial, setLives(n) { lives = n; },
+  get state() { return { ballSpeed, speedLevel, grid, balls, paddleX, lives, score, level, queue, phase, mode, playing, fx, pendingBalls, paddleW: paddleW(), speedMul: speedMul() }; },
+  set paddle(x) { paddleX = x; }, setLevel(l) { level = l; }, place(b) { balls = [{ ...b }]; phase = 'play'; }, apply: applySpecial, setLives(n) { lives = n; },
   setCell(r, c, ch) { grid[idx(r, c)] = ch; }, clearAll(keep = 0) { let k = 0; for (let i = 0; i < grid.length; i++) if (grid[i] !== '.' && k++ >= keep) grid[i] = '.'; },
 };
 
