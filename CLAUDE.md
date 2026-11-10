@@ -60,21 +60,25 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
   other's head from the side, only the turner dies; running into the side of a head kills the mover.
 - Food: regular food and dead-snake drops +2, "tiny food" (cut tails) +1. Regular food starts at one per
   player and rises through the round (x2 after 1 min, x3 after 2 min, max x5 / 100).
-- **Shrinking board**: 10 s warning (new edge shown in red) starts 2 min in or 3 s after a death; each
+- **Shrinking board**: 10 s warning (new edge shown in red) starts 2 min in or 3 s after a death (team rounds:
+  4 min in, or 3 s after a team of 2+ is down to its last snake); each
   shrink keeps the middle ~80% (min 24x14), then the next warning comes 30 s later or 3 s after a death.
   A snake loses everything from its first segment outside the new edge to its tail (that cut part's
   inside cells become tiny food); a snake whose head is outside dies.
-- Special foods (max 3, vanish after 15 s): Speed (2 steps/tick 5 s; also clears Slow), Ghost (held),
-  Feast (+5), Shears (enemies lose 1/4 of their length, min 3; cut tail -> tiny food), Double (growth x2
+- Food and special foods spawn slightly more often toward the middle (half even, half centre-weighted).
+- Special foods (max 3, vanish after 15 s): Speed (2 steps/tick 5 s; also clears Slow), Ghost (held: 6 s
+  through snakes and blockades, immune to other players' Shears/Slow/Bomb/Extendo), Feast (worth +5, +5
+  more per minute played when it appears; grows +1 every 3 s; never vanishes; max 2, outside the 3-cap), Shears (enemies lose 1/4 of their length, min 3; cut tail -> tiny food), Double (growth x2
   20 s), Slow (enemies half speed 5 s; an enemy with Speed just loses it), Extendo (8 s tongue 3 squares
   ahead; enemies whose head touches it die, never hurts you or teammates), Blockade (held: drops 5 tail
   segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
-  Bomb (held: dropped at your head, explodes after 5 s with radius 4, the exact squares shown on the field: destroys food, specials and
+  Bomb (held: dropped out of your tail, explodes after 5 s with radius 4, the exact squares shown on the field: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
 - Held items (Ghost, Blockade, Bomb) go into a 3-slot queue shown on the right; Space uses the oldest.
 - Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
   scoreboard: any of 12 colors normally, or one of 6 shades of their team's color in team mode.
-- **Team mode** (host toggle between rounds): random Red vs Blue each round. Red team = warm shades,
+- **Team mode** (host toggle between rounds): random Red vs Blue each round; Red spawns on the left facing
+  right, Blue on the right facing left (revives too). Red team = warm shades,
   blue team = cool shades, plus a team-colored ring on each head. Shears/Slow/Extendo hit the other team
   only. Revive tokens spawn only in team rounds, rarer as the round goes on; every 3 a team collects =
   1 revive, used automatically to respawn a dead teammate. Team out = nobody alive. No team score yet.

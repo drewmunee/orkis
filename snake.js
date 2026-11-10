@@ -23,7 +23,9 @@ const SPECIAL_LIFETIME = 15000;    // uneaten special foods vanish after this
 const MAX_SPECIALS = 3;
 const SPECIAL_CHANCE = 1 / 70;     // per tick, while below MAX_SPECIALS (~ one every 8s)
 // Special foods. Value = effect duration in ms (0 = instant or no timer).
-//  speed: 2 steps per tick · ghost (held): slide through snakes · feast: +5 · shears: enemies lose 1/4 of
+//  speed: 2 steps per tick · ghost (held): slide through snakes and blockades, immune to other players' items
+//  feast: worth 5 more for every minute the round has run when it appears (+5, +10, +15 ...), grows +1 every
+//  3 s while it waits, and never vanishes · shears: enemies lose 1/4 of
 //  their length · double: all growth x2 · slow: enemies move at half speed (cancels their Speed instead)
 //  extendo: a 3-square tongue that kills enemies who run into it · blockade (held): drop 5 tail segments
 //  as a permanent wall · token (team mode only): every 3 a team collects = 1 revive
@@ -42,6 +44,8 @@ const FFA_COLORS = 12, TEAM_SHADES = 6;        // palette sizes (the colors them
 const TOKEN_CHANCE = 1 / 90, MAX_TOKENS = 2;
 // Shrinking board (battle rounds only): a 10 s warning starts 2 minutes in, or 3 s after someone dies,
 // whichever comes first; after each shrink the next warning comes 30 s later (or 3 s after a death).
+const SHRINK_FIRST_TEAM_MS = 240000; // team rounds: 4 minutes, or once a team (of 2+) is down to its last snake
+const FEAST_BASE = 5, FEAST_PER_MIN = 5, FEAST_GROW_MS = 3000, MAX_FEASTS = 2;
 const SHRINK_FIRST_MS = 120000, SHRINK_AFTER_DEATH_MS = 3000, SHRINK_WARN_MS = 10000, SHRINK_EVERY_MS = 30000;
 const SHRINK_FACTOR = 0.8, SHRINK_MIN_W = 24, SHRINK_MIN_H = 14;
 const DIRS = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] };
@@ -86,21 +90,29 @@ function occupied(room) {
   for (const p of room.players.values()) if (p.alive) for (const c of p.body) occ.add(c);
   return occ;
 }
+// Food and special foods lean slightly toward the middle: half the time a spot is picked evenly, the
+// other half from a triangular spread centred on the middle, so edges still get some.
+const pick = (lo, n) => lo + (Math.random() < 0.5 ? rnd(n) : Math.min(n - 1, Math.floor((Math.random() + Math.random()) / 2 * n)));
 function randomFreeCell(room, occ = occupied(room)) {
   const b = room.bounds;
   for (let i = 0; i < 500; i++) {
-    const c = cell(room, b.x0 + rnd(b.x1 - b.x0), b.y0 + rnd(b.y1 - b.y0));
+    const c = cell(room, pick(b.x0, b.x1 - b.x0), pick(b.y0, b.y1 - b.y0));
     if (!occ.has(c) && !room.food.has(c) && !room.drops.has(c) && !room.bits.has(c) && !room.specials.has(c)) return c;
   }
   return -1;
 }
 function spawnSnake(room, p, occ) {
-  // find a spot inside the play area with room to move, pointing toward its middle
+  // find a spot inside the play area with room to move, pointing toward its middle.
+  // Team rounds: red starts on the left side facing right, blue on the right side facing left.
   const b = room.bounds, W = b.x1 - b.x0, H = b.y1 - b.y0;
+  const side = room.teamMatch ? p.team : null;
   for (let tries = 0; tries < 400; tries++) {
     const mx = Math.min(8, W >> 2), my = Math.min(6, H >> 2);
-    const x = b.x0 + mx + rnd(W - 2 * mx), y = b.y0 + my + rnd(H - 2 * my);
-    const dir = Math.abs(x - (b.x0 + W / 2)) > Math.abs(y - (b.y0 + H / 2)) ? (x < b.x0 + W / 2 ? 'R' : 'L') : (y < b.y0 + H / 2 ? 'D' : 'U');
+    const span = W - 2 * mx, third = Math.max(1, Math.floor(span * 0.35));
+    const x = side === 'red' ? b.x0 + mx + rnd(third) : side === 'blue' ? b.x1 - mx - 1 - rnd(third) : b.x0 + mx + rnd(span);
+    const y = b.y0 + my + rnd(H - 2 * my);
+    const dir = side === 'red' ? 'R' : side === 'blue' ? 'L'
+      : Math.abs(x - (b.x0 + W / 2)) > Math.abs(y - (b.y0 + H / 2)) ? (x < b.x0 + W / 2 ? 'R' : 'L') : (y < b.y0 + H / 2 ? 'D' : 'U');
     const [dx, dy] = DIRS[dir];
     const body = [];
     for (let i = 0; i < START_LEN; i++) body.push(cell(room, x - dx * i, y - dy * i));
@@ -123,13 +135,15 @@ function startRound(room) {
   room.classic = room.startCount === 1;
   setField(room, room.startCount);
   room.tickN = 0; room.playStart = Date.now() + COUNTDOWN_MS;
-  room.nextShrinkAt = room.classic ? Infinity : room.playStart + SHRINK_FIRST_MS;
+  room.nextShrinkAt = Infinity; // set below, once we know whether it's a team round
   // Team mode: shuffle everyone into red and blue (sizes differ by at most one), new teams every round.
   room.teamMatch = !!room.teamMode && room.startCount >= 2;
   const order = [...room.players.values()];
   for (let i = order.length - 1; i > 0; i--) { const j = rnd(i + 1); [order[i], order[j]] = [order[j], order[i]]; }
   order.forEach((p, i) => { p.team = room.teamMatch ? (i % 2 ? 'blue' : 'red') : null; p.eaten = 0; p.inRound = true; });
   room.teams = { red: { tokens: 0, revives: 0 }, blue: { tokens: 0, revives: 0 } };
+  room.teamSize = { red: order.filter(p => p.team === 'red').length, blue: order.filter(p => p.team === 'blue').length };
+  room.nextShrinkAt = room.classic ? Infinity : room.playStart + (room.teamMatch ? SHRINK_FIRST_TEAM_MS : SHRINK_FIRST_MS);
   const occ = new Set();
   for (const p of order) if (!spawnSnake(room, p, occ)) p.alive = false;
   topUpFood(room);
@@ -159,7 +173,9 @@ function kill(room, p, why) {
   p.body.forEach((c, i) => { if (i % 2 === 0 && inBounds(room, c)) room.drops.add(c); });
   log(room, `${p.name} ${why}`);
   // a death brings the next board shrink closer
-  if (!room.classic && !room.shrink) room.nextShrinkAt = Math.min(room.nextShrinkAt, Date.now() + SHRINK_AFTER_DEATH_MS);
+  // a death brings the next board shrink closer; in team rounds only once a team of 2+ is down to its last snake
+  const lastStanding = room.teamMatch && ['red', 'blue'].some(t => room.teamSize[t] >= 2 && alivePlayers(room).filter(q => q.team === t).length === 1);
+  if (!room.classic && !room.shrink && (!room.teamMatch || lastStanding)) room.nextShrinkAt = Math.min(room.nextShrinkAt, Date.now() + SHRINK_AFTER_DEATH_MS);
 }
 // Cut a snake's body from index i to the tail; the cut part turns into tiny food.
 function cutTail(room, p, i) {
@@ -242,26 +258,27 @@ function step(room, movers) {
     else if (room.drops.has(nc)) { room.drops.delete(nc); p.grow += FOOD_GROWTH * x2; }
     else if (room.bits.has(nc)) { room.bits.delete(nc); p.grow += BIT_GROWTH * x2; }
     const sp = room.specials.get(nc);
-    if (sp) { room.specials.delete(nc); pickUp(room, p, sp.type, x2); }
+    if (sp) { room.specials.delete(nc); pickUp(room, p, sp, x2); }
   }
   for (const [p, why] of dead) if (p.alive) kill(room, p, why);
 }
 
-function pickUp(room, p, type, x2) {
-  const now = Date.now();
+const feastValue = (sp, now = Date.now()) => sp.value + Math.floor((now - sp.born) / FEAST_GROW_MS);
+function pickUp(room, p, sp, x2) {
+  const now = Date.now(), type = sp.type;
   if (HELD.has(type)) {
     p.items.push(type);
     if (p.items.length > ITEM_MAX) p.items.splice(0, p.items.length - ITEM_MAX);
-  } else if (type === 'feast') p.grow += 5 * x2;
+  } else if (type === 'feast') p.grow += feastValue(sp, now) * x2;
   else if (type === 'shears') {
-    for (const q of alivePlayers(room)) if (enemies(room, p, q)) {
+    for (const q of alivePlayers(room)) if (enemies(room, p, q) && !(q.fx.ghost > now)) { // ghosts are immune
       const keep = Math.max(MIN_LEN, q.body.length - Math.floor(q.body.length * SHEARS_FRAC));
       if (keep < q.body.length) cutTail(room, q, keep);
     }
     log(room, `${p.name} grabbed Shears: ${room.teamMatch ? `team ${teamName(p.team === 'red' ? 'blue' : 'red')}` : 'everyone else'} loses a quarter`);
   } else if (type === 'slow') {
     // Slow cancels an enemy's Speed instead of slowing them
-    for (const q of alivePlayers(room)) if (enemies(room, p, q)) { if (q.fx.speed > now) delete q.fx.speed; else q.fx.slow = now + SPECIALS.slow; }
+    for (const q of alivePlayers(room)) if (enemies(room, p, q) && !(q.fx.ghost > now)) { if (q.fx.speed > now) delete q.fx.speed; else q.fx.slow = now + SPECIALS.slow; }
     log(room, `${p.name} grabbed Slow`);
   } else if (type === 'speed') { delete p.fx.slow; p.fx.speed = now + SPECIALS.speed; } // Speed always works, even when slowed
   else if (type === 'token') {
@@ -289,7 +306,7 @@ function useItem(room, p) {
     p.grow = Math.max(0, p.grow - n);
     log(room, `${p.name} dropped a blockade`);
   } else if (type === 'bomb') {
-    room.bombs.push({ cell: p.body[0], at: now + BOMB_FUSE_MS, by: p.name });
+    room.bombs.push({ cell: p.body[p.body.length - 1], at: now + BOMB_FUSE_MS, by: p.name }); // dropped out of your tail
     log(room, `${p.name} dropped a bomb!`);
   }
   p.items.shift();
@@ -349,7 +366,7 @@ function bombTick(room) {
     for (const c of [...room.specials.keys()]) if (inBlast(c)) room.specials.delete(c);
     removeWalls(room, [...room.walls].filter(inBlast));
     const hurt = [];
-    for (const p of alivePlayers(room)) if (p.body.some(inBlast)) {
+    for (const p of alivePlayers(room)) if (!(p.fx.ghost > now) && p.body.some(inBlast)) { // ghosts ride out the blast
       const keep = Math.max(MIN_LEN, p.body.length - Math.floor(p.body.length * SHEARS_FRAC));
       for (const c of p.body.splice(keep)) if (!inBlast(c) && inBounds(room, c) && !room.walls.has(c)) room.bits.add(c);
       p.grow = 0; hurt.push(p.name);
@@ -372,14 +389,17 @@ function tick(room) {
   // special foods come and go (revive tokens only appear in team matches)
   const now = Date.now();
   for (const [c, sp] of room.specials) if (sp.until < now) room.specials.delete(c);
-  const counts = { token: 0, other: 0 };
-  for (const sp of room.specials.values()) counts[sp.type === 'token' ? 'token' : 'other']++;
-  if (!room.classic && counts.other < MAX_SPECIALS && Math.random() < SPECIAL_CHANCE) {
-    const pool = Object.keys(SPECIALS).filter(k => k !== 'token');
-    const c = randomFreeCell(room);
-    if (c >= 0) room.specials.set(c, { type: pool[rnd(pool.length)], until: now + SPECIAL_LIFETIME });
-  }
+  const counts = { token: 0, feast: 0, other: 0 };
+  for (const sp of room.specials.values()) counts[sp.type === 'token' || sp.type === 'feast' ? sp.type : 'other']++;
   const minutes = Math.max(0, now - room.playStart) / 60000;
+  if (!room.classic && counts.other < MAX_SPECIALS && Math.random() < SPECIAL_CHANCE) {
+    const pool = Object.keys(SPECIALS).filter(k => k !== 'token' && (k !== 'feast' || counts.feast < MAX_FEASTS));
+    const type = pool[rnd(pool.length)], c = randomFreeCell(room);
+    // feasts stay until eaten and start bigger the later they appear
+    if (c >= 0) room.specials.set(c, type === 'feast'
+      ? { type, until: Infinity, born: now, value: FEAST_BASE + FEAST_PER_MIN * Math.floor(minutes) }
+      : { type, until: now + SPECIAL_LIFETIME });
+  }
   if (room.teamMatch && counts.token < MAX_TOKENS && Math.random() < TOKEN_CHANCE / (1 + minutes)) {
     const c = randomFreeCell(room);
     if (c >= 0) room.specials.set(c, { type: 'token', until: now + SPECIAL_LIFETIME });
@@ -402,7 +422,7 @@ function sendState(room) {
     })),
     food: [...room.food], drops: [...room.drops], bits: [...room.bits], walls: [...room.walls],
     bombs: room.bombs.map(b => [b.cell, b.at - now, BOMB_RADIUS]),
-    specials: [...room.specials].map(([c, sp]) => [c, sp.type, sp.until - now]),
+    specials: [...room.specials].map(([c, sp]) => [c, sp.type, sp.until === Infinity ? null : sp.until - now, sp.type === 'feast' ? feastValue(sp, now) : undefined]),
   });
 }
 

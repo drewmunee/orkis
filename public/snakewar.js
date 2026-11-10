@@ -11,14 +11,14 @@ const TEAM_SHADES = {
 const TEAM_COLOR = { red: '#ff2d2d', blue: '#2f6bff' };
 const SPECIAL_INFO = {
   speed: { name: 'Speed', icon: '⚡', color: '#ffd23f', desc: 'move twice as fast for 5 seconds (also clears Slow)' },
-  ghost: { name: 'Ghost', icon: '👻', color: '#cfd8ff', desc: 'held item: press Space to slide through snakes for 6 seconds' },
-  feast: { name: 'Feast', icon: '+5', color: '#ff66d9', desc: 'grow 5 segments at once' },
+  ghost: { name: 'Ghost', icon: '👻', color: '#cfd8ff', desc: 'held item: press Space for 6 seconds of sliding through snakes and blockades, immune to other players\' items (Shears, Slow, Bomb, Extendo)' },
+  feast: { name: 'Feast', icon: '+5', color: '#ff66d9', desc: 'grow by the number shown: +5 plus 5 for every minute the round has run, and it grows by 1 every 3 seconds until someone eats it (never vanishes)' },
   shears: { name: 'Shears', icon: '✂', color: '#ff7b7b', desc: 'enemy snakes lose a quarter of their length; the cut tails become tiny food' },
   double: { name: 'Double', icon: 'x2', color: '#7bffb0', desc: 'all growth counts double for 20 seconds' },
   slow: { name: 'Slow', icon: '🐌', color: '#a0c4ff', desc: 'enemies move at half speed for 5 seconds (a sped-up enemy just loses its Speed)' },
   extendo: { name: 'Extendo', icon: '👅', color: '#ff8fb1', desc: 'an 8-second tongue reaching 3 squares ahead; enemies who touch it die' },
   blockade: { name: 'Blockade', icon: '▦', color: '#aab0c4', desc: 'held item: press Space to drop 5 tail segments as a wall (max 5 on the board; ghosts pass through)' },
-  bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it at your head; after 5 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
+  bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 5 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
   token: { name: 'Revive token', icon: '♥', color: '#ff4d6d', desc: 'team mode only: every 3 your team collects earns a revive' },
 };
 const KEYS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R', w: 'U', s: 'D', a: 'L', d: 'R', W: 'U', S: 'D', A: 'L', D: 'R' };
@@ -261,13 +261,14 @@ function draw() {
     for (const [x, y] of blastTiles(f.cell, f.r)) ctx.fillRect(view.ox + x * cs, view.oy + y * cs, cs, cs);
   }
   // special foods pulse, and blink during their last 3 seconds
-  for (const [c, type, left] of state.specials) {
-    if (left < 3000 && Math.floor(now / 200) % 2) continue;
+  for (const [c, type, left, value] of state.specials) {
+    if (left != null && left < 3000 && Math.floor(now / 200) % 2) continue; // feasts (left = null) never blink out
     const info = SPECIAL_INFO[type], r = cs * (0.55 + 0.1 * Math.sin(now / 150));
     ctx.fillStyle = info.color; ctx.shadowColor = info.color; ctx.shadowBlur = cs;
     ctx.beginPath(); ctx.arc(cx(c) + cs / 2, cy(c) + cs / 2, r, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = '#111'; ctx.font = `800 ${Math.round(cs * 0.75)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(info.icon, cx(c) + cs / 2, cy(c) + cs / 2 + 1);
+    const label = type === 'feast' ? '+' + value : info.icon; // a feast shows what it's worth right now
+    ctx.fillStyle = '#111'; ctx.font = `800 ${Math.round(cs * (label.length > 2 ? 0.6 : 0.75))}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx(c) + cs / 2, cy(c) + cs / 2 + 1);
   }
   // snakes
   for (const s of state.snakes) {
