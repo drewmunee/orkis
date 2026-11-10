@@ -487,7 +487,7 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
 });
 // ---------- homepage game picker ----------
-const GAMES = [{ id: 'stackwar', title: 'STACKWAR' }, { id: 'snakewar', title: 'SNAKEWAR' }];
+const GAMES = [{ id: 'stackwar', title: 'STACKWAR' }, { id: 'snakewar', title: 'SNAKEWAR' }, { id: 'blockwar', title: 'BLOCKWAR' }];
 let gameIdx = 0;
 try { gameIdx = Math.max(0, GAMES.findIndex(g => g.id === localStorage.getItem('sw-game'))); } catch {}
 function showGame(dir) {
@@ -497,9 +497,39 @@ function showGame(dir) {
   $('gameDots').innerHTML = GAMES.map((_, i) => `<span class="${i === gameIdx ? 'on' : ''}"></span>`).join('');
   $('leaderboard').classList.toggle('hidden', !SHOW_LEADERBOARD || g.id !== 'stackwar'); // Stackwar's solo mode
   $('help').classList.toggle('hidden', g.id !== 'stackwar');
+  // Blockwar is single-player: no lobby code needed
+  $('room').classList.toggle('hidden', g.id === 'blockwar');
+  $('joinBtn').textContent = g.id === 'blockwar' ? 'Play' : 'Join';
+  renderLobbies();
   document.title = g.title[0] + g.title.slice(1).toLowerCase();
   try { localStorage.setItem('sw-game', g.id); } catch {}
 }
+// Lobby browser: who's playing what, refreshed every few seconds while the homepage is showing.
+// Clicking a lobby joins it (or fills in its code if you haven't entered a name yet).
+let lobbyData = null;
+function renderLobbies() {
+  const g = GAMES[gameIdx].id, list = $('lobbyList');
+  if (!list) return;
+  if (g === 'blockwar') { $('lobbyCount').textContent = ''; list.innerHTML = '<li class="empty">Blockwar is single-player for now; multiplayer lobbies are coming.</li>'; return; }
+  if (!lobbyData) return;
+  const rows = (lobbyData[g] || []).slice().sort((a, b) => b.players - a.players || a.room.localeCompare(b.room));
+  const total = rows.reduce((n, r) => n + r.players, 0);
+  $('lobbyCount').textContent = rows.length ? `${total} playing in ${rows.length} ${rows.length === 1 ? 'lobby' : 'lobbies'}` : '';
+  list.innerHTML = rows.length ? rows.map(r => `<li class="lobby" data-room="${esc(r.room)}" title="Join ${esc(r.room)}">
+      <span class="lname">${esc(r.room)}${r.teamMode ? ' · teams' : ''}<span class="lnames">${esc(r.names.join(', '))}</span></span>
+      <span class="lcount">${r.players} ${r.players === 1 ? 'player' : 'players'}</span>
+      <span class="lstate ${r.playing ? 'playing' : 'waiting'}">${r.playing ? 'In game' : 'Waiting'}</span></li>`).join('')
+    : '<li class="empty">Nobody is playing right now. Enter a lobby code to start one!</li>';
+  for (const li of list.querySelectorAll('li.lobby')) li.onclick = () => {
+    $('room').value = li.dataset.room;
+    if ($('name').value.trim()) $('joinForm').requestSubmit(); else $('name').focus();
+  };
+}
+function loadLobbies() {
+  if ($('join').classList.contains('hidden')) return; // only while the homepage is showing
+  fetch('/api/lobbies').then(r => r.json()).then(d => { lobbyData = d; renderLobbies(); }).catch(() => {});
+}
+loadLobbies(); setInterval(loadLobbies, 3000);
 function pickGame(dir) { gameIdx = (gameIdx + dir + GAMES.length) % GAMES.length; showGame(dir); }
 $('prevGame').onclick = () => pickGame(-1);
 $('nextGame').onclick = () => pickGame(1);
@@ -511,6 +541,7 @@ showGame(0);
 $('joinForm').onsubmit = e => {
   e.preventDefault(); $('joinErr').textContent = '';
   try { localStorage.setItem('sw-name', $('name').value.trim()); } catch {}
+  if (GAMES[gameIdx].id === 'blockwar') { location.href = 'block.html'; return; }
   if (GAMES[gameIdx].id === 'snakewar') { location.href = 'snake.html?room=' + encodeURIComponent($('room').value.trim() || 'lobby'); return; }
   connect($('name').value, $('room').value);
 };

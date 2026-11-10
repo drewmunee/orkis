@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blockwar</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('sw-theme')||'system'}catch(e){document.documentElement.dataset.theme='system'}</script>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="block.css">
+</head>
+<body class="block-page">
+<header id="bwBar">
+  <button id="leaveBtn" type="button" title="Back to game select">‹ Back to lobby</button>
+  <div class="bw-title">BLOCKWAR</div>
+  <div class="bw-stats">
+    <span>Score <b id="score">0</b></span>
+    <span>Blocks <b id="blocks">0</b></span>
+    <span>Lives <b id="lives"></b></span>
+  </div>
+  <label id="themeBar">Theme
+    <select id="theme">
+      <option value="system">System</option>
+      <option value="dark">Dark</option>
+      <option value="light">Light</option>
+    </select>
+  </label>
+</header>
+<main id="stage"><canvas id="board"></canvas></main>
+<p id="bwHelp"><b>← / →</b> or <b>A / D</b> move · <b>Space</b> launch the ball</p>
+<script src="blockwar.js"></script>
+</body>
+</html>

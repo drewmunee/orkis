@@ -10,6 +10,15 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 
 - **Stackwar**: multiplayer falling-block battle game (`public/index.html`, `public/game.js`).
 - **Snakewar**: battle-royale snake (`snake.js` on the server, `public/snake.html` + `public/snakewar.js`).
+- **Blockwar**: block breaker (`public/block.html`, `public/blockwar.js`, `public/block.css`). Single-player
+  and client-only for now.
+
+**Every game on this site will eventually be multiplayer** (owner's direction). Build new games and
+features with rooms/lobbies in mind, even while a game is single-player.
+
+The homepage lists open lobbies for the selected game under the picker (`GET /api/lobbies`, refreshed
+every 3 s; clicking a lobby joins it). Homepage content is anchored near the top so the list can grow
+without moving the picker. When a game gets lobbies, add it to `/api/lobbies` in `server.js`.
  Deployed on Render, which auto-deploys from `main`.
 
 ## Product decisions
@@ -88,6 +97,15 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 - **The two games must stay isolated.** Each connection belongs to one game for its life (Snakewar
   joins send `game: 'snake'`); they share only `base.css` (theme + base elements) and the `sw-name` /
   `sw-theme` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.
+
+## Blockwar
+- 800x600 logical board (4:3) scaled to fit under a top bar. A 12x8 grid of touching blocks; 3 lives.
+- ←/→ or A/D move the paddle (up/down do nothing yet); Space launches the ball from a centered paddle
+  in a random upward direction (within 60° of straight up), and restarts after a win or game over.
+- The paddle is drawn flat but bounces like a half circle: the hit point alone decides the new
+  direction (center = straight up, ends = 60° out to that side), whatever direction the ball came from.
+- Breaking a block bounces off the side it hit; the ball speeds up slightly with each block (max 720 px/s).
+  Higher rows score more.
 
 ## Roadmap (from the owner)
 **Planned**

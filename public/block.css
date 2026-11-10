@@ -1,0 +1,13 @@
+/* Blockwar: a top bar, then the board scaled to fit the rest of the window (blockwar.js sizes the canvas) */
+body.block-page { overflow:hidden; height:100vh; display:flex; flex-direction:column; }
+#bwBar { flex:none; display:flex; align-items:center; gap:18px; padding:8px 14px; border-bottom:1px solid var(--line); background:var(--panel); }
+#leaveBtn { padding:7px 12px; font-size:13px; font-weight:700; background:transparent; color:var(--text); border:1px solid var(--line); border-radius:6px; cursor:pointer; }
+#leaveBtn:hover { border-color:#e0702f; }
+.bw-title { font-weight:900; letter-spacing:4px; color:#e0702f; }
+.bw-stats { display:flex; gap:22px; margin-left:auto; font-size:15px; color:var(--dim); }
+.bw-stats b { color:var(--text); font-size:18px; margin-left:4px; font-variant-numeric:tabular-nums; }
+#lives { color:#ff4d5e !important; letter-spacing:2px; }
+#bwBar #themeBar { position:static; margin-left:12px; }
+#stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; }
+#board { display:block; border:2px solid var(--line); border-radius:6px; background:var(--well); }
+#bwHelp { flex:none; margin:0 0 8px; text-align:center; color:var(--dim); font-size:12px; }

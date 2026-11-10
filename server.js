@@ -13,6 +13,12 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
+  if (p === '/api/lobbies') {
+    // homepage lobby browser: every open lobby per game (Blockwar is single-player for now)
+    const stackwar = [...rooms.values()].map(r => ({ room: r.code, players: r.players.size, names: [...r.players.values()].map(q => q.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ stackwar, snakewar: snake.lobbies(), blockwar: [] }));
+  }
   if (p === '/api/leaderboard') {
     const board = /[?&]game=snake\b/.test(req.url) ? leaderboard.snake : leaderboard;
     board.top().then(

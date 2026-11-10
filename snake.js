@@ -521,4 +521,9 @@ function join(ws, id, m) {
   };
 }
 
-module.exports = { join, _rooms: rooms, _tick: tick, _useItem: useItem }; // underscored exports are for tests
+// Public lobby list for the homepage browser
+function lobbies() {
+  return [...rooms.values()].map(r => ({ room: r.code, players: r.players.size, names: [...r.players.values()].map(p => p.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
+}
+
+module.exports = { join, lobbies, _rooms: rooms, _tick: tick, _useItem: useItem }; // underscored exports are for tests

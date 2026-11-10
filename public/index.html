@@ -25,9 +25,13 @@
   <form id="joinForm">
     <input id="name" placeholder="Username" maxlength="14" required>
     <input id="room" placeholder="Lobby code" maxlength="20" value="lobby">
-    <button>Join</button>
+    <button id="joinBtn">Join</button>
   </form>
   <p id="joinErr" class="err"></p>
+  <section id="lobbies" class="panel">
+    <div class="label">Open lobbies <small id="lobbyCount"></small></div>
+    <ul id="lobbyList"><li class="empty">Loading…</li></ul>
+  </section>
   <section id="leaderboard" class="panel hidden">
     <div class="label">Solo leaderboard <small>most lines in one run</small></div>
     <ol id="lbList"><li class="empty">Loading…</li></ol>
