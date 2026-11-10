@@ -243,7 +243,18 @@ function frame(t) {
     else lockAcc = 0;
   }
   draw();
+  renderEffects();
   requestAnimationFrame(frame);
+}
+// timed effects on you, as pills beside your specials hand; the last 3 s blink so you notice it's ending.
+// (Darkness isn't listed: you can see it, and a timer would give away when the board comes back.)
+let lastFx = '';
+function renderEffects() {
+  const t = performance.now(), out = [];
+  if (playing && hasteUntil > t) out.push(['Haste', '#ff66d9', hasteUntil - t]);
+  if (playing && invertUntil > t) out.push(['Inverted', '#19d3b5', invertUntil - t]);
+  const html = out.map(([n, c, left]) => `<span class="${left < 3000 && Math.floor(t / 250) % 2 ? 'off' : ''}" style="background:${c}">${n} ${Math.ceil(left / 1000)}</span>`).join('');
+  if (html !== lastFx) { lastFx = html; $('fx').innerHTML = html; }
 }
 function die() {
   if (!playing) return;

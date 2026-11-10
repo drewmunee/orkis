@@ -80,6 +80,10 @@ New games must call the same `leaveRoom()` pattern.
   Stackwar Haste/Darkness/Inverted, Snakewar Speed/Ghost/Double/Slow/Extendo, Blockwar Slow/Fast Ball,
   Big/Tiny Paddle and Explosivo. Opposites still cancel/replace (Snakewar Slow cancels Speed; Blockwar Big vs Tiny,
   Slow vs Fast replace each other). Exception: the Snakewar bomb fuse is always 5 s.
+- Timed effects shown as pills blink (every 250 ms) in their last 3 s: Blockwar's pills (on the board,
+  top right, above the blocks) and Stackwar's Haste/Inverted pills (`#fx` beside the specials hand).
+  Darkness deliberately has no pill. Blockwar Big Paddle also fades in and out in its last 3 s.
+  Snakewar shows no effect timers yet.
 
 ## Player stats
 - `stats.js` (tables `stats`, `stat_players`): all-time counters and personal bests per player (browser ID)
@@ -187,7 +191,8 @@ New games must call the same `leaveRoom()` pattern.
 - Like Stackwar: each player's game runs in their own browser; `block.js` handles rooms, the host's mode
   choice, starts matches (one shared seed), relays board snapshots (~4/s) and specials, and decides winners.
 - Layout: room panel + chat on the left, your board centered with a bar above it (your name, then
-  Lives/Score/Blocks (+Level in solo) in the middle, then your 3-slot special queue and active effects),
+  Lives/Score/Blocks (+Level in solo) in the middle, then your 3-slot special queue; active effects sit on
+  the board's top-right corner),
   other players' boards (half size) on the right. Block rows use a calm plum-to-orange gradient
   (`ROW_COLORS`) so the bright special blocks stand out. Numbers are per viewer like Stackwar (1 = you).
 - 800x600 logical board, 12 columns x 18 rows of space, starting with 8 touching rows; ←/→ or A/D move,
@@ -211,7 +216,8 @@ New games must call the same `leaveRoom()` pattern.
   stalactite), C Clear Line (lowest row), M Multiball (doubles balls; triples in solo), E Explosivo
   (5 s, stacks: each block a ball breaks also breaks the blocks touching its 4 sides, no chain; a bit
   rarer, weight 2 like Q), S Slow Ball / F Fast Ball (half /
-  double speed 10 s), B Big Paddle / T Tiny Paddle (double / half width 10 s), Q Earthquake (shuffles
+  double speed 10 s), B Big Paddle / T Tiny Paddle (double / half width 10 s; in solo every timed special
+  lasts twice as long, 20 s, except Explosivo which is 7 s), Q Earthquake (shuffles
   the board, buries specials away from the exposed edge).
 - Solo runs never spawn R (Random), T (Tiny Paddle) or F (Fast Ball) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
   it removes like a break (10, stone 5) and counts toward blocks broken, in every mode; in solo it doesn't

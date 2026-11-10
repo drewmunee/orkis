@@ -12,19 +12,19 @@ const STONE = '#8d8478', CRACKED = '#6b645b'; // stone takes two hits: the first
 const PADDLE_W = 110, PADDLE_H = 14, PADDLE_Y = H - 40, PADDLE_SPEED = 640;
 const BALL_R = 8, START_SPEED = 380, SPEED_UP = 3, SOLO_SPEED_UP = 1.5, MAX_SPEED = 700; // solo speeds up more gently
 const MAX_ANGLE = Math.PI / 3;                  // paddle edge sends the ball out at 60° from straight up
-const START_LIVES = 3, RESPAWN_MS = 5000, FX_MS = 10000, BOOM_MS = 5000, QUEUE_MAX = 3, SPECIAL_RATE = 0.07;
+const START_LIVES = 3, RESPAWN_MS = 5000, FX_MS = 10000, BOOM_MS = 5000, ENDING_MS = 3000, QUEUE_MAX = 3, SPECIAL_RATE = 0.07;
 const SYNC_MS = 250;                            // how often your board is sent to the others
 // Specials (letter blocks you break to collect): [name, color, description, weight]
 const SPECIALS = {
   R: ['Random', '#b08968', 'drops a boulder or stalactite of breakable stone onto the board', 4],
   C: ['Clear Line', '#7bffb0', 'instantly removes the lowest row of blocks', 3],
   M: ['Multiball', '#ffd23f', 'doubles the number of balls, triples in solo (a life is only lost when every ball is gone)', 3],
-  S: ['Slow Ball', '#a0c4ff', 'halves ball speed for 10 seconds', 3],
+  S: ['Slow Ball', '#a0c4ff', 'halves ball speed for 10 seconds (20 in solo)', 3],
   F: ['Fast Ball', '#ff7b7b', 'doubles ball speed for 10 seconds', 3],
-  B: ['Big Paddle', '#4cde6c', 'doubles paddle width for 10 seconds', 3],
+  B: ['Big Paddle', '#4cde6c', 'doubles paddle width for 10 seconds (20 in solo)', 3],
   T: ['Tiny Paddle', '#ff9a3c', 'halves paddle width for 10 seconds', 3],
   Q: ['Earthquake', '#c8a2ff', 'shuffles the board and buries its specials away from the edge', 2],
-  E: ['Explosivo', '#ff5aa0', 'for 5 seconds every block the ball breaks also breaks the blocks touching its sides', 2],
+  E: ['Explosivo', '#ff5aa0', 'for 5 seconds (7 in solo) every block the ball breaks also breaks the blocks touching its sides', 2],
 };
 const SP_KEYS = Object.keys(SPECIALS);
 const SLOT_COLORS = ['', '#ff5470', '#30d5ff', '#4cde6c', '#ffd23f', '#b45cff', '#ff9a3c'];
@@ -144,7 +144,9 @@ const levelMul = () => mode === 'solo' ? 1 + 0.05 * (level - speedLevel) : 1; //
 const now = () => performance.now();
 const paddleW = () => PADDLE_W * (fx.paddle && fx.paddle.until > now() ? fx.paddle.mul : 1);
 const speedMul = () => (fx.speed && fx.speed.until > now() ? fx.speed.mul : 1) * levelMul();
-const stackFx = (cur, mul, ms = FX_MS) => ({ mul, until: (cur && cur.mul === mul && cur.until > now() ? cur.until : now()) + ms });
+// solo: timed specials last twice as long (Explosivo 7 s instead of 5)
+const fxMs = () => mode === 'solo' ? FX_MS * 2 : FX_MS, boomMs = () => mode === 'solo' ? 7000 : BOOM_MS;
+const stackFx = (cur, mul, ms = fxMs()) => ({ mul, until: (cur && cur.mul === mul && cur.until > now() ? cur.until : now()) + ms });
 const exploding = () => !!(fx.boom && fx.boom.until > now());
 function applySpecial(s) {
   if (!playing) return;
@@ -175,7 +177,7 @@ function applySpecial(s) {
     case 'B': fx.paddle = stackFx(fx.paddle, 2); break;
     case 'T': fx.paddle = stackFx(fx.paddle, 0.5); break;
     case 'Q': earthquake(); break;
-    case 'E': fx.boom = stackFx(fx.boom, 1, BOOM_MS); break; // stacks like every timed special
+    case 'E': fx.boom = stackFx(fx.boom, 1, boomMs()); break; // stacks like every timed special
   }
   updateHud(); sync(true);
 }
@@ -296,7 +298,7 @@ function update(dt) {
 }
 
 // ---------- drawing ----------
-function drawBoard(cx, s, { cells, px, pw, balls: bs, ready, scale = 1 }) {
+function drawBoard(cx, s, { cells, px, pw, balls: bs, ready, scale = 1, paddleAlpha = 1 }) {
   cx.fillStyle = theme.well; cx.fillRect(0, 0, W, H);
   for (let i = 0; i < cells.length; i++) {
     const ch = cells[i]; if (ch === '.') continue;
@@ -316,7 +318,9 @@ function drawBoard(cx, s, { cells, px, pw, balls: bs, ready, scale = 1 }) {
       cx.strokeStyle = 'rgba(0,0,0,.45)'; cx.lineWidth = 2; cx.strokeRect(x + 1, y + 1, BW - 2, BH - 2);
     }
   }
+  cx.save(); cx.globalAlpha = paddleAlpha;
   cx.fillStyle = theme.text; cx.beginPath(); cx.roundRect(px, PADDLE_Y, pw, PADDLE_H, 4); cx.fill(); // paddle: flat
+  cx.restore();
   cx.fillStyle = '#ffcc33';
   for (const [x, y] of bs) { cx.beginPath(); cx.arc(x, y, BALL_R * (scale < 1 ? 1.4 : 1), 0, 7); cx.fill(); }
   if (ready) { cx.beginPath(); cx.arc(px + pw / 2, PADDLE_Y - BALL_R - 1, BALL_R, 0, 7); cx.fill(); }
@@ -335,7 +339,10 @@ function draw() {
   fit();
   if (!grid) newGrid(1); // something to look at before the first match
   const pw = paddleW();
-  drawBoard(ctx, 1, { cells: grid, px: paddleX ?? (W - pw) / 2, pw, balls: (balls || []).map(b => [b.x, b.y]), ready: playing && phase === 'ready' });
+  // Big Paddle about to run out: the paddle fades in and out for its last 3 s
+  const bigLeft = fx && fx.paddle && fx.paddle.mul > 1 ? fx.paddle.until - now() : 0;
+  const paddleAlpha = bigLeft > 0 && bigLeft < ENDING_MS ? 0.6 + 0.4 * Math.cos(now() / 1000 * Math.PI * 4) : 1;
+  drawBoard(ctx, 1, { cells: grid, px: paddleX ?? (W - pw) / 2, pw, balls: (balls || []).map(b => [b.x, b.y]), ready: playing && phase === 'ready', paddleAlpha });
   let msg = null;
   if (!playing && !mode) msg = [roomState === 'lobby' ? (myId === hostId ? 'Press Space to start' : 'Waiting for the host…') : 'Game in progress, you\'re watching', ''];
   else if (phase === 'ready') msg = ['Press Space to launch', mode === 'clear' ? 'Clear every block first to win' : `${lives} ${lives === 1 ? 'life' : 'lives'} left`];
@@ -397,12 +404,14 @@ function renderQueue() {
   $('queue').innerHTML = html;
 }
 let lastFx = '';
+const blinkOff = left => left < ENDING_MS && Math.floor(now() / 250) % 2 === 1;
 function renderEffects() {
   const t = now(), out = [];
   if (fx && fx.speed && fx.speed.until > t) out.push([fx.speed.mul > 1 ? 'Fast' : 'Slow', fx.speed.mul > 1 ? '#ff7b7b' : '#a0c4ff', fx.speed.until]);
   if (fx && fx.boom && fx.boom.until > t) out.push(['Explosivo', '#ff5aa0', fx.boom.until]);
   if (fx && fx.paddle && fx.paddle.until > t) out.push([fx.paddle.mul > 1 ? 'Big paddle' : 'Tiny paddle', fx.paddle.mul > 1 ? '#4cde6c' : '#ff9a3c', fx.paddle.until]);
-  const html = out.map(([n, c, u]) => `<span style="background:${c}">${n} ${Math.ceil((u - t) / 1000)}</span>`).join('');
+  // the last 3 s blink so you notice from the corner of your eye that it's about to run out
+  const html = out.map(([n, c, u]) => `<span class="${blinkOff(u - t) ? 'off' : ''}" style="background:${c}">${n} ${Math.ceil((u - t) / 1000)}</span>`).join('');
   if (html !== lastFx) { lastFx = html; $('effects').innerHTML = html; }
 }
 function renderPlayers() {

@@ -50,8 +50,11 @@ body.block-page { overflow:hidden; height:100vh; display:flex; flex-direction:co
 #queue .q { width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; color:#111; }
 #queue .q.next { outline:3px solid var(--ring); outline-offset:2px; transform:scale(1.08); }
 #queue .q.empty { border:2px dashed var(--line); }
-#effects { display:flex; gap:4px; }
+/* active effects sit on the board itself, in the empty strip above the blocks (top right) */
+#meBar { position:relative; }
+#effects { position:absolute; top:calc(100% + 10px); right:8px; display:flex; gap:4px; z-index:2; pointer-events:none; }
 #effects span { font-size:11px; font-weight:800; padding:3px 7px; border-radius:10px; color:#111; white-space:nowrap; }
+#effects span.off { opacity:.2; } /* blink: effect has under 3 s left */
 #board { display:block; border:2px solid var(--line); border-radius:6px; background:var(--well); }
 
 #opps { justify-self:start; display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; align-content:start; width:100%; max-width:560px; overflow-y:auto; min-height:0; }
