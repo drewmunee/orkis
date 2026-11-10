@@ -186,6 +186,12 @@ $('chat').addEventListener('keydown', e => {
 });
 $('chat').addEventListener('blur', updateChat);
 $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
+// Back to the homepage. Leaving while still alive in a round means dying, so ask first.
+$('leaveBtn').onclick = e => {
+  const alive = roomState !== 'lobby' && state.snakes.some(s => s.id === myId);
+  if (alive && !confirm('Leave this round? Your snake will be out.')) { e.target.blur(); return; }
+  location.href = '/';
+};
 $('theme').value = document.documentElement.dataset.theme || 'system';
 $('theme').addEventListener('change', e => { document.documentElement.dataset.theme = e.target.value; try { localStorage.setItem('sw-theme', e.target.value); } catch {} readTheme(); e.target.blur(); });
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
