@@ -77,8 +77,8 @@ New games must call the same `leaveRoom()` pattern.
 
 ## Timed specials stack (all games)
 - Getting the same timed effect again adds its full duration to what's left instead of restarting it:
-  Stackwar Haste/Darkness/Inverted, Snakewar Speed/Ghost/Double/Slow/Extendo, Blockwar Slow/Fast Ball and
-  Big/Tiny Paddle. Opposites still cancel/replace (Snakewar Slow cancels Speed; Blockwar Big vs Tiny,
+  Stackwar Haste/Darkness/Inverted, Snakewar Speed/Ghost/Double/Slow/Extendo, Blockwar Slow/Fast Ball,
+  Big/Tiny Paddle and Explosivo. Opposites still cancel/replace (Snakewar Slow cancels Speed; Blockwar Big vs Tiny,
   Slow vs Fast replace each other). Exception: the Snakewar bomb fuse is always 5 s.
 
 ## Player stats
@@ -195,18 +195,20 @@ New games must call the same `leaveRoom()` pattern.
 - Paddle bounces like a half circle: the hit point alone decides the new direction (center = straight up,
   ends = 60° to that side). Blocks bounce off the side hit; the ball speeds up a little per block.
 - Losing your last ball costs a life (Multiball: only when every ball is gone), then a 5 s wait before
-  the ball is back on a centered paddle.
+  the ball is back on a centered paddle (solo: no wait, the ball is back at once; Space launches).
 - Modes: **solo** (1 player): endless; each row's worth of blocks broken brings a new row in at the top,
-  level up every 5 rows (+8% ball speed each); over when blocks reach the bottom row or lives run out.
+  level up every 5 rows (+5% ball speed each; solo's per-block speed-up is also half of multiplayer's); over when blocks reach the bottom row or lives run out.
   **Clear race**: identical boards, first to clear every block wins, unlimited lives (misses just cost
   the 5 s wait). **Lives**: 3 lives, a cleared board refills, last player with lives left wins.
   Team mode is planned. Solo will later get random artifacts/shapes at higher stages.
 - Specials: ~7% of blocks carry a letter; breaking one adds it to your queue (max 3, oldest dropped);
   1-6 fires it at that player (1 = you), X discards, or click a board. R Random (stone boulder or
-  stalactite), C Clear Line (lowest row), M Multiball (doubles balls), S Slow Ball / F Fast Ball (half /
+  stalactite), C Clear Line (lowest row), M Multiball (doubles balls; triples in solo), E Explosivo
+  (5 s, stacks: each block a ball breaks also breaks the blocks touching its 4 sides, no chain; a bit
+  rarer, weight 2 like Q), S Slow Ball / F Fast Ball (half /
   double speed 10 s), B Big Paddle / T Tiny Paddle (double / half width 10 s), Q Earthquake (shuffles
   the board, buries specials away from the exposed edge).
-- Solo runs never spawn R (Random) or T (Tiny Paddle) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
+- Solo runs never spawn R (Random), T (Tiny Paddle) or F (Fast Ball) blocks (`SOLO_EXCLUDED`). Clear Line scores every block
   it removes like a break (10, stone 5) and counts toward blocks broken, in every mode; in solo it doesn't
   advance the new-row counter.
 

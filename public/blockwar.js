@@ -10,20 +10,21 @@ const BW = W / COLS, START_ROWS = 8;
 const ROW_COLORS = ['#4a3470', '#5d3a7c', '#743f84', '#8c4686', '#a44f80', '#ba5b73', '#cc6d62', '#da834f'];
 const STONE = '#8d8478';
 const PADDLE_W = 110, PADDLE_H = 14, PADDLE_Y = H - 40, PADDLE_SPEED = 640;
-const BALL_R = 8, START_SPEED = 380, SPEED_UP = 3, MAX_SPEED = 700;
+const BALL_R = 8, START_SPEED = 380, SPEED_UP = 3, SOLO_SPEED_UP = 1.5, MAX_SPEED = 700; // solo speeds up more gently
 const MAX_ANGLE = Math.PI / 3;                  // paddle edge sends the ball out at 60° from straight up
-const START_LIVES = 3, RESPAWN_MS = 5000, FX_MS = 10000, QUEUE_MAX = 3, SPECIAL_RATE = 0.07;
+const START_LIVES = 3, RESPAWN_MS = 5000, FX_MS = 10000, BOOM_MS = 5000, QUEUE_MAX = 3, SPECIAL_RATE = 0.07;
 const SYNC_MS = 250;                            // how often your board is sent to the others
 // Specials (letter blocks you break to collect): [name, color, description, weight]
 const SPECIALS = {
   R: ['Random', '#b08968', 'drops a boulder or stalactite of breakable stone onto the board', 4],
   C: ['Clear Line', '#7bffb0', 'instantly removes the lowest row of blocks', 3],
-  M: ['Multiball', '#ffd23f', 'doubles the number of balls (a life is only lost when every ball is gone)', 3],
+  M: ['Multiball', '#ffd23f', 'doubles the number of balls, triples in solo (a life is only lost when every ball is gone)', 3],
   S: ['Slow Ball', '#a0c4ff', 'halves ball speed for 10 seconds', 3],
   F: ['Fast Ball', '#ff7b7b', 'doubles ball speed for 10 seconds', 3],
   B: ['Big Paddle', '#4cde6c', 'doubles paddle width for 10 seconds', 3],
   T: ['Tiny Paddle', '#ff9a3c', 'halves paddle width for 10 seconds', 3],
   Q: ['Earthquake', '#c8a2ff', 'shuffles the board and buries its specials away from the edge', 2],
+  E: ['Explosivo', '#ff5aa0', 'for 5 seconds every block the ball breaks also breaks the blocks touching its sides', 2],
 };
 const SP_KEYS = Object.keys(SPECIALS);
 const SLOT_COLORS = ['', '#ff5470', '#30d5ff', '#4cde6c', '#ffd23f', '#b45cff', '#ff9a3c'];
@@ -56,8 +57,8 @@ const nameOf = id => (players.find(p => p.id === id) || {}).name || '?';
 
 // ---------- seeded random (clear races start on the same board) ----------
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-// Solo runs never spawn Random (stone) or Tiny Paddle blocks; multiplayer gets them all.
-const SOLO_EXCLUDED = 'RT';
+// Solo runs never spawn Random (stone), Tiny Paddle or Fast Ball blocks; multiplayer gets them all.
+const SOLO_EXCLUDED = 'RTF';
 function pickSpecial(rand = Math.random) {
   const keys = mode === 'solo' ? SP_KEYS.filter(k => !SOLO_EXCLUDED.includes(k)) : SP_KEYS;
   const total = keys.reduce((s, k) => s + SPECIALS[k][3], 0);
@@ -109,6 +110,8 @@ function loseLife() {
   if (mode !== 'clear') lives--;
   updateHud();
   if (mode !== 'clear' && lives <= 0) return gameOver();
+  // solo: straight back on the paddle, launch whenever you're ready; multiplayer waits 5 s
+  if (mode === 'solo') return toReady();
   phase = 'wait'; phaseUntil = performance.now() + RESPAWN_MS; balls = [];
 }
 function boardCleared() {
@@ -128,13 +131,14 @@ function soloProgress() {
   rowsAdded++; level = 1 + Math.floor(rowsAdded / 5);
   updateHud();
 }
-const levelMul = () => mode === 'solo' ? 1 + 0.08 * (level - 1) : 1; // +8% ball speed per level
+const levelMul = () => mode === 'solo' ? 1 + 0.05 * (level - 1) : 1; // +5% ball speed per level
 
 // ---------- effects from specials ----------
 const now = () => performance.now();
 const paddleW = () => PADDLE_W * (fx.paddle && fx.paddle.until > now() ? fx.paddle.mul : 1);
 const speedMul = () => (fx.speed && fx.speed.until > now() ? fx.speed.mul : 1) * levelMul();
-const stackFx = (cur, mul) => ({ mul, until: (cur && cur.mul === mul && cur.until > now() ? cur.until : now()) + FX_MS });
+const stackFx = (cur, mul, ms = FX_MS) => ({ mul, until: (cur && cur.mul === mul && cur.until > now() ? cur.until : now()) + ms });
+const exploding = () => !!(fx.boom && fx.boom.until > now());
 function applySpecial(s) {
   if (!playing) return;
   switch (s) {
@@ -147,16 +151,24 @@ function applySpecial(s) {
       if (!blocksLeft()) boardCleared();
       break;
     }
-    case 'M':
-      if (phase === 'play') balls = balls.concat(balls.map(b => ({ ...b, vx: -b.vx || 0.3 })));
-      else pendingBalls *= 2;
+    case 'M': { // every ball splits in two (three in solo), the new ones heading off at other angles
+      const n = mode === 'solo' ? 3 : 2;
+      if (phase === 'play') balls = balls.flatMap(b => {
+        const out = [b];
+        if (n === 2) out.push({ ...b, vx: -b.vx || 0.3 });
+        else for (const d of [-0.5, 0.5]) { const a = Math.atan2(b.vx, -b.vy) + d; out.push({ ...b, vx: Math.sin(a), vy: -Math.abs(Math.cos(a)) || -0.5 }); }
+        return out;
+      });
+      else pendingBalls *= n;
       break;
+    }
     // the same effect again stacks (adds 10 s to what's left); the opposite one replaces it
     case 'S': fx.speed = stackFx(fx.speed, 0.5); break;
     case 'F': fx.speed = stackFx(fx.speed, 2); break;
     case 'B': fx.paddle = stackFx(fx.paddle, 2); break;
     case 'T': fx.paddle = stackFx(fx.paddle, 0.5); break;
     case 'Q': earthquake(); break;
+    case 'E': fx.boom = stackFx(fx.boom, 1, BOOM_MS); break; // stacks like every timed special
   }
   updateHud(); sync(true);
 }
@@ -221,17 +233,31 @@ function hitBlocks(b) {
     if (d < BALL_R * BALL_R && d < bestD) { best = idx(r, c); bestD = d; bn = [dx, dy]; }
   }
   if (best < 0) return;
-  const ch = grid[best]; grid[best] = '.'; brokenCount++;
-  if (SPECIALS[ch]) { queue.push(ch); if (queue.length > QUEUE_MAX) queue.splice(0, queue.length - QUEUE_MAX); renderQueue(); }
-  score += ch === 'z' ? 5 : 10;
-  ballSpeed = Math.min(MAX_SPEED, ballSpeed + SPEED_UP);
+  let n = 1; breakCell(best);
+  // Explosivo: the blocks touching the broken one's four sides go too (no chain reaction)
+  if (exploding()) {
+    const r = (best / COLS) | 0, c = best % COLS;
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const rr = r + dr, cc = c + dc;
+      if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[idx(rr, cc)] !== '.') { breakCell(idx(rr, cc)); n++; }
+    }
+  }
+  ballSpeed = Math.min(MAX_SPEED, ballSpeed + (mode === 'solo' ? SOLO_SPEED_UP : SPEED_UP));
   let [dx, dy] = bn;
   if (dx === 0 && dy === 0) { dx = -b.vx; dy = -b.vy; }
   if (Math.abs(dx) > Math.abs(dy)) { if (Math.sign(b.vx) !== Math.sign(dx)) b.vx = -b.vx; }
   else if (Math.sign(b.vy) !== Math.sign(dy)) b.vy = -b.vy;
-  soloProgress();
+  // solo rows move the whole grid down, so they only come in once every break above is done
+  for (let k = 0; k < n && phase !== 'done'; k++) soloProgress();
+  if (phase === 'done') return;
   if (!blocksLeft()) boardCleared();
   updateHud();
+}
+// one block broken by a ball: score it, count it, collect its special
+function breakCell(i) {
+  const ch = grid[i]; grid[i] = '.'; brokenCount++;
+  if (SPECIALS[ch]) { queue.push(ch); if (queue.length > QUEUE_MAX) queue.splice(0, queue.length - QUEUE_MAX); renderQueue(); }
+  score += ch === 'z' ? 5 : 10;
 }
 function update(dt) {
   const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
@@ -358,6 +384,7 @@ let lastFx = '';
 function renderEffects() {
   const t = now(), out = [];
   if (fx && fx.speed && fx.speed.until > t) out.push([fx.speed.mul > 1 ? 'Fast' : 'Slow', fx.speed.mul > 1 ? '#ff7b7b' : '#a0c4ff', fx.speed.until]);
+  if (fx && fx.boom && fx.boom.until > t) out.push(['Explosivo', '#ff5aa0', fx.boom.until]);
   if (fx && fx.paddle && fx.paddle.until > t) out.push([fx.paddle.mul > 1 ? 'Big paddle' : 'Tiny paddle', fx.paddle.mul > 1 ? '#4cde6c' : '#ff9a3c', fx.paddle.until]);
   const html = out.map(([n, c, u]) => `<span style="background:${c}">${n} ${Math.ceil((u - t) / 1000)}</span>`).join('');
   if (html !== lastFx) { lastFx = html; $('effects').innerHTML = html; }
