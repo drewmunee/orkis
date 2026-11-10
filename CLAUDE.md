@@ -1,10 +1,5 @@
 # Project notes
 
-> **Reminder for the owner (say this at the start of every session until it's done):**
-> Persistent data isn't set up yet. Create a free Postgres database on Neon (neon.tech), copy its
-> `postgresql://` connection string, and add it in Render → Environment as `DATABASE_URL`.
-> Until then the solo leaderboards (Stackwar lines, Snakewar classic scores) reset on every restart/redeploy. Remove this note once it's done.
-
 Two games share one site and one Node.js server (`server.js`, WebSockets via `ws`), with plain
 HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys too) to choose the game.
 
@@ -48,8 +43,9 @@ New games must call the same `leaveRoom()` pattern.
   run per username to the leaderboard shown on the homepage (`GET /api/leaderboard`, top 10).
   The homepage leaderboard is **hidden for now** (`SHOW_LEADERBOARD = false` in `public/game.js`) until
   the Neon database is set up; scores are still recorded. Flip it to `true` to show it again.
-- **Leaderboard storage** (`leaderboard.js`): Postgres when `DATABASE_URL` is set (required on Render,
-  whose filesystem is wiped on every restart/redeploy); otherwise `data/leaderboard.json` for local play.
+- **Leaderboard storage** (`leaderboard.js`): Postgres when `DATABASE_URL` is set; otherwise
+  `data/leaderboard.json` for local play. Production uses a free Neon Postgres database; its connection
+  string is set as `DATABASE_URL` in Render's Environment settings (never commit it).
 - **Team mode** (host toggles it in the room panel): each match shuffles players into Red and Blue
   (sizes differ by at most 1, e.g. 3v2). Specials can target anyone, teammates included. Garbage to
   teammates is always just 1 line with a 95% chance of a special; opponents get the normal amount.
