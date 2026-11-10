@@ -36,6 +36,11 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
   the Neon database is set up; scores are still recorded. Flip it to `true` to show it again.
 - **Leaderboard storage** (`leaderboard.js`): Postgres when `DATABASE_URL` is set (required on Render,
   whose filesystem is wiped on every restart/redeploy); otherwise `data/leaderboard.json` for local play.
+- **Team mode** (host toggles it in the room panel): each match shuffles players into Red and Blue
+  (sizes differ by at most 1, e.g. 3v2). Specials can target anyone, teammates included. Garbage to
+  teammates is always just 1 line with a 95% chance of a special; opponents get the normal amount.
+  The first 4-line clear gives a bonus special to every living player on that team. A team wins when
+  only its players are left. No team score is kept yet.
 - The light/dark theme is chosen with the Theme dropdown (System/Dark/Light), saved per browser.
 
 ## Snakewar

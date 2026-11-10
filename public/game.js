@@ -45,7 +45,10 @@ const countingDown = () => performance.now() < countdownEnd;
 // The solo leaderboard keeps recording scores, but stays off screen until a database (Neon) is set up.
 // Flip this to true to show it on the homepage and mention ranks after solo runs.
 const SHOW_LEADERBOARD = false;
-let soloRun = false; // game started with only this player: score goes to the leaderboard
+let soloRun = false;
+let teamMode = false; // host's toggle for the next match; players' .team is set per match ('red' | 'blue' | null)
+const TEAM_COLORS = { red: '#ff4d5e', blue: '#3d7bff' };
+const teamTag = t => t ? `<span class="team team-${t}">${t === 'red' ? 'Red' : 'Blue'}</span>` : ''; // game started with only this player: score goes to the leaderboard
 let held = null, holdUsed = false; // saved piece index; hold allowed once per piece
 let inventory = [], lines = 0, level = 1, hasteUntil = 0, darkUntil = 0;
 let dropAcc = 0, lockAcc = 0, lockResets = 0, lastTime = 0, sendPending = false;
@@ -133,10 +136,10 @@ function clearLines(collect) {
   }
   return n;
 }
-function garbageRow(withSpecials) {
+function garbageRow(withSpecials, chance = 0.7) {
   const row = Array(W).fill('8');
   row[(Math.random() * W) | 0] = '.';
-  if (withSpecials && Math.random() < 0.7) {
+  if (withSpecials && Math.random() < chance) {
     const count = Math.random() < 0.25 ? 2 : 1;
     for (let i = 0; i < count; i++) {
       const filled = row.map((c, x) => c === '8' ? x : -1).filter(x => x >= 0);
@@ -152,11 +155,11 @@ function randomSpecial(keys = SP_KEYS) {
   return keys[0];
 }
 const BONUS_KEYS = SP_KEYS.filter(k => !'ACDH'.includes(k)); // first 4-line clear reward pool
-function addGarbage(count, withSpecials) {
+function addGarbage(count, withSpecials, chance) {
   for (let i = 0; i < count; i++) {
     const top = board.shift();
     if (top.some(c => c !== '.')) { board.unshift(top); return die(); }
-    board.push(garbageRow(withSpecials));
+    board.push(garbageRow(withSpecials, chance));
   }
   fixPiece();
 }
@@ -320,7 +323,7 @@ function renderOpps() {
     for (const p of others) {
       const el = document.createElement('div');
       el.className = 'opp'; el.dataset.id = p.id;
-      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${esc(p.name)}</span><span class="w"></span></div><canvas width="${W * 14}" height="${H * 14}"></canvas>`;
+      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><canvas width="${W * 14}" height="${H * 14}"></canvas>`;
       el.onclick = () => useSpecial(numOf(players.find(q => q.id === p.id)));
       wrap.appendChild(el);
     }
@@ -328,6 +331,8 @@ function renderOpps() {
   for (const el of wrap.children) {
     const p = players.find(q => q.id === +el.dataset.id);
     el.classList.toggle('dead', roomState === 'playing' && !p.alive);
+    el.classList.toggle('team-red', p.team === 'red'); el.classList.toggle('team-blue', p.team === 'blue');
+    el.querySelector('.tm').innerHTML = teamTag(p.team);
     el.querySelector('.w').textContent = p.wins ? `${p.wins}★` : '';
     const cx = el.querySelector('canvas').getContext('2d');
     cx.fillStyle = theme.well; cx.fillRect(0, 0, W * 14, H * 14);
@@ -347,9 +352,15 @@ function renderInv() {
 }
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
-  $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${esc(me.name)}</span>` : '';
-  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
-  $('startBtn').classList.toggle('hidden', !(myId === hostId && roomState === 'lobby'));
+  $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${esc(me.name)}</span>${teamTag(me.team)}` : '';
+  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''} ${teamTag(p.team)}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
+  const hostInLobby = myId === hostId && roomState === 'lobby';
+  $('startBtn').classList.toggle('hidden', !hostInLobby);
+  $('startBtn').textContent = teamMode ? 'Start team game' : 'Start game';
+  $('teamBtn').classList.toggle('hidden', !hostInLobby);
+  $('teamBtn').textContent = teamMode ? 'Team mode: ON (switch to free-for-all)' : 'Switch to team mode';
+  $('teamBtn').classList.toggle('on', teamMode);
+  $('modeInfo').textContent = roomState === 'lobby' ? (teamMode ? 'Next game: Red vs Blue (teams picked at random)' : '') : '';
   renderOpps();
 }
 function updateStats() { $('lines').textContent = lines; $('level').textContent = level; }
@@ -385,7 +396,7 @@ function connect(name, room) {
         board = newBoard(); renderInv(); setStatus('Waiting for the host to start…');
         break;
       case 'lobby':
-        players = m.players; hostId = m.hostId; roomState = m.state; renderPlayers();
+        players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; renderPlayers();
         if (roomState === 'lobby' && !playing) setStatus($('status').textContent || 'Waiting for the host to start…');
         break;
       case 'start':
@@ -395,7 +406,7 @@ function connect(name, room) {
         if (m.players.length === 1) setStatus('Solo run: clear as many lines as you can. It speeds up every 10 lines.');
         break;
       case 'board': boards.set(m.id, m.cells); renderOpps(); break;
-      case 'garbage': if (playing) { addGarbage(m.count, true); syncBoard(); } break;
+      case 'garbage': if (playing) { addGarbage(m.count, true, m.rich ? 0.95 : 0.7); syncBoard(); } break; // rich: a teammate's line, nearly always has a special
       case 'special': if (playing) applySpecial(m.special); break;
       case 'setboard': if (playing) { board = deserialize(m.cells); fixPiece(); syncBoard(); } break;
       case 'used': {
@@ -407,8 +418,15 @@ function connect(name, room) {
       case 'dead': { const p = players.find(q => q.id === m.id); if (p) p.alive = false; log(`${nameOf(m.id)} is out`); renderPlayers(); break; }
       case 'gameover':
         playing = false; piece = null; roomState = 'lobby';
-        if (!soloRun) setStatus(m.winnerId === myId ? '🏆 You win!' : m.winnerName ? `${m.winnerName} wins!` : 'Game over');
-        log(m.winnerName ? `— ${m.winnerName} wins —` : '— Game over —');
+        if ('winnerTeam' in m) { // team match
+          const mine = (players.find(p => p.id === myId) || {}).team;
+          const name = m.winnerTeam === 'red' ? 'Red team' : m.winnerTeam === 'blue' ? 'Blue team' : null;
+          setStatus(!name ? 'Game over' : m.winnerTeam === mine ? `🏆 ${name} wins! (your team)` : `${name} wins!`);
+          log(name ? `— ${name} wins —` : '— Game over —');
+        } else {
+          if (!soloRun) setStatus(m.winnerId === myId ? '🏆 You win!' : m.winnerName ? `${m.winnerName} wins!` : 'Game over');
+          log(m.winnerName ? `— ${m.winnerName} wins —` : '— Game over —');
+        }
         break;
       case 'log': log(m.msg); break;
       case 'chat': chatLine(m.id, m.msg); break;
@@ -479,6 +497,7 @@ $('joinForm').onsubmit = e => {
   connect($('name').value, $('room').value);
 };
 $('startBtn').onclick = () => net({ t: 'start' });
+$('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
 function loadLeaderboard() {
   fetch('/api/leaderboard').then(r => r.json()).then(rows => {
     $('lbList').innerHTML = rows.length

@@ -39,10 +39,10 @@ function broadcast(room, msg, exceptId) {
   for (const p of room.players.values()) if (p.id !== exceptId) send(p.ws, msg);
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null }));
 }
 function sendLobby(room) {
-  broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state });
+  broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode });
 }
 function freeSlot(room) {
   const used = new Set([...room.players.values()].map(p => p.slot));
@@ -62,6 +62,17 @@ function finishSolo(room, p) {
 function checkGameOver(room) {
   if (room.state !== 'playing') return;
   const alive = [...room.players.values()].filter(p => p.alive);
+  if (room.teamMatch) {
+    // team match: over once everyone left standing is on one team (or nobody is)
+    const teams = new Set(alive.map(p => p.team));
+    if (teams.size > 1) return;
+    room.state = 'lobby';
+    for (const p of room.players.values()) p.alive = false;
+    const winnerTeam = alive.length ? alive[0].team : null;
+    broadcast(room, { t: 'gameover', winnerTeam });
+    sendLobby(room);
+    return;
+  }
   const over = room.startCount > 1 ? alive.length <= 1 : alive.length === 0;
   if (!over) return;
   room.state = 'lobby';
@@ -109,9 +120,22 @@ wss.on('connection', ws => {
         const seed = (Math.random() * 2 ** 31) | 0;
         for (const p of room.players.values()) { p.alive = true; p.board = ''; p.lines = 0; }
         room.firstFourDone = false; // first 4-line clear of each match earns a bonus
-        broadcast(room, { t: 'start', seed, players: playerList(room) });
+        // Team mode: shuffle everyone into red and blue (sizes differ by at most one), new teams every match.
+        // Teams only decide the winner; garbage and specials work exactly as in a free-for-all.
+        room.teamMatch = !!room.teamMode && room.startCount >= 2;
+        const order = [...room.players.values()];
+        for (let i = order.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [order[i], order[j]] = [order[j], order[i]]; }
+        order.forEach((p, i) => { p.team = room.teamMatch ? (i % 2 ? 'blue' : 'red') : null; });
+        broadcast(room, { t: 'start', seed, players: playerList(room), teamMatch: room.teamMatch });
+        if (room.teamMatch) for (const team of ['red', 'blue'])
+          broadcast(room, { t: 'log', msg: `${team === 'red' ? 'Red' : 'Blue'} team: ${order.filter(p => p.team === team).map(p => p.name).join(', ')}` });
         break;
       }
+      case 'teammode':
+        if (me.id !== room.hostId || room.state !== 'lobby') return;
+        room.teamMode = !!m.on;
+        sendLobby(room);
+        break;
       case 'board':
         if (typeof m.cells !== 'string' || m.cells.length > 400) return;
         me.board = m.cells;
@@ -125,13 +149,22 @@ wss.on('connection', ws => {
         let garbage = n >= 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0;
         // The match's first 4-line clear sends 4 lines instead of 3 and earns a free special.
         const firstFour = n >= 4 && !room.firstFourDone;
-        if (firstFour) { room.firstFourDone = true; garbage = 4; send(me.ws, { t: 'bonus' }); }
+        // In a team match the bonus special goes to every living player on the clearer's team.
+        const team = room.teamMatch ? me.team : null;
+        const mates = p => team && p.team === team;
+        if (firstFour) {
+          room.firstFourDone = true; garbage = 4;
+          for (const p of room.players.values()) if (p.alive && (p.id === me.id || mates(p))) send(p.ws, { t: 'bonus' });
+        }
         if (!garbage) return;
+        // Teammates only ever get 1 garbage line, and it almost always carries a special (a gift, really).
         for (const p of room.players.values())
-          if (p.id !== me.id && p.alive) send(p.ws, { t: 'garbage', count: garbage, from: me.id });
+          if (p.id !== me.id && p.alive) send(p.ws, mates(p) ? { t: 'garbage', count: 1, from: me.id, rich: true } : { t: 'garbage', count: garbage, from: me.id });
+        const tName = t => t === 'red' ? 'Red' : 'Blue', other = team === 'red' ? 'blue' : 'red';
+        const to = team ? `+${garbage} to ${tName(other)}, +1 to ${tName(team)}` : `+${garbage} to all`;
         broadcast(room, { t: 'log', msg: firstFour
-          ? `${me.name} got the first 4-line clear → +4 to all and a bonus special`
-          : `${me.name} cleared ${n} lines → +${garbage} to all` });
+          ? `${me.name} got the first 4-line clear → ${to} and a bonus special${team ? ` for team ${tName(team)}` : ''}`
+          : `${me.name} cleared ${n} lines → ${to}` });
         break;
       }
       case 'special': {
