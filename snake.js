@@ -512,6 +512,10 @@ function join(ws, id, m) {
     room = { code, players: new Map(), hostId: id, state: 'lobby', food: new Set(), drops: new Set(), bits: new Set(), specials: new Map(), walls: new Set(), blockades: [], bombs: [], startCount: 0, teamMode: false };
     setField(room, 1); rooms.set(code, room);
   }
+  const wanted = String(m.name || 'Player').trim().slice(0, 14) || 'Player';
+  const clash = moderation.nameClash(room.players.values(), wanted, m.bid); // no duplicate names in a lobby
+  if (clash === 'taken') { send(ws, { t: 'error', msg: moderation.nameTaken(wanted) }); if (!room.players.size) rooms.delete(code); return null; }
+  if (clash) clash.ws.terminate(); // same browser rejoining: drop its old connection
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
   const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null };

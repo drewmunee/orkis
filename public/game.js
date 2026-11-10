@@ -592,7 +592,8 @@ $('joinForm').onsubmit = async e => {
   e.preventDefault(); $('joinErr').textContent = '';
   // usernames with racial slurs are refused (the server checks too)
   try {
-    const r = await (await fetch('/api/name-ok?name=' + encodeURIComponent($('name').value.trim()))).json();
+    const q = new URLSearchParams({ name: $('name').value.trim(), room: $('room').value.trim() || 'lobby', game: GAMES[gameIdx].id, bid: SW.bid });
+    const r = await (await fetch('/api/name-ok?' + q)).json();
     if (!r.ok) { $('joinErr').textContent = r.msg; $('name').focus(); return; }
   } catch {}
   try { localStorage.setItem('sw-name', $('name').value.trim()); } catch {}

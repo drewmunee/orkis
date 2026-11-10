@@ -60,6 +60,10 @@ function join(ws, id, m) {
   const code = String(m.room || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
   let room = rooms.get(code);
   if (!room) { room = { code, players: new Map(), hostId: id, state: 'lobby', mode: 'clear', matchMode: null }; rooms.set(code, room); }
+  const wanted = String(m.name || 'Player').trim().slice(0, 14) || 'Player';
+  const clash = moderation.nameClash(room.players.values(), wanted, m.bid); // no duplicate names in a lobby
+  if (clash === 'taken') { send(ws, { t: 'error', msg: moderation.nameTaken(wanted) }); if (!room.players.size) rooms.delete(code); return null; }
+  if (clash) clash.ws.terminate(); // same browser rejoining: drop its old connection
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
   const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, wins: 0, board: null };

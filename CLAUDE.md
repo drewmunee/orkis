@@ -30,8 +30,16 @@ New games must call the same `leaveRoom()` pattern.
   `GET /api/leaderboard?game=...`. Shown on the homepage next to the lobby list for the selected game
   (`SHOW_LEADERBOARD` in `public/game.js`). The top 3 names tile the homepage background in a moving
   checkerboard (gold/silver/bronze text, each row offset by one name, neighbouring rows drifting opposite ways).
-  Old per-username tables (`leaderboard`, `snake_leaderboard`) are copied in on start; such a row merges
-  into a browser's spot the first time that name submits from a browser.
+  The board lists each username once (case-insensitive): if a name has spots from several browsers, only
+  its best is shown and ranked (rank/cutoff are per name too).
+  Old per-username tables (`leaderboard`, `snake_leaderboard`) are copied in once, then renamed to
+  `*_migrated` (re-copying on every start used to resurrect merged rows as duplicates); a 'name:' row
+  merges into a browser's spot the first time that name submits from a browser. On start, 'name:' rows
+  duplicated by a browser spot with the same name and an equal or better score are deleted.
+- **Duplicate names**: no two players in the same lobby (any game) may share a name, ignoring case
+  (`moderation.nameClash`); the same browser ID rejoining replaces its old connection instead. The
+  homepage pre-checks this via `GET /api/name-ok?name=&room=&game=&bid=`. Names aren't owned site-wide
+  until claimed usernames (roadmap) exist.
 - After a solo run the result line says whether it made the leaderboard (`SW.leaderboardText`).
 - Sanity checks reject impossible solo scores (Stackwar > ~3 lines/s, Blockwar > ~150 pts/s over the run).
   Stackwar/Blockwar scores still come from the browser, so a determined cheat is possible; Snakewar is

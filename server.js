@@ -43,8 +43,14 @@ const server = http.createServer((req, res) => {
   }
   if (p === '/api/name-ok') {
     // the homepage checks a username before joining
-    const ok = moderation.nameAllowed(String(q.get('name') || '').trim().slice(0, 14));
-    return json(200, ok ? { ok } : { ok, msg: moderation.NAME_REFUSED });
+    const name = String(q.get('name') || '').trim().slice(0, 14);
+    if (!moderation.nameAllowed(name)) return json(200, { ok: false, msg: moderation.NAME_REFUSED });
+    // and nobody else in the lobby they're about to join already has it
+    const code = String(q.get('room') || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
+    const map = { stackwar: rooms, snakewar: snake._rooms, blockwar: block._rooms }[q.get('game')];
+    const r = map && map.get(code);
+    if (r && moderation.nameClash(r.players.values(), name, q.get('bid')) === 'taken') return json(200, { ok: false, msg: moderation.nameTaken(name) });
+    return json(200, { ok: true });
   }
   if (p === '/api/settings') {
     // per-browser settings: GET ?bid=<browser id>, POST {bid, settings}
@@ -162,9 +168,13 @@ wss.on('connection', ws => {
       const code = String(m.room || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
       room = rooms.get(code);
       if (!room) { room = { code, players: new Map(), hostId: me.id, state: 'lobby', startCount: 0 }; rooms.set(code, room); }
+      const wanted = String(m.name || 'Player').trim().slice(0, 14) || 'Player';
+      const clash = moderation.nameClash(room.players.values(), wanted, m.bid);
+      if (clash === 'taken') { send(ws, { t: 'error', msg: moderation.nameTaken(wanted) }); room = null; return; }
+      if (clash) clash.ws.terminate(); // same browser rejoining: drop its old connection
       const slot = freeSlot(room);
       if (!slot) { send(ws, { t: 'error', msg: 'Room is full (6 players max).' }); room = null; return; }
-      me.name = String(m.name || 'Player').trim().slice(0, 14) || 'Player';
+      me.name = wanted;
       me.bid = typeof m.bid === 'string' ? m.bid.slice(0, 40) : null; // browser ID: one leaderboard spot per browser
       me.slot = slot;
       room.players.set(me.id, me);

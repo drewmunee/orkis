@@ -39,4 +39,15 @@ function hasSwear(text) {
   return words.some(w => w && (SWEAR_WORDS.has(w) || SWEAR_STEMS.some(s => w.startsWith(s) || (s.length >= 4 && w.includes(s))) || /^f\*+k|^s\*+t$|^f\*+/.test(w)));
 }
 
-module.exports = { nameAllowed, NAME_REFUSED, hasSwear };
+// No two people with the same name (ignoring capitals) in one lobby. If the name belongs to someone from
+// this same browser (e.g. rejoining after their connection dropped), their old connection is replaced
+// instead. Returns null if the name is free, the player to replace, or 'taken'.
+function nameClash(players, name, bid) {
+  const n = String(name).trim().toLowerCase();
+  const other = [...players].find(p => p.name.toLowerCase() === n);
+  if (!other) return null;
+  return other.bid && bid && other.bid === bid ? other : 'taken';
+}
+const nameTaken = name => `Someone in this lobby is already called ${name}. Please pick a different name.`;
+
+module.exports = { nameAllowed, NAME_REFUSED, hasSwear, nameClash, nameTaken };
