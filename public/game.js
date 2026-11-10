@@ -446,7 +446,34 @@ document.addEventListener('keydown', e => {
   }
   e.preventDefault();
 });
-$('joinForm').onsubmit = e => { e.preventDefault(); $('joinErr').textContent = ''; connect($('name').value, $('room').value); };
+// ---------- homepage game picker ----------
+const GAMES = [{ id: 'stackwar', title: 'STACKWAR' }, { id: 'snakewar', title: 'SNAKEWAR' }];
+let gameIdx = 0;
+try { gameIdx = Math.max(0, GAMES.findIndex(g => g.id === localStorage.getItem('sw-game'))); } catch {}
+function showGame(dir) {
+  const g = GAMES[gameIdx], t = $('titleText');
+  t.textContent = g.title; t.dataset.game = g.id;
+  if (dir) { t.classList.remove('slide-l', 'slide-r'); void t.offsetWidth; t.classList.add(dir < 0 ? 'slide-l' : 'slide-r'); }
+  $('gameDots').innerHTML = GAMES.map((_, i) => `<span class="${i === gameIdx ? 'on' : ''}"></span>`).join('');
+  $('leaderboard').classList.toggle('hidden', g.id !== 'stackwar'); // the leaderboard is Stackwar's solo mode
+  $('help').classList.toggle('hidden', g.id !== 'stackwar');
+  document.title = g.title[0] + g.title.slice(1).toLowerCase();
+  try { localStorage.setItem('sw-game', g.id); } catch {}
+}
+function pickGame(dir) { gameIdx = (gameIdx + dir + GAMES.length) % GAMES.length; showGame(dir); }
+$('prevGame').onclick = () => pickGame(-1);
+$('nextGame').onclick = () => pickGame(1);
+document.addEventListener('keydown', e => {
+  if ($('join').classList.contains('hidden') || /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
+  if (e.key === 'ArrowLeft') pickGame(-1); else if (e.key === 'ArrowRight') pickGame(1);
+});
+showGame(0);
+$('joinForm').onsubmit = e => {
+  e.preventDefault(); $('joinErr').textContent = '';
+  try { localStorage.setItem('sw-name', $('name').value.trim()); } catch {}
+  if (GAMES[gameIdx].id === 'snakewar') { location.href = 'snake.html?room=' + encodeURIComponent($('room').value.trim() || 'lobby'); return; }
+  connect($('name').value, $('room').value);
+};
 $('startBtn').onclick = () => net({ t: 'start' });
 function loadLeaderboard() {
   fetch('/api/leaderboard').then(r => r.json()).then(rows => {

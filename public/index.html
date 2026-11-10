@@ -16,7 +16,11 @@
   </select>
 </label>
 <div id="join" class="screen">
-  <h1>STACKWAR</h1>
+  <div id="picker">
+    <button type="button" class="pick" id="prevGame" aria-label="Previous game">‹</button>
+    <div id="gameTitle"><h1 id="titleText">STACKWAR</h1><div id="gameDots"></div></div>
+    <button type="button" class="pick" id="nextGame" aria-label="Next game">›</button>
+  </div>
   <form id="joinForm">
     <input id="name" placeholder="Username" maxlength="14" required>
     <input id="room" placeholder="Lobby code" maxlength="20" value="lobby">

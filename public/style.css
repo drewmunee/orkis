@@ -98,3 +98,18 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 #lbList .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #lbList .empty { color:var(--dim); border:none; }
 #leaderboard .hint { color:var(--dim); font-size:12px; margin:8px 0 0; }
+
+/* homepage game picker */
+#picker { display:flex; align-items:center; gap:18px; margin-bottom:24px; }
+#gameTitle { width:min(520px, 70vw); overflow:hidden; }
+#gameTitle h1 { margin:0; }
+#titleText[data-game="snakewar"] { color:#2fb85e; text-shadow:0 0 24px #3ccf6e40; }
+#titleText.slide-r { animation:slideR .25s ease-out; }
+#titleText.slide-l { animation:slideL .25s ease-out; }
+@keyframes slideR { from { transform:translateX(40%); opacity:0; } to { transform:none; opacity:1; } }
+@keyframes slideL { from { transform:translateX(-40%); opacity:0; } to { transform:none; opacity:1; } }
+.pick { font-size:34px; line-height:1; width:48px; height:48px; border-radius:50%; padding:0; background:var(--panel); color:var(--text); border:1px solid var(--line); }
+.pick:hover { border-color:var(--accent); }
+#gameDots { display:flex; justify-content:center; gap:8px; margin-top:8px; }
+#gameDots span { width:8px; height:8px; border-radius:50%; background:var(--line); }
+#gameDots span.on { background:var(--accent); }

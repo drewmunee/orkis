@@ -5,8 +5,12 @@
 > `postgresql://` connection string, and add it in Render → Environment as `DATABASE_URL`.
 > Until then the solo leaderboard resets on every restart/redeploy. Remove this note once it's done.
 
-Stackwar: multiplayer falling-block battle game. Node.js server (`server.js`, WebSockets via `ws`)
-plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-deploys from `main`.
+Two games share one site and one Node.js server (`server.js`, WebSockets via `ws`), with plain
+HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys too) to choose the game.
+
+- **Stackwar**: multiplayer falling-block battle game (`public/index.html`, `public/game.js`).
+- **Snakewar**: battle-royale snake (`snake.js` on the server, `public/snake.html` + `public/snakewar.js`).
+ Deployed on Render, which auto-deploys from `main`.
 
 ## Product decisions
 - **Desktop + keyboard only.** Do not spend effort on phone/touch support or mobile layouts.
@@ -31,6 +35,17 @@ plus a plain HTML/CSS/JS client in `public/`. Deployed on Render, which auto-dep
 - **Leaderboard storage** (`leaderboard.js`): Postgres when `DATABASE_URL` is set (required on Render,
   whose filesystem is wiped on every restart/redeploy); otherwise `data/leaderboard.json` for local play.
 - The light/dark theme is chosen with the Theme dropdown (System/Dark/Light), saved per browser.
+
+## Snakewar
+- Server-authoritative: `snake.js` moves every snake each tick (110 ms), resolves collisions and food,
+  and broadcasts the whole field. Clients only send direction changes and draw.
+- One shared 112x63 (16:9) field scaled to fill the window. Up to 12 players per room; lobby code
+  defaults to `lobby` (rooms are separate from Stackwar's).
+- Walls and any snake body (including your own) kill; head-on collisions kill both. A dead snake
+  leaves food on every other segment. Last snake alive wins (solo: play until you die).
+- Always one regular food per player in the round. Special foods spawn randomly (max 3, vanish
+  after 15 s): Speed (2 steps/tick for 5 s), Ghost (pass through snakes for 6 s), Feast (+5 length).
+  Owner said more special abilities are TBD.
 
 ## Roadmap (from the owner)
 **Planned**

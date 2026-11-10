@@ -4,11 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const leaderboard = require('./leaderboard');
+const snake = require('./snake');
 
 const PORT = process.env.PORT || 3000;
 const PUB = path.join(__dirname, 'public');
 const MAX_PLAYERS = 6;
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
@@ -73,10 +74,13 @@ function checkGameOver(room) {
 wss.on('connection', ws => {
   const me = { id: nextId++, ws, name: '', slot: 0, alive: false, board: '', wins: 0, lines: 0 };
   let room = null;
+  let snakeConn = null; // set when this connection plays Snakewar instead of Stackwar
 
   ws.on('message', raw => {
     let m;
     try { m = JSON.parse(raw); } catch { return; }
+    if (snakeConn) return snakeConn.message(m);
+    if (m.t === 'join' && m.game === 'snake') { if (!room) snakeConn = snake.join(ws, me.id, m); return; }
 
     if (m.t === 'join') {
       if (room) return;
@@ -161,6 +165,7 @@ wss.on('connection', ws => {
   });
 
   ws.on('close', () => {
+    if (snakeConn) return snakeConn.close();
     if (!room) return;
     finishSolo(room, me); // a solo player closing the tab still gets their run recorded
     room.players.delete(me.id);
