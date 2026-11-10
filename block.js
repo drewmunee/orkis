@@ -4,6 +4,8 @@
 //   clear (2+): everyone gets the same board; the first to clear every block wins
 //   lives (2+): 3 lives each; the last player with lives left wins
 const leaderboard = require('./leaderboard');
+const moderation = require('./moderation');
+const swearjar = require('./swearjar');
 const MAX_PLAYERS = 6;
 const MODES = ['clear', 'lives'];
 const rooms = new Map();
@@ -118,6 +120,7 @@ function join(ws, id, m) {
           break;
         case 'chat':
           broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
+          if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => log(room, line), e => console.error('swear jar failed:', e.message)); // a quarter in the jar
           break;
       }
     },

@@ -1,6 +1,8 @@
 // Snakewar: battle-royale snake. The server owns the game: it moves every snake on a fixed tick,
 // resolves collisions and food, and broadcasts the whole field to everyone in the room.
 const leaderboard = require('./leaderboard');
+const moderation = require('./moderation');
+const swearjar = require('./swearjar');
 const GW = 112, GH = 63;           // full-size 16:9 field, fills most laptop/desktop screens
 // Field size depends on how many are in the room when a round starts: solo is classic snake on a small
 // 32x18 board; 2 players get a quarter of the full area, 3 players half, 4+ the full field. All 16:9.
@@ -505,6 +507,7 @@ function join(ws, id, m) {
         sendLobby(room);
       } else if (m.t === 'chat') {
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
+        if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => log(room, line), e => console.error('swear jar failed:', e.message)); // a quarter in the jar
       }
     },
     close() {

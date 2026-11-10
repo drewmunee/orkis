@@ -42,6 +42,16 @@ New games must call the same `leaveRoom()` pattern.
 - Storage: Postgres (Neon) when `DATABASE_URL` is set (`db.js`), else JSON files in `data/` for local play.
   Production's `DATABASE_URL` lives in Render's Environment settings (never commit it).
 
+## Moderation and the swear jar
+- `moderation.js`: usernames containing racial slurs are refused at join for every game (checked once in
+  `server.js` before routing) and on the homepage (`GET /api/name-ok`). Ordinary swearing is allowed in
+  names. Lists are base64-encoded in the file; matching undoes look-alike characters, ignores spacing/
+  punctuation and catches stretched letters, while short words only match as whole words. Owner asked
+  for slurs only; chat is not filtered.
+- Swear jar (`swearjar.js`, table `swear_jar`): any chat message with a swear word adds one quarter and
+  the room sees "<name> puts a quarter into the swear jar. The swear jar is at $X.XX." Kept permanently,
+  per player (browser ID), so per-player totals can be shown later.
+
 ## Product decisions
 - **Desktop + keyboard only.** Do not spend effort on phone/touch support or mobile layouts.
   Optimize for people at a computer with a keyboard.

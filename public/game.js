@@ -568,8 +568,13 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') pickGame(-1); else if (e.key === 'ArrowRight') pickGame(1);
 });
 showGame(0);
-$('joinForm').onsubmit = e => {
+$('joinForm').onsubmit = async e => {
   e.preventDefault(); $('joinErr').textContent = '';
+  // usernames with racial slurs are refused (the server checks too)
+  try {
+    const r = await (await fetch('/api/name-ok?name=' + encodeURIComponent($('name').value.trim()))).json();
+    if (!r.ok) { $('joinErr').textContent = r.msg; $('name').focus(); return; }
+  } catch {}
   try { localStorage.setItem('sw-name', $('name').value.trim()); } catch {}
   if (GAMES[gameIdx].id === 'blockwar') { location.href = 'block.html?room=' + encodeURIComponent($('room').value.trim() || 'lobby'); return; }
   if (GAMES[gameIdx].id === 'snakewar') { location.href = 'snake.html?room=' + encodeURIComponent($('room').value.trim() || 'lobby'); return; }

@@ -5,6 +5,8 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const leaderboard = require('./leaderboard');
 const settings = require('./settings');
+const moderation = require('./moderation');
+const swearjar = require('./swearjar');
 const snake = require('./snake');
 const block = require('./block');
 
@@ -28,6 +30,11 @@ const server = http.createServer((req, res) => {
     const game = leaderboard.GAMES.includes(q.get('game')) ? q.get('game') : q.get('game') === 'snake' ? 'snakewar' : 'stackwar';
     leaderboard.top(game).then(rows => json(200, rows), err => { console.error('leaderboard read failed:', err.message); json(500, []); });
     return;
+  }
+  if (p === '/api/name-ok') {
+    // the homepage checks a username before joining
+    const ok = moderation.nameAllowed(String(q.get('name') || '').trim().slice(0, 14));
+    return json(200, ok ? { ok } : { ok, msg: moderation.NAME_REFUSED });
   }
   if (p === '/api/settings') {
     // per-browser settings: GET ?bid=<browser id>, POST {bid, settings}
@@ -133,6 +140,8 @@ wss.on('connection', ws => {
     // waiting for the connection to close; the close handler below does the cleanup for every game
     if (m.t === 'leave') return ws.terminate();
     if (snakeConn) return snakeConn.message(m);
+    // usernames may not contain racial slurs (every game's join comes through here)
+    if (m.t === 'join' && !moderation.nameAllowed(String(m.name || '').trim().slice(0, 14))) return send(ws, { t: 'error', msg: moderation.NAME_REFUSED });
     if (m.t === 'join' && m.game === 'snake') { if (!room) snakeConn = snake.join(ws, me.id, m) || { message() {}, close() {} }; return; } // a Snakewar connection never falls through to Stackwar
     if (m.t === 'join' && m.game === 'block') { if (!room) snakeConn = block.join(ws, me.id, m) || { message() {}, close() {} }; return; } // same for Blockwar
 
@@ -240,6 +249,7 @@ wss.on('connection', ws => {
         break;
       case 'chat':
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
+        if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => broadcast(room, { t: 'log', msg: line }), e => console.error('swear jar failed:', e.message)); // a quarter in the jar
         break;
     }
   });
