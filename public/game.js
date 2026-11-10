@@ -18,7 +18,7 @@ const SPECIALS = {
   R: ['Random Clear', '#7bd3ff', 'Knocks 8 random blocks out of the target board', 4],
   Q: ['Earthquake',   '#ffb347', 'Shakes every row of the target board sideways', 3],
   G: ['Gravity',      '#c8a2ff', 'Drops all blocks down, filling every hole', 1.5],
-  B: ['Blank',        '#d0d0d0', 'Turns all special blocks on the target into junk', 3],
+  B: ['Blank',        '#d0d0d0', 'Turns 3 of the target\'s special blocks into junk', 3],
   H: ['Haste',        '#ff66d9', 'Target pieces fall 3x faster for 10 seconds', 3],
   D: ['Darkness',     '#3b3363', 'Blacks out the target board for 4 seconds (only the falling piece stays faintly visible)', 3, '#fff'],
   S: ['Switch',       '#fff36b', 'Switches your whole board with the target', 0.7],
@@ -500,6 +500,11 @@ $('joinForm').onsubmit = e => {
   connect($('name').value, $('room').value);
 };
 $('startBtn').onclick = () => net({ t: 'start' });
+// Back to the homepage (game + lobby select). Leaving mid-game counts as being knocked out, so ask first.
+$('leaveBtn').onclick = e => {
+  if (playing && !confirm('Leave this game? You will be counted as out.')) { e.target.blur(); return; }
+  location.href = '/';
+};
 $('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
 function loadLeaderboard() {
   fetch('/api/leaderboard').then(r => r.json()).then(rows => {
@@ -515,7 +520,7 @@ $('chat').addEventListener('keydown', e => {
   if (e.key === 'Enter') { if (e.target.value.trim()) net({ t: 'chat', msg: e.target.value }); e.target.value = ''; e.target.blur(); }
   else if (e.key === 'Escape') e.target.blur();
 });
-$('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]};color:${SPECIALS[k][4] || '#111'}">${k}</span><b>${SPECIALS[k][0]}</b> — ${SPECIALS[k][2]}</li>`).join('');
+$('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]};color:${SPECIALS[k][4] || '#111'}">${k}</span><span><b>${SPECIALS[k][0]}</b> – ${SPECIALS[k][2]}</span></li>`).join('');
 try { $('name').value = localStorage.getItem('sw-name') || ''; } catch {}
 $('theme').value = document.documentElement.dataset.theme || 'system';
 $('theme').addEventListener('change', e => {

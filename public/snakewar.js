@@ -189,7 +189,7 @@ $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
 $('theme').value = document.documentElement.dataset.theme || 'system';
 $('theme').addEventListener('change', e => { document.documentElement.dataset.theme = e.target.value; try { localStorage.setItem('sw-theme', e.target.value); } catch {} readTheme(); e.target.blur(); });
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
-$('specialList').innerHTML = Object.values(SPECIAL_INFO).map(s => `<li><span class="ic" style="background:${s.color}">${s.icon}</span><b>${s.name}</b> ${s.desc}</li>`).join('');
+$('specialList').innerHTML = Object.values(SPECIAL_INFO).map(s => `<li><span class="ic" style="background:${s.color}">${s.icon}</span><span><b>${s.name}</b> – ${s.desc}</span></li>`).join('');
 
 readTheme(); connect(); requestAnimationFrame(draw);
 })();
