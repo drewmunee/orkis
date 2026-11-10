@@ -3,7 +3,7 @@
 > **Reminder for the owner (say this at the start of every session until it's done):**
 > Persistent data isn't set up yet. Create a free Postgres database on Neon (neon.tech), copy its
 > `postgresql://` connection string, and add it in Render → Environment as `DATABASE_URL`.
-> Until then the solo leaderboard resets on every restart/redeploy. Remove this note once it's done.
+> Until then the solo leaderboards (Stackwar lines, Snakewar classic scores) reset on every restart/redeploy. Remove this note once it's done.
 
 Two games share one site and one Node.js server (`server.js`, WebSockets via `ws`), with plain
 HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys too) to choose the game.
@@ -42,11 +42,14 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
 - Server-authoritative: `snake.js` moves every snake each tick (110 ms), resolves collisions and food,
   and broadcasts the whole field. Clients only send direction changes and draw.
 - One shared 16:9 field scaled to fill the window. Its size depends on the players in the room when the
-  round starts: 1-2 players 56x32 (quarter area), 3 players 79x45 (half), 4+ 112x63 (full).
+  round starts: 2 players 56x32 (quarter area), 3 players 79x45 (half), 4+ 112x63 (full).
+- **Solo is classic snake**: 32x18 board, solid walls (no wrap), one food at a time, +1 per food, no
+  special foods. Score = food eaten; best per username goes to `leaderboard.snake` (`snake_leaderboard`
+  table, `GET /api/leaderboard?game=snake`). Not shown on the homepage yet (same as Stackwar's).
   Up to 12 players per room; lobby code defaults to `lobby` (rooms are separate from Stackwar's).
-- The field wraps at every edge. Any snake body (including your own) kills; head-on collisions kill both. A dead snake
-  leaves food on every other segment. Last snake alive wins (solo: play until you die).
-- Every food (including what dead snakes leave) grows a snake by 2. Regular food starts at one per
+- Battle rounds (2+ players) wrap at every edge. Any snake body (including your own) kills; head-on collisions kill both. A dead snake
+  leaves food on every other segment. Last snake alive wins.
+- In battle rounds every food (including what dead snakes leave) grows a snake by 2. Regular food starts at one per
   player and rises as the round goes on (x2 after 1 min, x3 after 2 min, max x5 / 100).
 - Special foods spawn randomly (max 3, vanish after 15 s): Speed (2 steps/tick for 5 s), Ghost (pass
   through snakes for 6 s), Feast (+5 length), Shears (every other snake loses 4 segments, never below 3),

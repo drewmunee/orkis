@@ -19,7 +19,7 @@ if (!name.trim()) { location.replace('/'); return; }
 
 let ws, myId = null, hostId = null, roomState = 'lobby', GW = 112, GH = 63;
 let players = [], state = { snakes: [], food: [], drops: [], specials: [] };
-let countdownEnd = 0, banner = null; // banner: {text, until}
+let countdownEnd = 0, banner = null, best = null; // best: this player's classic high score, once known // banner: {text, until}
 
 const canvas = $('field'), ctx = canvas.getContext('2d');
 let theme = {};
@@ -43,15 +43,22 @@ function connect() {
       case 'lobby': players = m.players; hostId = m.hostId; roomState = m.state; renderPlayers(); updateChat(); break;
       case 'start':
         players = m.players; countdownEnd = performance.now() + m.countdown; banner = null;
-        setStatus(players.length === 1 ? 'Solo round: grow as long as you can' : '');
+        setStatus(players.length === 1 ? 'Classic snake: walls are solid. Eat as much as you can!' : '');
         log('— Round started —');
         break;
-      case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } updateLengths(); updateChat(); break; // field size depends on player count
+      case 'state': state = m; renderScore(); if (m.w) { GW = m.w; GH = m.h; } updateLengths(); updateChat(); break; // field size depends on player count
       case 'ate': if (m.id === myId) flashBanner(`${SPECIAL_INFO[m.special].name}!`, 900); break;
       case 'gameover': {
+        if (state.classic) break; // solo score arrives in its own 'classic' message
         const txt = m.winnerId === myId ? '🏆 You win!' : m.winnerName ? `${m.winnerName} wins!` : 'Round over';
         flashBanner(txt, 3500); setStatus(txt + (myId === hostId ? ' Press Space to play again.' : ''));
         log(m.winnerName ? `— ${m.winnerName} wins (length ${m.len}) —` : '— Round over —');
+        break;
+      }
+      case 'classic': {
+        if (m.best != null) best = m.best;
+        const txt = m.error ? `Score ${m.score} (couldn't save)` : !m.score ? 'Score 0' : m.score >= m.best ? `Score ${m.score}: new high score!` : `Score ${m.score} · best ${m.best}`;
+        flashBanner(txt, 4000); setStatus(txt + ' Press Space to play again.'); log(txt); renderScore();
         break;
       }
       case 'log': log(m.msg); break;
@@ -66,6 +73,11 @@ function connect() {
 function updateChat() {
   const inRound = roomState !== 'lobby', alive = state.snakes.some(s => s.id === myId);
   $('chatBox').classList.toggle('hidden', inRound && alive && document.activeElement !== $('chat'));
+}
+function renderScore() { // classic solo: show food eaten and the best so far
+  const me = state.snakes.find(s => s.id === myId);
+  $('score').classList.toggle('hidden', !state.classic);
+  if (state.classic) $('score').textContent = `Score ${me ? me.eaten : 0}` + (best != null ? ` · Best ${best}` : '');
 }
 function setStatus(s) { $('status').textContent = s; }
 function renderPlayers() {
@@ -90,7 +102,7 @@ function fit() {
   const dpr = window.devicePixelRatio || 1, w = innerWidth, h = innerHeight;
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const cs = Math.max(4, Math.floor(Math.min(w / GW, h / GH)));
+  const cs = Math.max(4, Math.floor(Math.min((w - 12) / GW, (h - 12) / GH))); // small margin keeps the border/walls visible
   view = { cs, ox: Math.floor((w - cs * GW) / 2), oy: Math.floor((h - cs * GH) / 2), w, h };
 }
 const cx = c => view.ox + (c % GW) * view.cs, cy = c => view.oy + ((c / GW) | 0) * view.cs;
@@ -105,8 +117,8 @@ function draw() {
   ctx.fillStyle = theme.grid; ctx.globalAlpha = 0.35;
   for (let y = 0; y < GH; y++) for (let x = (y & 1); x < GW; x += 2) ctx.fillRect(ox + x * cs, oy + y * cs, cs, cs);
   ctx.globalAlpha = 1;
-  // dashed edge: snakes wrap around to the other side
-  ctx.strokeStyle = '#3ccf6e'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.strokeRect(ox - 1, oy - 1, cs * GW + 2, cs * GH + 2); ctx.setLineDash([]);
+  // dashed edge: snakes wrap around to the other side; solid in classic solo, where walls kill
+  ctx.strokeStyle = '#3ccf6e'; ctx.lineWidth = state.classic ? 4 : 2; ctx.setLineDash(state.classic ? [] : [8, 6]); ctx.strokeRect(ox - 1, oy - 1, cs * GW + 2, cs * GH + 2); ctx.setLineDash([]);
 
   // food
   ctx.fillStyle = '#ff4d5e';

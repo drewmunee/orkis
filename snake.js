@@ -1,10 +1,13 @@
 // Snakewar: battle-royale snake. The server owns the game: it moves every snake on a fixed tick,
 // resolves collisions and food, and broadcasts the whole field to everyone in the room.
+const leaderboard = require('./leaderboard').snake;
 const GW = 112, GH = 63;           // full-size 16:9 field, fills most laptop/desktop screens
-// Field size depends on how many are in the room when a round starts: solo/2 players get a quarter of the
-// area, 3 players half, 4+ the full field. Every size keeps the 16:9 shape.
+// Field size depends on how many are in the room when a round starts: solo is classic snake on a small
+// 32x18 board; 2 players get a quarter of the full area, 3 players half, 4+ the full field. All 16:9.
+const CLASSIC = { w: 32, h: 18 };
 function fieldFor(n) {
-  const k = n <= 2 ? 0.5 : n === 3 ? Math.SQRT1_2 : 1; // side scale: area 1/4, 1/2, full
+  if (n <= 1) return { ...CLASSIC };
+  const k = n === 2 ? 0.5 : n === 3 ? Math.SQRT1_2 : 1; // side scale: area 1/4, 1/2, full
   return { w: Math.round(GW * k), h: Math.round(GH * k) };
 }
 const FOOD_GROWTH = 2;              // every food (incl. what dead snakes leave) adds 2 segments
@@ -69,7 +72,7 @@ function spawnSnake(room, p, occ) {
     let clear = true;
     for (const c of body) { const [cx, cy] = xy(room, c); for (let ox = -3; ox <= 3 && clear; ox++) for (let oy = -3; oy <= 3; oy++) if (occ.has(cell(room, cx + ox, cy + oy))) { clear = false; break; } }
     if (!clear) continue;
-    p.body = body; p.dir = dir; p.queue = []; p.grow = 0; p.fx = {}; p.alive = true;
+    p.body = body; p.dir = dir; p.queue = []; p.grow = 0; p.fx = {}; p.alive = true; p.eaten = 0;
     for (const c of body) occ.add(c);
     return;
   }
@@ -80,6 +83,9 @@ function startRound(room) {
   room.state = 'countdown';
   room.food = new Set(); room.drops = new Set(); room.specials = new Map();
   room.startCount = room.players.size;
+  // Solo rounds are classic snake: walls kill, one food at a time, +1 per food, no special foods,
+  // and the score (food eaten) goes on the Snakewar high-score board.
+  room.classic = room.startCount === 1;
   Object.assign(room, fieldFor(room.startCount));
   room.tickN = 0; room.playStart = Date.now() + COUNTDOWN_MS;
   const occ = new Set();
@@ -96,6 +102,7 @@ function startRound(room) {
 function stopRound(room) { clearTimeout(room.timer); clearInterval(room.timer); room.timer = null; }
 
 function topUpFood(room) {
+  if (room.classic) { if (!room.food.size) { const c = randomFreeCell(room); if (c >= 0) room.food.add(c); } return; }
   const base = Math.max(1, room.startCount || room.players.size);
   const mult = Math.min(FOOD_MAX_MULT, 1 + Math.max(0, Date.now() - (room.playStart || Date.now())) / FOOD_RAMP_MS);
   const want = Math.min(FOOD_CAP, Math.floor(base * mult));
@@ -121,14 +128,17 @@ function step(room, movers) {
   for (const p of movers) {
     if (p.queue.length) { const d = p.queue.shift(); if (!isReverse(p.dir, d)) p.dir = d; }
     const [hx, hy] = xy(room, p.body[0]), [dx, dy] = DIRS[p.dir];
-    // the field wraps: leaving one edge brings you in on the opposite side
-    const nc = cell(room, (hx + dx + room.w) % room.w, (hy + dy + room.h) % room.h);
+    const nx = hx + dx, ny = hy + dy;
+    if (room.classic && (nx < 0 || ny < 0 || nx >= room.w || ny >= room.h)) { plan.push([p, -1]); continue; } // classic: walls kill
+    // battle rounds wrap: leaving one edge brings you in on the opposite side
+    const nc = cell(room, (nx + room.w) % room.w, (ny + room.h) % room.h);
     plan.push([p, nc]);
     heads.set(nc, (heads.get(nc) || []).concat(p));
   }
   const dead = [];
   for (const [p, nc] of plan) {
     const ghost = p.fx.ghost > Date.now();
+    if (nc < 0) { dead.push([p, 'hit the wall']); continue; }
     if (!ghost && occ.has(nc)) {
       const owner = [...room.players.values()].find(q => q.alive && q.body.includes(nc));
       dead.push([p, owner === p ? 'ran into themselves' : `crashed into ${owner ? owner.name : 'a snake'}`]); continue;
@@ -142,7 +152,7 @@ function step(room, movers) {
     p.body.unshift(nc);
     if (p.grow > 0) p.grow--; else p.body.pop();
     const x2 = p.fx.double > Date.now() ? 2 : 1; // Double: all growth counts twice
-    if (room.food.has(nc)) { room.food.delete(nc); p.grow += FOOD_GROWTH * x2; }
+    if (room.food.has(nc)) { room.food.delete(nc); p.eaten++; p.grow += room.classic ? 1 : FOOD_GROWTH * x2; }
     else if (room.drops.has(nc)) { room.drops.delete(nc); p.grow += FOOD_GROWTH * x2; }
     const sp = room.specials.get(nc);
     if (sp) {
@@ -174,7 +184,7 @@ function tick(room) {
   // special foods come and go
   const now = Date.now();
   for (const [c, sp] of room.specials) if (sp.until < now) room.specials.delete(c);
-  if (room.specials.size < MAX_SPECIALS && Math.random() < SPECIAL_CHANCE) {
+  if (!room.classic && room.specials.size < MAX_SPECIALS && Math.random() < SPECIAL_CHANCE) {
     const c = randomFreeCell(room);
     if (c >= 0) room.specials.set(c, { type: SPECIAL_KEYS[rnd(SPECIAL_KEYS.length)], until: now + SPECIAL_LIFETIME });
   }
@@ -186,9 +196,9 @@ function tick(room) {
 function sendState(room) {
   const now = Date.now();
   broadcast(room, {
-    t: 'state', w: room.w, h: room.h,
+    t: 'state', w: room.w, h: room.h, classic: !!room.classic,
     snakes: [...room.players.values()].filter(p => p.alive).map(p => ({
-      id: p.id, body: p.body, dir: p.dir,
+      id: p.id, body: p.body, dir: p.dir, eaten: p.eaten || 0,
       fx: Object.fromEntries(Object.entries(p.fx).filter(([, u]) => u > now).map(([k, u]) => [k, u - now])),
     })),
     food: [...room.food], drops: [...room.drops],
@@ -196,6 +206,15 @@ function sendState(room) {
   });
 }
 
+// Classic solo: save the score (food eaten) and tell the player how it compares to their best.
+function recordClassic(room, p = [...room.players.values()][0]) {
+  if (!p) return;
+  const score = p.eaten || 0;
+  if (!score) return send(p.ws, { t: 'classic', score: 0 });
+  leaderboard.submit(p.name, score).then(
+    ({ best, rank }) => send(p.ws, { t: 'classic', score, best, rank }),
+    err => { console.error('snake leaderboard write failed:', err.message); send(p.ws, { t: 'classic', score, error: true }); });
+}
 function checkRoundOver(room) {
   if (room.state !== 'playing' && room.state !== 'countdown') return;
   const alive = [...room.players.values()].filter(p => p.alive);
@@ -205,6 +224,7 @@ function checkRoundOver(room) {
   room.state = 'lobby';
   const winner = room.startCount > 1 ? alive[0] : null;
   if (winner) { winner.wins++; winner.alive = false; }
+  if (room.classic) recordClassic(room);
   broadcast(room, { t: 'gameover', winnerId: winner ? winner.id : null, winnerName: winner ? winner.name : null, len: winner ? winner.body.length : 0 });
   sendState(room);
   sendLobby(room);
@@ -237,6 +257,7 @@ function join(ws, id, m) {
       }
     },
     close() {
+      if (room.classic && room.state !== 'lobby' && me.alive) { recordClassic(room, me); room.classic = false; } // closing the tab still saves a solo score
       room.players.delete(me.id);
       if (!room.players.size) { stopRound(room); rooms.delete(room.code); return; }
       if (room.hostId === me.id) room.hostId = room.players.values().next().value.id;

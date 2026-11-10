@@ -14,7 +14,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/api/leaderboard') {
-    leaderboard.top().then(
+    const board = /[?&]game=snake\b/.test(req.url) ? leaderboard.snake : leaderboard;
+    board.top().then(
       rows => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(rows)); },
       err => { console.error('leaderboard read failed:', err.message); res.writeHead(500); res.end('[]'); });
     return;
