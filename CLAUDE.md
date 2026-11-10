@@ -56,6 +56,25 @@ New games must call the same `leaveRoom()` pattern.
 - Storage: Postgres (Neon) when `DATABASE_URL` is set (`db.js`), else JSON files in `data/` for local play.
   Production's `DATABASE_URL` lives in Render's Environment settings (never commit it).
 
+## Database safety (owner's requirement: a deploy must never lose or duplicate stored data)
+- **All schema changes go in `migrations.js`** as a new numbered entry at the end. Modules never create
+  or alter tables themselves; they `await ready()` from `db.js`. Never edit, reorder or delete a shipped
+  migration. Each runs once (recorded in `schema_migrations`) in a transaction, under an advisory lock
+  (Render runs old + new servers side by side during a deploy). If one fails, `server.js` exits before
+  listening, so Render keeps the previous version live.
+- Additive changes only: new tables, `ADD COLUMN ... DEFAULT`, indexes. Never rename/drop tables or
+  columns with data, and never rename stored keys (game ids like `stackwar`, stat names, `player_key`
+  formats `b:<bid>` / `name:<name>`); add new ones and read both. The runner refuses DROP/TRUNCATE and
+  DELETE/UPDATE without WHERE unless the migration is marked `destructive: true` (needs the owner's OK).
+  Row copies must be repeat-safe (`ON CONFLICT DO NOTHING`, `GREATEST`).
+- Before new migrations run, every table is copied to schema `backup_before_<id>` (newest 3 kept).
+- Writes that touch several rows use `transaction()`. Stats batches are all-or-nothing and re-queued on
+  failure (never double-counted or dropped); on SIGTERM the server closes sockets (solo runs record),
+  flushes stats and exits.
+- New stats: just call `stats.add`/`stats.best` with a new stat name; no migration needed.
+- **Before shipping any storage change, run** `TEST_DATABASE_URL=postgres://sw:sw@localhost/sw npm run test:db`
+  (local scratch DB only; it wipes it) and add a check for the new data to `scripts/db-safety-test.js`.
+
 ## Timed specials stack (all games)
 - Getting the same timed effect again adds its full duration to what's left instead of restarting it:
   Stackwar Haste/Darkness/Inverted, Snakewar Speed/Ghost/Double/Slow/Extendo, Blockwar Slow/Fast Ball and

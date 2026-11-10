@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:db": "node scripts/db-safety-test.js"
   },
   "keywords": [],
   "author": "",

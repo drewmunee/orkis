@@ -1,19 +1,14 @@
 // Per-player settings, saved against the browser ID (theme today; controls and other preferences later).
 // Stored as one small JSON object per browser.
-const { getPool, jsonFile, validBid } = require('./db');
+const { getPool, ready, jsonFile, validBid } = require('./db');
 
 const MAX_BYTES = 4096;
 
 function postgresSettings(pool) {
-  const ready = pool.query(`CREATE TABLE IF NOT EXISTS settings (
-    bid        text PRIMARY KEY,
-    data       jsonb NOT NULL,
-    updated_at timestamptz NOT NULL DEFAULT now()
-  )`);
   return {
-    async get(bid) { await ready; const r = (await pool.query('SELECT data FROM settings WHERE bid = $1', [bid])).rows[0]; return r ? r.data : {}; },
+    async get(bid) { await ready(); const r = (await pool.query('SELECT data FROM settings WHERE bid = $1', [bid])).rows[0]; return r ? r.data : {}; },
     async set(bid, data) {
-      await ready;
+      await ready();
       await pool.query(`INSERT INTO settings (bid, data) VALUES ($1, $2)
         ON CONFLICT (bid) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`, [bid, data]);
     },

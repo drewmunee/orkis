@@ -1,7 +1,7 @@
 // All-time player stats, per player (browser ID, or username without one) and per game.
 // Games call add() for counters and best() for personal records; changes are buffered in memory and
 // written to the database every few seconds, so a busy game never waits on storage.
-const { getPool, jsonFile, playerKey } = require('./db');
+const { getPool, ready, transaction, jsonFile, playerKey } = require('./db');
 
 const FLUSH_MS = 5000;
 const pending = new Map(); // "key|game|stat|op" -> number   (op: add | max)
@@ -22,17 +22,12 @@ function add(p, game, stats, n = 1) {
 // best(p, 'snakewar', 'longest', 57): keeps the highest value ever seen
 const best = (p, game, stat, value) => record(p, game, stat, value, 'max');
 
+// tables are created by migrations.js
 function postgresStore(pool) {
-  const ready = (async () => {
-    await pool.query(`CREATE TABLE IF NOT EXISTS stats (
-      player_key text NOT NULL, game text NOT NULL, stat text NOT NULL, value bigint NOT NULL DEFAULT 0,
-      PRIMARY KEY (player_key, game, stat))`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS stat_players (
-      player_key text PRIMARY KEY, name text NOT NULL, first_seen timestamptz NOT NULL DEFAULT now(), last_seen timestamptz NOT NULL DEFAULT now())`);
-  })();
   return {
-    async write(adds, maxes, who) {
-      await ready;
+    // one transaction: either the whole batch is saved or none of it is (then it's retried), so a
+    // failed write can never count something twice or drop part of a batch
+    write: (adds, maxes, who) => transaction(async pool => {
       const cols = rows => [rows.map(r => r[0]), rows.map(r => r[1]), rows.map(r => r[2]), rows.map(r => r[3])];
       if (adds.length) await pool.query(`INSERT INTO stats (player_key, game, stat, value) SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::bigint[])
         ON CONFLICT (player_key, game, stat) DO UPDATE SET value = stats.value + EXCLUDED.value`, cols(adds));
@@ -40,9 +35,9 @@ function postgresStore(pool) {
         ON CONFLICT (player_key, game, stat) DO UPDATE SET value = GREATEST(stats.value, EXCLUDED.value)`, cols(maxes));
       for (const [key, name] of who) await pool.query(`INSERT INTO stat_players (player_key, name) VALUES ($1, $2)
         ON CONFLICT (player_key) DO UPDATE SET name = EXCLUDED.name, last_seen = now()`, [key, name]);
-    },
+    }),
     async read(key) {
-      await ready;
+      await ready();
       const rows = (await pool.query('SELECT game, stat, value FROM stats WHERE player_key = $1', [key])).rows;
       const who = (await pool.query('SELECT name, first_seen FROM stat_players WHERE player_key = $1', [key])).rows[0];
       return { rows: rows.map(r => [r.game, r.stat, +r.value]), name: who ? who.name : null, since: who ? who.first_seen : null };
@@ -75,9 +70,16 @@ function flush() {
   const adds = [], maxes = [];
   for (const [k, v] of pending) { const [key, game, stat, op] = k.split('|'); (op === 'max' ? maxes : adds).push([key, game, stat, v]); }
   const who = [...names]; pending.clear(); names.clear();
-  flushing = flushing.then(() => store.write(adds, maxes, who)).catch(e => console.error('stats write failed:', e.message));
+  flushing = flushing.then(() => store.write(adds, maxes, who)).catch(e => {
+    // nothing was saved (the write is all-or-nothing): put it back so the next flush tries again
+    console.error('stats write failed, will retry:', e.message);
+    for (const [key, game, stat, v] of adds) { const k = `${key}|${game}|${stat}|add`; pending.set(k, (pending.get(k) || 0) + v); }
+    for (const [key, game, stat, v] of maxes) { const k = `${key}|${game}|${stat}|max`; pending.set(k, Math.max(pending.get(k) || 0, v)); }
+    for (const [key, name] of who) if (!names.has(key)) names.set(key, name);
+  });
   return flushing;
 }
+const unsaved = () => pending.size + names.size;
 setInterval(flush, FLUSH_MS).unref();
 
 // Everything recorded for one browser: { name, since, games: { stackwar: { lines: 120, ... }, ... } }
@@ -89,4 +91,4 @@ async function forBrowser(bid, name) {
   return { name: n, since, games };
 }
 
-module.exports = { add, best, flush, forBrowser };
+module.exports = { add, best, flush, unsaved, forBrowser };

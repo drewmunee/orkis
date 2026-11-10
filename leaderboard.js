@@ -3,42 +3,16 @@
 // The board also shows each username only once (ignoring capitals): if the same name has spots from two
 // browsers (e.g. the same person on a laptop and a desktop), only its best score is listed and ranked.
 //   stackwar: lines cleared in a solo run · snakewar: food eaten in classic solo · blockwar: solo points
-const { getPool, jsonFile, playerKey } = require('./db');
+const { getPool, ready, transaction, jsonFile, playerKey } = require('./db');
 
 const GAMES = ['stackwar', 'snakewar', 'blockwar'];
 const TOP_N = 10;
 
+// tables are created by migrations.js
 function postgresBoards(pool) {
-  const ready = (async () => {
-    await pool.query(`CREATE TABLE IF NOT EXISTS scores (
-      game        text NOT NULL,
-      player_key  text NOT NULL,
-      name        text NOT NULL,
-      score       integer NOT NULL,
-      achieved_at timestamptz NOT NULL DEFAULT now(),
-      PRIMARY KEY (game, player_key)
-    )`);
-    // carry over scores from the old per-username tables (keyed by name; they merge into a browser's
-    // spot the first time that name submits from a browser)
-    // This copy happens once: the old table is then renamed (kept, not deleted). Re-copying it on every
-    // start used to bring back rows that had already merged into a browser's spot, making duplicates.
-    for (const [table, game] of [['leaderboard', 'stackwar'], ['snake_leaderboard', 'snakewar']]) {
-      const exists = (await pool.query('SELECT to_regclass($1) AS t', [table])).rows[0].t;
-      if (!exists) continue;
-      await pool.query(
-        `INSERT INTO scores (game, player_key, name, score, achieved_at)
-         SELECT $1, 'name:' || name_key, name, lines, achieved_at FROM ${table}
-         ON CONFLICT DO NOTHING`, [game]);
-      await pool.query(`ALTER TABLE ${table} RENAME TO ${table}_migrated`);
-    }
-    // Clean up leftovers from that old behaviour: a username-keyed row whose player already has a browser
-    // spot with the same name and an equal or better score was merged before, so it's a duplicate.
-    await pool.query(`DELETE FROM scores s WHERE s.player_key LIKE 'name:%' AND EXISTS (
-      SELECT 1 FROM scores b WHERE b.game = s.game AND b.player_key LIKE 'b:%' AND lower(b.name) = lower(s.name) AND b.score >= s.score)`);
-  })();
   return {
-    async submit(game, key, name, score) {
-      await ready;
+    // all-or-nothing, so a dropped connection can't lose a merged legacy score halfway
+    submit: (game, key, name, score) => transaction(async pool => {
       const legacy = 'name:' + name.trim().toLowerCase();
       if (key !== legacy) {
         // a score saved under this name before browser IDs existed becomes this browser's
@@ -63,9 +37,9 @@ function postgresBoards(pool) {
       const tenth = (await pool.query(`SELECT s AS score FROM (SELECT MAX(score) AS s, MIN(achieved_at) AS a FROM scores WHERE game = $1 GROUP BY lower(name)) t
         ORDER BY s DESC, a ASC OFFSET $2 LIMIT 1`, [game, TOP_N - 1])).rows[0];
       return { best, rank, prevBest: prev ? prev.score : 0, onBoard: rank <= TOP_N, cutoff: tenth ? tenth.score : 0 };
-    },
+    }),
     async top(game) {
-      await ready;
+      await ready();
       // one row per username: its best score from any browser
       const { rows } = await pool.query(`SELECT name, score, achieved_at FROM (
           SELECT DISTINCT ON (lower(name)) name, score, achieved_at FROM scores WHERE game = $1 ORDER BY lower(name), score DESC, achieved_at ASC

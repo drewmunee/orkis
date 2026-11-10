@@ -8,7 +8,8 @@ const settings = require('./settings');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
 const stats = require('./stats');
-const { validBid } = require('./db');
+const db = require('./db');
+const { validBid } = db;
 const snake = require('./snake');
 const block = require('./block');
 
@@ -295,4 +296,27 @@ wss.on('connection', ws => {
   });
 });
 
-server.listen(PORT, () => console.log(`Stackwar running on http://localhost:${PORT}`));
+// Apply any new database migrations before taking players. If one fails, exit without listening:
+// Render then keeps the previous version running and the database is left as it was.
+db.ready().then(() => server.listen(PORT, () => console.log(`Stackwar running on http://localhost:${PORT}`)), e => {
+  console.error(e.message);
+  process.exit(1);
+});
+
+// Render stops the old server with SIGTERM when a new version goes live. Close every connection first
+// (so solo runs in progress get recorded like a closed tab), then save buffered stats before exiting.
+let stopping = false;
+async function shutdown(sig) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${sig}: saving data and shutting down`);
+  server.close();
+  for (const ws of wss.clients) ws.terminate();
+  await new Promise(r => setTimeout(r, 1500)); // let close handlers send their leaderboard writes
+  for (let i = 0; i < 3 && stats.unsaved(); i++) await stats.flush();
+  if (stats.unsaved()) console.error(`shutdown: ${stats.unsaved()} stat entries could not be saved`);
+  await db.close().catch(() => {});
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
