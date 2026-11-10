@@ -8,8 +8,10 @@ const START_LEN = 4;
 const SPECIAL_LIFETIME = 15000;    // uneaten special foods vanish after this
 const MAX_SPECIALS = 3;
 const SPECIAL_CHANCE = 1 / 70;     // per tick, while below MAX_SPECIALS (~ one every 8s)
-// Special foods: speed (2 steps per tick), ghost (pass through snake bodies), feast (+5 length)
-const SPECIALS = { speed: 5000, ghost: 6000, feast: 0 };
+// Special foods: speed (2 steps per tick), ghost (pass through snake bodies), feast (+5 length),
+// shears (every other snake loses SHEARS_CUT segments, never below SHEARS_MIN)
+const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0 };
+const SHEARS_CUT = 4, SHEARS_MIN = 3;
 const SPECIAL_KEYS = Object.keys(SPECIALS);
 const DIRS = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] };
 
@@ -104,16 +106,14 @@ function step(room, movers) {
   for (const p of movers) {
     if (p.queue.length) { const d = p.queue.shift(); if (!isReverse(p.dir, d)) p.dir = d; }
     const [hx, hy] = xy(p.body[0]), [dx, dy] = DIRS[p.dir];
-    const nx = hx + dx, ny = hy + dy;
-    const off = nx < 0 || ny < 0 || nx >= GW || ny >= GH;
-    const nc = off ? -1 : cell(nx, ny);
-    plan.push([p, nc, off]);
-    if (!off) heads.set(nc, (heads.get(nc) || []).concat(p));
+    // the field wraps: leaving one edge brings you in on the opposite side
+    const nc = cell((hx + dx + GW) % GW, (hy + dy + GH) % GH);
+    plan.push([p, nc]);
+    heads.set(nc, (heads.get(nc) || []).concat(p));
   }
   const dead = [];
-  for (const [p, nc, off] of plan) {
+  for (const [p, nc] of plan) {
     const ghost = p.fx.ghost > Date.now();
-    if (off) { dead.push([p, 'hit the wall']); continue; }
     if (!ghost && occ.has(nc)) {
       const owner = [...room.players.values()].find(q => q.alive && q.body.includes(nc));
       dead.push([p, owner === p ? 'ran into themselves' : `crashed into ${owner ? owner.name : 'a snake'}`]); continue;
@@ -131,7 +131,12 @@ function step(room, movers) {
     const sp = room.specials.get(nc);
     if (sp) {
       room.specials.delete(nc);
-      if (sp.type === 'feast') p.grow += 5; else p.fx[sp.type] = Date.now() + SPECIALS[sp.type];
+      if (sp.type === 'feast') p.grow += 5;
+      else if (sp.type === 'shears') {
+        for (const q of room.players.values()) if (q !== p && q.alive) { q.body.splice(Math.max(SHEARS_MIN, q.body.length - SHEARS_CUT)); q.grow = 0; }
+        log(room, `${p.name} grabbed Shears: everyone else loses ${SHEARS_CUT}`);
+      }
+      else p.fx[sp.type] = Date.now() + SPECIALS[sp.type];
       broadcast(room, { t: 'ate', id: p.id, special: sp.type });
     }
   }

@@ -4,8 +4,9 @@ const $ = id => document.getElementById(id);
 const SNAKE_COLORS = ['', '#ff5470', '#30d5ff', '#4cde6c', '#ffd23f', '#b45cff', '#ff9a3c', '#3d7bff', '#ff66d9', '#7bffb0', '#c8a2ff', '#ffb347', '#a0e8ff'];
 const SPECIAL_INFO = {
   speed: { name: 'Speed', icon: '⚡', color: '#ffd23f', desc: 'move twice as fast for 5 seconds' },
-  ghost: { name: 'Ghost', icon: '👻', color: '#cfd8ff', desc: 'slide through snakes for 6 seconds (walls still kill)' },
+  ghost: { name: 'Ghost', icon: '👻', color: '#cfd8ff', desc: 'slide through snakes for 6 seconds' },
   feast: { name: 'Feast', icon: '+5', color: '#ff66d9', desc: 'grow 5 segments at once' },
+  shears: { name: 'Shears', icon: '✂', color: '#ff7b7b', desc: 'every other snake loses 4 segments (never below 3)' },
 };
 const KEYS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R', w: 'U', s: 'D', a: 'L', d: 'R', W: 'U', S: 'D', A: 'L', D: 'R' };
 
@@ -37,13 +38,13 @@ function connect() {
     switch (m.t) {
       case 'error': setStatus(m.msg); break;
       case 'welcome': myId = m.id; GW = m.w; GH = m.h; $('roomName').textContent = m.room; break;
-      case 'lobby': players = m.players; hostId = m.hostId; roomState = m.state; renderPlayers(); break;
+      case 'lobby': players = m.players; hostId = m.hostId; roomState = m.state; renderPlayers(); updateChat(); break;
       case 'start':
         players = m.players; countdownEnd = performance.now() + m.countdown; banner = null;
         setStatus(players.length === 1 ? 'Solo round: grow as long as you can' : '');
         log('— Round started —');
         break;
-      case 'state': state = m; updateLengths(); break;
+      case 'state': state = m; updateLengths(); updateChat(); break;
       case 'ate': if (m.id === myId) flashBanner(`${SPECIAL_INFO[m.special].name}!`, 900); break;
       case 'gameover': {
         const txt = m.winnerId === myId ? '🏆 You win!' : m.winnerName ? `${m.winnerName} wins!` : 'Round over';
@@ -58,6 +59,12 @@ function connect() {
 }
 
 // ---------- HUD ----------
+// Chat stays out of the way while you're alive in a round: it shows for spectators, players who are
+// out, and between rounds. Alive players can still open it with Enter.
+function updateChat() {
+  const inRound = roomState !== 'lobby', alive = state.snakes.some(s => s.id === myId);
+  $('chatBox').classList.toggle('hidden', inRound && alive && document.activeElement !== $('chat'));
+}
 function setStatus(s) { $('status').textContent = s; }
 function renderPlayers() {
   const lens = new Map(state.snakes.map(s => [s.id, s.body.length]));
@@ -96,7 +103,8 @@ function draw() {
   ctx.fillStyle = theme.grid; ctx.globalAlpha = 0.35;
   for (let y = 0; y < GH; y++) for (let x = (y & 1); x < GW; x += 2) ctx.fillRect(ox + x * cs, oy + y * cs, cs, cs);
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = '#3ccf6e'; ctx.lineWidth = 2; ctx.strokeRect(ox - 1, oy - 1, cs * GW + 2, cs * GH + 2);
+  // dashed edge: snakes wrap around to the other side
+  ctx.strokeStyle = '#3ccf6e'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.strokeRect(ox - 1, oy - 1, cs * GW + 2, cs * GH + 2); ctx.setLineDash([]);
 
   // food
   ctx.fillStyle = '#ff4d5e';
@@ -150,7 +158,7 @@ function draw() {
 // ---------- input ----------
 document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
-  if (e.key === 'Enter') { $('chat').focus(); e.preventDefault(); return; }
+  if (e.key === 'Enter') { $('chatBox').classList.remove('hidden'); $('chat').focus(); e.preventDefault(); return; }
   if (e.key === ' ') { if (myId === hostId && roomState === 'lobby') net({ t: 'start' }); e.preventDefault(); return; }
   const d = KEYS[e.key];
   if (d) { net({ t: 'dir', d }); e.preventDefault(); }
@@ -160,6 +168,7 @@ $('chat').addEventListener('keydown', e => {
   if (e.key === 'Enter') { if (e.target.value.trim()) net({ t: 'chat', msg: e.target.value }); e.target.value = ''; e.target.blur(); }
   else if (e.key === 'Escape') e.target.blur();
 });
+$('chat').addEventListener('blur', updateChat);
 $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
 $('theme').value = document.documentElement.dataset.theme || 'system';
 $('theme').addEventListener('change', e => { document.documentElement.dataset.theme = e.target.value; try { localStorage.setItem('sw-theme', e.target.value); } catch {} readTheme(); e.target.blur(); });

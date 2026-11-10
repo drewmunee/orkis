@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Snakewar</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('sw-theme')||'system'}catch(e){document.documentElement.dataset.theme='system'}</script>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="base.css">
 <link rel="stylesheet" href="snake.css">
 </head>
 <body class="snake-page">
@@ -34,8 +34,9 @@
   <details id="snakeHelp" class="sw-panel">
     <summary>How to play</summary>
     <p><b>Arrows / WASD</b> steer · <b>Space</b> start (host) · <b>Enter</b> chat</p>
-    <p>Eat food to grow. Hitting a wall or any snake (yourself included) kills you, and your body
-      breaks into food. Last snake alive wins the round.</p>
+    <p>Eat food to grow. The edges wrap around to the other side. Hitting any snake (yourself
+      included) kills you, and your body breaks into food. Last snake alive wins the round.</p>
+    <p>Chat is hidden while you're alive in a round; press <b>Enter</b> to open it.</p>
     <ul id="specialList"></ul>
   </details>
 </div>

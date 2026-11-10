@@ -1,0 +1,15 @@
+/* Shared by every page: theme colors, base elements and the theme picker. Game-specific styles live in style.css (Stackwar) and snake.css (Snakewar). */
+/* Dark is the default; light applies when chosen, or when "System" is chosen and the OS is light. */
+:root { color-scheme:dark; --bg:#0e1020; --panel:#181b33; --line:#2b2f55; --text:#e6e8ff; --dim:#8a8fbf; --accent:#ffcc33; --title:#ffcc33; --well:#05060f; --grid:#141733; --ring:#ffffff; --hover:#ffffff14; --glow:0 0 24px #ffcc3340; }
+:root[data-theme="light"] { color-scheme:light; --bg:#eef0f7; --panel:#ffffff; --line:#cdd2e4; --text:#1b1e33; --dim:#5d6385; --accent:#ffbf1f; --title:#c98a00; --well:#dde1ee; --grid:#cdd2e4; --ring:#1b1e33; --hover:#0000000d; --glow:none; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] { color-scheme:light; --bg:#eef0f7; --panel:#ffffff; --line:#cdd2e4; --text:#1b1e33; --dim:#5d6385; --accent:#ffbf1f; --title:#c98a00; --well:#dde1ee; --grid:#cdd2e4; --ring:#1b1e33; --hover:#0000000d; --glow:none; }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, sans-serif; min-height:100vh; }
+.hidden { display:none !important; }
+input, button { font:inherit; padding:9px 12px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; border:none; }
+.err { color:#ff6b6b; }
+#themeBar { position:absolute; top:8px; right:12px; z-index:5; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim); }
+#theme { font:inherit; padding:4px 6px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer; }

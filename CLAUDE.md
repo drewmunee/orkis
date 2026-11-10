@@ -41,11 +41,17 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
   and broadcasts the whole field. Clients only send direction changes and draw.
 - One shared 112x63 (16:9) field scaled to fill the window. Up to 12 players per room; lobby code
   defaults to `lobby` (rooms are separate from Stackwar's).
-- Walls and any snake body (including your own) kill; head-on collisions kill both. A dead snake
+- The field wraps at every edge. Any snake body (including your own) kills; head-on collisions kill both. A dead snake
   leaves food on every other segment. Last snake alive wins (solo: play until you die).
 - Always one regular food per player in the round. Special foods spawn randomly (max 3, vanish
-  after 15 s): Speed (2 steps/tick for 5 s), Ghost (pass through snakes for 6 s), Feast (+5 length).
+  after 15 s): Speed (2 steps/tick for 5 s), Ghost (pass through snakes for 6 s), Feast (+5 length),
+  Shears (every other snake loses 4 segments, never below 3).
   Owner said more special abilities are TBD.
+- Chat/log is hidden from players who are alive in a round (Enter opens it); it shows for
+  spectators, eliminated players, and between rounds.
+- **The two games must stay isolated.** Each connection belongs to one game for its life (Snakewar
+  joins send `game: 'snake'`); they share only `base.css` (theme + base elements) and the `sw-name` /
+  `sw-theme` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.
 
 ## Roadmap (from the owner)
 **Planned**
