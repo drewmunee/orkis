@@ -42,6 +42,27 @@ New games must call the same `leaveRoom()` pattern.
 - Storage: Postgres (Neon) when `DATABASE_URL` is set (`db.js`), else JSON files in `data/` for local play.
   Production's `DATABASE_URL` lives in Render's Environment settings (never commit it).
 
+## Timed specials stack (all games)
+- Getting the same timed effect again adds its full duration to what's left instead of restarting it:
+  Stackwar Haste/Darkness/Inverted, Snakewar Speed/Ghost/Double/Slow/Extendo, Blockwar Slow/Fast Ball and
+  Big/Tiny Paddle. Opposites still cancel/replace (Snakewar Slow cancels Speed; Blockwar Big vs Tiny,
+  Slow vs Fast replace each other). Exception: the Snakewar bomb fuse is always 5 s.
+
+## Player stats
+- `stats.js` (tables `stats`, `stat_players`): all-time counters and personal bests per player (browser ID)
+  per game, recorded by the servers, buffered and written every 5 s. `GET /api/stats?bid=` (also returns
+  the player's and everyone's swear jar). Shown on `public/stats.html` (Stats tab at the top of the homepage).
+- Stackwar: played/solo/ffa/team games, ffa & team wins, lines, singles/doubles/triples/tetrises, garbage
+  sent, first-4-line bonuses, top-outs, specials sent/received/self, best solo.
+- Snakewar: games and wins by mode, food (incl. remains/tiny food), longest snake, specials, ghosts/
+  blockades/bombs used, bomb hits/bombed, revive tokens/revives, kills (+tongue/blockade kills) and deaths
+  by cause. Kill credit: running into a snake's body, or turning into its head, credits that snake;
+  tongue credits its owner; a blockade credits whoever placed it; own body/blockade = self-death;
+  face-to-face head-on = no credit.
+- Blockwar: games and wins by mode, blocks broken and lives lost (running totals sent with board
+  snapshots; server counts the increase, capped), specials, best solo score and level.
+- New games should record stats the same way and add a card to `statspage.js`.
+
 ## Moderation and the swear jar
 - `moderation.js`: usernames containing racial slurs are refused at join for every game (checked once in
   `server.js` before routing) and on the homepage (`GET /api/name-ok`). Ordinary swearing is allowed in
@@ -108,7 +129,7 @@ New games must call the same `leaveRoom()` pattern.
   20 s), Slow (enemies half speed 5 s; an enemy with Speed just loses it), Extendo (8 s tongue 3 squares
   ahead; enemies whose head touches it die, never hurts you or teammates), Blockade (held: drops 5 tail
   segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
-  Bomb (held: dropped out of your tail, explodes after 5 s with radius 4, the exact squares shown on the field: destroys food, specials and
+  Bomb (held: dropped out of your tail, explodes after 5 s with radius 5, the exact squares shown on the field: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
 - Held items (Ghost, Blockade, Bomb) go into a 3-slot queue shown on the right; Space uses the oldest.
 - Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
@@ -122,7 +143,7 @@ New games must call the same `leaveRoom()` pattern.
   spectators, eliminated players, and between rounds. It auto-scrolls unless you scrolled up.
 - **The two games must stay isolated.** Each connection belongs to one game for its life (Snakewar
   joins send `game: 'snake'`); they share only `base.css` (theme + base elements), `common.js` (browser ID +
-  settings) and the `sw-name` / `sw-theme` / `sw-bid` / `sw-settings` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.
+  settings), the homepage/stats tabs and the `sw-name` / `sw-theme` / `sw-bid` / `sw-settings` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.
 
 ## Blockwar
 - Like Stackwar: each player's game runs in their own browser; `block.js` handles rooms, the host's mode

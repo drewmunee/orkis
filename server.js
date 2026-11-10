@@ -7,6 +7,8 @@ const leaderboard = require('./leaderboard');
 const settings = require('./settings');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
+const stats = require('./stats');
+const { validBid } = require('./db');
 const snake = require('./snake');
 const block = require('./block');
 
@@ -29,6 +31,14 @@ const server = http.createServer((req, res) => {
     // top 10 for one game: ?game=stackwar | snakewar | blockwar (default stackwar)
     const game = leaderboard.GAMES.includes(q.get('game')) ? q.get('game') : q.get('game') === 'snake' ? 'snakewar' : 'stackwar';
     leaderboard.top(game).then(rows => json(200, rows), err => { console.error('leaderboard read failed:', err.message); json(500, []); });
+    return;
+  }
+  if (p === '/api/stats') {
+    // all-time stats for one browser: ?bid=<browser id>
+    const bid = q.get('bid');
+    if (!validBid(bid)) return json(400, { error: 'bad id' });
+    Promise.all([stats.forBrowser(bid), swearjar.mine(bid), swearjar.total()])
+      .then(([s, mine, total]) => json(200, { ...s, swearJar: { mine, total } }), e => { console.error('stats read failed:', e.message); json(500, { error: 'unavailable' }); });
     return;
   }
   if (p === '/api/name-ok') {
@@ -88,6 +98,7 @@ function finishSolo(room, p) {
   // sanity check: nobody clears more than ~3 lines a second over a whole run
   const secs = (Date.now() - (room.startedAt || Date.now())) / 1000;
   if (lines > Math.max(8, secs * 3)) { console.warn(`ignored implausible Stackwar score ${lines} in ${secs.toFixed(0)} s from ${p.name}`); return send(p.ws, { t: 'solo', lines, error: true }); }
+  stats.best(p, 'stackwar', 'best_solo', lines);
   leaderboard.submit('stackwar', p, lines).then(
     r => send(p.ws, { t: 'solo', lines, ...r }),
     err => { console.error('leaderboard write failed:', err.message); send(p.ws, { t: 'solo', lines, error: true }); });
@@ -102,6 +113,7 @@ function checkGameOver(room) {
     room.state = 'lobby';
     for (const p of room.players.values()) p.alive = false;
     const winnerTeam = alive.length ? alive[0].team : null;
+    for (const p of room.players.values()) if (winnerTeam && p.team === winnerTeam) stats.add(p, 'stackwar', 'wins_team');
     broadcast(room, { t: 'gameover', winnerTeam });
     sendLobby(room);
     return;
@@ -110,7 +122,7 @@ function checkGameOver(room) {
   if (!over) return;
   room.state = 'lobby';
   const winner = room.startCount > 1 ? alive[0] : null;
-  if (winner) winner.wins++;
+  if (winner) { winner.wins++; stats.add(winner, 'stackwar', 'wins_ffa'); }
   for (const p of room.players.values()) p.alive = false;
   broadcast(room, { t: 'gameover', winnerId: winner ? winner.id : null, winnerName: winner ? winner.name : null });
   sendLobby(room);
@@ -170,6 +182,7 @@ wss.on('connection', ws => {
         room.state = 'playing';
         room.startCount = room.players.size;
         room.startedAt = Date.now();
+        for (const p of room.players.values()) stats.add(p, 'stackwar', { played: 1, [room.players.size === 1 ? 'solo_runs' : room.teamMode ? 'team_games' : 'ffa_games']: 1 });
         const seed = (Math.random() * 2 ** 31) | 0;
         for (const p of room.players.values()) { p.alive = true; p.board = ''; p.lines = 0; }
         room.firstFourDone = false; // first 4-line clear of each match earns a bonus
@@ -201,6 +214,7 @@ wss.on('connection', ws => {
         if (!me.alive) return;
         const n = Math.min(4, Math.max(0, m.count | 0)); // one piece can clear at most 4 lines
         me.lines += n;
+        if (n) stats.add(me, 'stackwar', { lines: n, [['', 'singles', 'doubles', 'triples', 'tetrises'][n]]: 1 });
         let garbage = n >= 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0;
         // The match's first 4-line clear sends 4 lines instead of 3 and earns a free special.
         const firstFour = n >= 4 && !room.firstFourDone;
@@ -208,13 +222,13 @@ wss.on('connection', ws => {
         const team = room.teamMatch ? me.team : null;
         const mates = p => team && p.team === team;
         if (firstFour) {
-          room.firstFourDone = true; garbage = 4;
+          room.firstFourDone = true; garbage = 4; stats.add(me, 'stackwar', 'first_tetris_bonus');
           for (const p of room.players.values()) if (p.alive && (p.id === me.id || mates(p))) send(p.ws, { t: 'bonus' });
         }
         if (!garbage) return;
         // Teammates only ever get 1 garbage line, and it almost always carries a special (a gift, really).
         for (const p of room.players.values())
-          if (p.id !== me.id && p.alive) send(p.ws, mates(p) ? { t: 'garbage', count: 1, from: me.id, rich: true } : { t: 'garbage', count: garbage, from: me.id });
+          if (p.id !== me.id && p.alive) { const g = mates(p) ? 1 : garbage; stats.add(me, 'stackwar', 'garbage_sent', g); send(p.ws, mates(p) ? { t: 'garbage', count: 1, from: me.id, rich: true } : { t: 'garbage', count: garbage, from: me.id }); }
         const tName = t => t === 'red' ? 'Red' : 'Blue', other = team === 'red' ? 'blue' : 'red';
         const to = team ? `+${garbage} to ${tName(other)}, +1 to ${tName(team)}` : `+${garbage} to all`;
         broadcast(room, { t: 'log', msg: firstFour
@@ -238,10 +252,13 @@ wss.on('connection', ws => {
           send(target.ws, { t: 'special', special: type, from: me.id });
         }
         broadcast(room, { t: 'used', special: type, from: me.id, to: target.id });
+        if (target.id === me.id) stats.add(me, 'stackwar', 'specials_self');
+        else { stats.add(me, 'stackwar', 'specials_sent'); stats.add(target, 'stackwar', 'specials_received'); }
         break;
       }
       case 'dead':
         if (!me.alive) return;
+        stats.add(me, 'stackwar', 'topouts');
         finishSolo(room, me);
         me.alive = false;
         broadcast(room, { t: 'dead', id: me.id });

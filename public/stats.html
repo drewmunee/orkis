@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your stats</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('sw-theme')||'system'}catch(e){document.documentElement.dataset.theme='system'}</script>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="stats.css">
+</head>
+<body>
+<nav id="topTabs"><a href="/">Play</a><a href="stats.html" class="on" aria-current="page">Stats</a></nav>
+<label id="themeBar">Theme
+  <select id="theme">
+    <option value="system">System</option>
+    <option value="dark">Dark</option>
+    <option value="light">Light</option>
+  </select>
+</label>
+<main id="statsPage">
+  <h1>Your stats</h1>
+  <p id="who" class="sub">Loading…</p>
+  <section id="totals"></section>
+  <section id="games"></section>
+  <p class="note">Stats belong to this browser, so they follow you across username changes. Another browser, device, or clearing this site's data starts fresh.</p>
+</main>
+<script src="common.js"></script>
+<script src="statspage.js"></script>
+</body>
+</html>

@@ -17,6 +17,7 @@ function postgresJar(pool) {
       return +(await pool.query('SELECT COALESCE(SUM(quarters), 0) AS q FROM swear_jar')).rows[0].q;
     },
     async total() { await ready; return +(await pool.query('SELECT COALESCE(SUM(quarters), 0) AS q FROM swear_jar')).rows[0].q; },
+    async mine(key) { await ready; const r = (await pool.query('SELECT quarters FROM swear_jar WHERE player_key = $1', [key])).rows[0]; return r ? +r.quarters : 0; },
   };
 }
 function fileJar() {
@@ -25,6 +26,7 @@ function fileJar() {
   return {
     async add(key, name) { const e = f.data[key] || { name, quarters: 0 }; e.quarters++; e.name = name; f.data[key] = e; f.save(); return sum(); },
     async total() { return sum(); },
+    async mine(key) { return (f.data[key] || {}).quarters || 0; },
   };
 }
 
@@ -38,4 +40,4 @@ async function addQuarter(p) {
   return `${p.name} puts a quarter into the swear jar. The swear jar is at ${dollars(total)}.`;
 }
 
-module.exports = { addQuarter, total: () => jar.total(), dollars };
+module.exports = { addQuarter, total: () => jar.total(), mine: (bid, name) => jar.mine(playerKey(bid, name)), dollars };

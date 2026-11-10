@@ -6,6 +6,7 @@
 const leaderboard = require('./leaderboard');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
+const stats = require('./stats');
 const MAX_PLAYERS = 6;
 const MODES = ['clear', 'lives'];
 const rooms = new Map();
@@ -30,7 +31,7 @@ const log = (room, msg) => broadcast(room, { t: 'log', msg });
 
 function endMatch(room, winner, why) {
   room.state = 'lobby';
-  if (winner && room.matchMode !== 'solo') winner.wins++;
+  if (winner && room.matchMode !== 'solo') { winner.wins++; stats.add(winner, 'blockwar', room.matchMode === 'clear' ? 'wins_clear' : 'wins_lives'); }
   for (const p of room.players.values()) p.alive = false;
   broadcast(room, { t: 'gameover', winnerId: winner ? winner.id : null, winnerName: winner ? winner.name : null, why });
   sendLobby(room);
@@ -49,6 +50,7 @@ function recordSolo(room, p, score) {
   if (score < 1) return send(p.ws, { t: 'solo', score: 0 });
   const secs = (Date.now() - (room.startedAt || Date.now())) / 1000;
   if (score > Math.max(500, secs * 150)) { console.warn(`ignored implausible Blockwar score ${score} in ${secs.toFixed(0)} s from ${p.name}`); return send(p.ws, { t: 'solo', score, error: true }); }
+  stats.best(p, 'blockwar', 'best_solo', score);
   leaderboard.submit('blockwar', p, score).then(
     r => send(p.ws, { t: 'solo', score, ...r }),
     err => { console.error('blockwar leaderboard write failed:', err.message); send(p.ws, { t: 'solo', score, error: true }); });
@@ -75,7 +77,10 @@ function join(ws, id, m) {
           room.state = 'playing';
           room.matchMode = room.players.size === 1 ? 'solo' : room.mode;
           room.startedAt = Date.now();
-          for (const p of room.players.values()) { p.alive = true; p.board = null; }
+          for (const p of room.players.values()) {
+            p.alive = true; p.board = null; p.tally = { broken: 0, lost: 0 };
+            stats.add(p, 'blockwar', { played: 1, [room.matchMode === 'solo' ? 'solo_runs' : room.matchMode === 'clear' ? 'clear_games' : 'lives_games']: 1 });
+          }
           // one seed for everyone so clear races start on identical boards
           broadcast(room, { t: 'start', seed: (Math.random() * 2 ** 31) | 0, mode: room.matchMode, players: playerList(room) });
           sendLobby(room);
@@ -91,6 +96,13 @@ function join(ws, id, m) {
           const b = { cells: m.cells, px: +m.px || 0, pw: +m.pw || 0, balls: Array.isArray(m.balls) ? m.balls.slice(0, 16) : [], lives: m.lives | 0, left: m.left | 0, score: m.score | 0, level: m.level | 0 };
           me.board = b;
           broadcast(room, { t: 'board', id: me.id, ...b }, me.id);
+          // stats: the snapshot carries running totals for this match; count what's new since the last one
+          if (me.tally && room.state === 'playing') {
+            const broken = Math.max(0, Math.min(60, (m.broken | 0) - me.tally.broken)), lost = Math.max(0, Math.min(3, (m.lost | 0) - me.tally.lost));
+            if (broken) stats.add(me, 'blockwar', 'blocks', broken);
+            if (lost) stats.add(me, 'blockwar', 'lives_lost', lost);
+            me.tally = { broken: me.tally.broken + broken, lost: me.tally.lost + lost };
+          }
           break;
         }
         case 'special': {
@@ -100,6 +112,8 @@ function join(ws, id, m) {
           const type = String(m.special).slice(0, 1);
           send(target.ws, { t: 'special', special: type, from: me.id });
           broadcast(room, { t: 'used', special: type, from: me.id, to: target.id });
+          if (target.id === me.id) stats.add(me, 'blockwar', 'specials_self');
+          else { stats.add(me, 'blockwar', 'specials_sent'); stats.add(target, 'blockwar', 'specials_received'); }
           break;
         }
         case 'cleared': // clear race: this player cleared their whole board
@@ -114,6 +128,7 @@ function join(ws, id, m) {
           if (room.matchMode === 'solo') {
             log(room, `Game over: ${m.score | 0} points, level ${m.level | 0}`);
             recordSolo(room, me, m.score | 0);
+            stats.best(me, 'blockwar', 'best_level', Math.min(999, m.level | 0));
           }
           else log(room, `${me.name} is out of lives`);
           checkOver(room);

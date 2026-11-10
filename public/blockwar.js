@@ -36,6 +36,7 @@ let ws, myId = null, hostId = null, roomState = 'lobby', lobbyMode = 'clear', pl
 const others = new Map();     // id -> latest board snapshot
 let mode = null;              // this match: 'solo' | 'clear' | 'lives' (null between matches)
 let playing = false;          // my game is running
+let brokenCount = 0, livesLost = 0; // running totals for this match (for stats)
 let grid, balls = [], paddleX, lives, score = 0, level = 1, brokenSinceRow, rowsAdded, phase, phaseUntil, pendingBalls, ballSpeed;
 let soloResult = '';      // leaderboard line after a solo run
 let queue = [], fx = {};  // held specials and active effects (start empty so drawing works before the first match)
@@ -73,7 +74,7 @@ const cellColor = ch => ch === 'z' ? STONE : ch >= 'a' && ch <= 'h' ? ROW_COLORS
 
 // ---------- match flow ----------
 function startMatch(seed, m) {
-  mode = m; playing = true; soloResult = '';
+  mode = m; playing = true; soloResult = ''; brokenCount = 0; livesLost = 0;
   newGrid(seed);
   lives = START_LIVES; score = 0; level = 1; brokenSinceRow = 0; rowsAdded = 0; queue = []; fx = {}; pendingBalls = 1; ballSpeed = START_SPEED;
   toReady();
@@ -92,19 +93,21 @@ function launch() {
 }
 function gameOver(why) {
   phase = 'done'; playing = false; balls = [];
+  sync(true); // final board (and stat totals) before saying we're out
   net({ t: 'out', score, level });
   setStatus(mode === 'solo' ? `${why ? why + ' ' : ''}Game over: ${score} points (level ${level})` : 'Out of lives!');
   updateHud(); sync(true);
 }
 function loseLife() {
   // clear races never run out of lives; lives mode and solo do
+  livesLost++;
   if (mode !== 'clear') lives--;
   updateHud();
   if (mode !== 'clear' && lives <= 0) return gameOver();
   phase = 'wait'; phaseUntil = performance.now() + RESPAWN_MS; balls = [];
 }
 function boardCleared() {
-  if (mode === 'clear') { phase = 'done'; playing = false; net({ t: 'cleared' }); sync(true); return; }
+  if (mode === 'clear') { phase = 'done'; playing = false; sync(true); net({ t: 'cleared' }); return; }
   // lives mode: a fresh board; solo: rows keep coming anyway
   newGrid((Math.random() * 2 ** 31) | 0);
 }
@@ -126,6 +129,7 @@ const levelMul = () => mode === 'solo' ? 1 + 0.08 * (level - 1) : 1; // +8% ball
 const now = () => performance.now();
 const paddleW = () => PADDLE_W * (fx.paddle && fx.paddle.until > now() ? fx.paddle.mul : 1);
 const speedMul = () => (fx.speed && fx.speed.until > now() ? fx.speed.mul : 1) * levelMul();
+const stackFx = (cur, mul) => ({ mul, until: (cur && cur.mul === mul && cur.until > now() ? cur.until : now()) + FX_MS });
 function applySpecial(s) {
   if (!playing) return;
   switch (s) {
@@ -139,10 +143,11 @@ function applySpecial(s) {
       if (phase === 'play') balls = balls.concat(balls.map(b => ({ ...b, vx: -b.vx || 0.3 })));
       else pendingBalls *= 2;
       break;
-    case 'S': fx.speed = { mul: 0.5, until: now() + FX_MS }; break;
-    case 'F': fx.speed = { mul: 2, until: now() + FX_MS }; break;
-    case 'B': fx.paddle = { mul: 2, until: now() + FX_MS }; break;
-    case 'T': fx.paddle = { mul: 0.5, until: now() + FX_MS }; break;
+    // the same effect again stacks (adds 10 s to what's left); the opposite one replaces it
+    case 'S': fx.speed = stackFx(fx.speed, 0.5); break;
+    case 'F': fx.speed = stackFx(fx.speed, 2); break;
+    case 'B': fx.paddle = stackFx(fx.paddle, 2); break;
+    case 'T': fx.paddle = stackFx(fx.paddle, 0.5); break;
     case 'Q': earthquake(); break;
   }
   updateHud(); sync(true);
@@ -208,7 +213,7 @@ function hitBlocks(b) {
     if (d < BALL_R * BALL_R && d < bestD) { best = idx(r, c); bestD = d; bn = [dx, dy]; }
   }
   if (best < 0) return;
-  const ch = grid[best]; grid[best] = '.';
+  const ch = grid[best]; grid[best] = '.'; brokenCount++;
   if (SPECIALS[ch]) { queue.push(ch); if (queue.length > QUEUE_MAX) queue.splice(0, queue.length - QUEUE_MAX); renderQueue(); }
   score += ch === 'z' ? 5 : 10;
   ballSpeed = Math.min(MAX_SPEED, ballSpeed + SPEED_UP);
@@ -379,7 +384,7 @@ function sync(force) {
   // periodic snapshot of my board for everyone else's side view
   if (!grid || (!force && performance.now() - lastSync < SYNC_MS)) return;
   lastSync = performance.now();
-  net({ t: 'board', cells: grid.join(''), px: Math.round(paddleX ?? 0), pw: Math.round(paddleW()), balls: (balls || []).map(b => [Math.round(b.x), Math.round(b.y)]), lives, left: blocksLeft(), score, level });
+  net({ t: 'board', cells: grid.join(''), px: Math.round(paddleX ?? 0), pw: Math.round(paddleW()), balls: (balls || []).map(b => [Math.round(b.x), Math.round(b.y)]), lives, left: blocksLeft(), score, level, broken: brokenCount, lost: livesLost });
 }
 setInterval(() => { if (playing) sync(); }, SYNC_MS);
 function connect() {

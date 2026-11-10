@@ -161,3 +161,9 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #join.hidden ~ #marquee { display:none; }
 @keyframes drift { from { transform:translateX(0); } to { transform:translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { #marquee .row { animation:none; } }
+
+/* Play / Stats tabs at the top of the homepage (the stats page has the same in stats.css) */
+#topTabs { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:6; display:flex; gap:4px; padding:4px; background:var(--panel); border:1px solid var(--line); border-radius:22px; }
+#topTabs a { padding:6px 18px; border-radius:18px; color:var(--dim); text-decoration:none; font-weight:700; font-size:14px; }
+#topTabs a:hover { color:var(--text); }
+#topTabs a.on { background:var(--accent); color:#111; }

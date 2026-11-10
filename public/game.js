@@ -174,6 +174,8 @@ function fixPiece() { // keep active piece out of blocks after the board changes
 }
 
 // ---------- specials ----------
+const stack = (until, ms) => Math.max(until, performance.now()) + ms;
+let darkStart = 0;
 function applySpecial(s) {
   switch (s) {
     case 'A': addGarbage(1, false); break;
@@ -196,9 +198,10 @@ function applySpecial(s) {
       for (let i = 0; i < 3 && sp.length; i++) { const [x, y] = sp.splice((Math.random() * sp.length) | 0, 1)[0]; board[y][x] = '8'; }
       break;
     }
-    case 'H': hasteUntil = performance.now() + 10000; break;
-    case 'D': darkUntil = performance.now() + DARKNESS_MS; break;
-    case 'I': invertUntil = performance.now() + INVERT_MS; break;
+    // timed specials stack: a second one adds its full time to whatever is left
+    case 'H': hasteUntil = stack(hasteUntil, 10000); break;
+    case 'D': if (darkUntil < performance.now()) darkStart = performance.now(); darkUntil = stack(darkUntil, DARKNESS_MS); break;
+    case 'I': invertUntil = stack(invertUntil, INVERT_MS); break;
   }
   if (playing) { fixPiece(); syncBoard(); }
 }
@@ -287,7 +290,7 @@ function draw() {
   // Darkness: black out the stack and ghost (fades in/out), leaving only a faint outline of the falling piece
   const dark = darkUntil - performance.now();
   if (playing && dark > 0) {
-    const a = Math.min(1, (DARKNESS_MS - dark) / 250, dark / 400);
+    const a = Math.min(1, (performance.now() - darkStart) / 250, dark / 400); // fade in from when it started
     ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W * CELL, H * CELL); ctx.restore();
     if (piece) piece.m.forEach((r, y) => r.forEach((v, x) => { if (v) drawCell(piece.id, piece.x + x, piece.y + y, CELL, ctx, 0.3); }));
   }
