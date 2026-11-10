@@ -27,11 +27,16 @@ const SPECIAL_CHANCE = 1 / 70;     // per tick, while below MAX_SPECIALS (~ one 
 //  their length · double: all growth x2 · slow: enemies move at half speed (cancels their Speed instead)
 //  extendo: a 3-square tongue that kills enemies who run into it · blockade (held): drop 5 tail segments
 //  as a permanent wall · token (team mode only): every 3 a team collects = 1 revive
-const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000, extendo: 8000, blockade: 0, token: 0 };
-const HELD = new Set(['ghost', 'blockade']);   // these go to the player's item queue and are used with Space
+//  bomb (held): dropped at your head, explodes after 5 s; everything within its radius is destroyed
+//  (food, specials, blockades) and every snake with any part inside loses a quarter of its length
+const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000, extendo: 8000, blockade: 0, bomb: 0, token: 0 };
+const HELD = new Set(['ghost', 'blockade', 'bomb']);   // these go to the player's item queue and are used with Space
 const ITEM_MAX = 3;                            // queue size; collecting more drops the oldest
 const SHEARS_FRAC = 0.25, MIN_LEN = 3;
 const BLOCKADE_LEN = 5, EXTENDO_REACH = 3, TOKENS_PER_REVIVE = 3;
+const MAX_BLOCKADES = 5;                       // placing a 6th removes the oldest
+const BOMB_FUSE_MS = 5000, BOMB_RADIUS = 4;
+const FFA_COLORS = 12, TEAM_SHADES = 6;        // palette sizes (the colors themselves live in the client)
 // Revive tokens (team matches) have their own spawner: about one every 10 s at the start, getting rarer
 // as the round goes on (chance per tick divided by 1 + minutes played), at most 2 on the field.
 const TOKEN_CHANCE = 1 / 90, MAX_TOKENS = 2;
@@ -46,6 +51,12 @@ const cell = (r, x, y) => y * r.w + x;           // cells are numbered per room,
 const xy = (r, c) => [c % r.w, (c / r.w) | 0];
 const rnd = n => (Math.random() * n) | 0;
 const inBounds = (r, c) => { const [x, y] = xy(r, c), b = r.bounds; return x >= b.x0 && x < b.x1 && y >= b.y0 && y < b.y1; };
+// Blockades: room.walls is every wall cell (fast lookup); room.blockades lists each placed blockade's
+// cells, oldest first, so the oldest can be removed when there are too many.
+function removeWalls(room, cells) {
+  for (const c of cells) room.walls.delete(c);
+  room.blockades = room.blockades.map(g => g.filter(c => room.walls.has(c))).filter(g => g.length);
+}
 const isReverse = (a, b) => DIRS[a][0] === -DIRS[b][0] && DIRS[a][1] === -DIRS[b][1];
 const alivePlayers = room => [...room.players.values()].filter(p => p.alive);
 // In a team match, effects aimed at "other snakes" only hit the other team.
@@ -60,14 +71,14 @@ function freeSlot(room) {
   return 0;
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null, color: p.color, shade: p.shade }));
 }
 function sendLobby(room) { broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode }); }
 function log(room, msg) { broadcast(room, { t: 'log', msg }); }
 function setField(room, n) {
   Object.assign(room, fieldFor(n));
   room.bounds = { x0: 0, y0: 0, x1: room.w, y1: room.h };
-  room.food.clear(); room.drops.clear(); room.bits.clear(); room.specials.clear(); room.walls.clear(); room.shrink = null;
+  room.food.clear(); room.drops.clear(); room.bits.clear(); room.specials.clear(); room.walls.clear(); room.blockades = []; room.bombs = []; room.shrink = null;
 }
 
 function occupied(room) {
@@ -105,7 +116,7 @@ function spawnSnake(room, p, occ) {
 
 function startRound(room) {
   room.state = 'countdown';
-  room.food = new Set(); room.drops = new Set(); room.bits = new Set(); room.specials = new Map(); room.walls = new Set();
+  room.food = new Set(); room.drops = new Set(); room.bits = new Set(); room.specials = new Map(); room.walls = new Set(); room.blockades = []; room.bombs = [];
   room.startCount = room.players.size;
   // Solo rounds are classic snake: walls kill, one food at a time, +1 per food, no special foods,
   // and the score (food eaten) goes on the Snakewar high-score board.
@@ -198,8 +209,8 @@ function step(room, movers) {
   for (const [p, nc] of plan) {
     if (nc < 0) { dead.set(p, 'hit the wall'); continue; }
     const hit = occ.get(nc);
-    if (hit === 'wall') { dead.set(p, 'hit a blockade'); continue; }
-    if (hit && !ghost(p)) {
+    if (hit === 'wall') { if (!ghost(p)) { dead.set(p, 'hit a blockade'); continue; } } // ghosts slip through blockades
+    else if (hit && !ghost(p)) {
       dead.set(p, hit === p ? 'ran into themselves' : `crashed into ${hit.name}`);
       // swapping heads with a snake coming straight at you is a true head-on: both go
       if (hit.body[0] === nc && movers.includes(hit) && isReverse(hit.dir, p.dir)) dead.set(hit, `collided head-on with ${p.name}`);
@@ -271,9 +282,15 @@ function useItem(room, p) {
   else if (type === 'blockade') {
     const n = Math.min(BLOCKADE_LEN, p.body.length - MIN_LEN);
     if (n < 1) return send(p.ws, { t: 'note', msg: 'Too short to drop a blockade' });
-    for (const c of p.body.splice(p.body.length - n)) room.walls.add(c);
+    const cells = p.body.splice(p.body.length - n).filter(c => !room.walls.has(c));
+    for (const c of cells) room.walls.add(c);
+    room.blockades.push(cells);
+    while (room.blockades.length > MAX_BLOCKADES) removeWalls(room, room.blockades[0]); // oldest goes
     p.grow = Math.max(0, p.grow - n);
     log(room, `${p.name} dropped a blockade`);
+  } else if (type === 'bomb') {
+    room.bombs.push({ cell: p.body[0], at: now + BOMB_FUSE_MS, by: p.name });
+    log(room, `${p.name} dropped a bomb!`);
   }
   p.items.shift();
   broadcast(room, { t: 'used', id: p.id, item: type });
@@ -313,10 +330,34 @@ function shrinkTick(room) {
       if (i === 0) kill(room, p, 'was caught outside the shrinking board');
       else if (i > 0) cutTail(room, p, i);
     }
-    for (const set of [room.food, room.drops, room.bits, room.walls]) for (const c of [...set]) if (!inBounds(room, c)) set.delete(c);
+    for (const set of [room.food, room.drops, room.bits]) for (const c of [...set]) if (!inBounds(room, c)) set.delete(c);
+    removeWalls(room, [...room.walls].filter(c => !inBounds(room, c)));
+    room.bombs = room.bombs.filter(b => inBounds(room, b.cell));
     for (const c of [...room.specials.keys()]) if (!inBounds(room, c)) room.specials.delete(c);
     log(room, 'The board shrank!');
   }
+}
+
+// Bombs: after the fuse, wipe out everything within the radius and take a quarter off every snake
+// that has any part inside it (the bomber included). Cut tails outside the blast become tiny food.
+function bombTick(room) {
+  const now = Date.now();
+  for (const bomb of room.bombs.filter(b => b.at <= now)) {
+    const [bx, by] = xy(room, bomb.cell);
+    const inBlast = c => { const [x, y] = xy(room, c); return (x - bx) ** 2 + (y - by) ** 2 <= BOMB_RADIUS ** 2; };
+    for (const set of [room.food, room.drops, room.bits]) for (const c of [...set]) if (inBlast(c)) set.delete(c);
+    for (const c of [...room.specials.keys()]) if (inBlast(c)) room.specials.delete(c);
+    removeWalls(room, [...room.walls].filter(inBlast));
+    const hurt = [];
+    for (const p of alivePlayers(room)) if (p.body.some(inBlast)) {
+      const keep = Math.max(MIN_LEN, p.body.length - Math.floor(p.body.length * SHEARS_FRAC));
+      for (const c of p.body.splice(keep)) if (!inBlast(c) && inBounds(room, c) && !room.walls.has(c)) room.bits.add(c);
+      p.grow = 0; hurt.push(p.name);
+    }
+    broadcast(room, { t: 'boom', cell: bomb.cell, r: BOMB_RADIUS });
+    log(room, `${bomb.by}'s bomb exploded${hurt.length ? ': ' + hurt.join(', ') + ' got hit' : ''}`);
+  }
+  room.bombs = room.bombs.filter(b => b.at > now);
 }
 
 function tick(room) {
@@ -326,6 +367,7 @@ function tick(room) {
   const fast = alivePlayers(room).filter(p => p.fx.speed > Date.now() && !slowed(p));
   if (fast.length) step(room, fast);
   revive(room);
+  bombTick(room);
   shrinkTick(room);
   // special foods come and go (revive tokens only appear in team matches)
   const now = Date.now();
@@ -359,6 +401,7 @@ function sendState(room) {
       tongue: p.fx.extendo > now ? tongueCells(room, p, p.body[0]) : undefined,
     })),
     food: [...room.food], drops: [...room.drops], bits: [...room.bits], walls: [...room.walls],
+    bombs: room.bombs.map(b => [b.cell, b.at - now, BOMB_RADIUS]),
     specials: [...room.specials].map(([c, sp]) => [c, sp.type, sp.until - now]),
   });
 }
@@ -404,12 +447,12 @@ function join(ws, id, m) {
   const code = String(m.room || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
   let room = rooms.get(code);
   if (!room) {
-    room = { code, players: new Map(), hostId: id, state: 'lobby', food: new Set(), drops: new Set(), bits: new Set(), specials: new Map(), walls: new Set(), startCount: 0, teamMode: false };
+    room = { code, players: new Map(), hostId: id, state: 'lobby', food: new Set(), drops: new Set(), bits: new Set(), specials: new Map(), walls: new Set(), blockades: [], bombs: [], startCount: 0, teamMode: false };
     setField(room, 1); rooms.set(code, room);
   }
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
-  const me = { id, ws, slot, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null };
+  const me = { id, ws, slot, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null };
   room.players.set(id, me);
   if (room.state === 'lobby') setField(room, room.players.size); // preview the size the next round will use
   send(ws, { t: 'welcome', id, room: code, w: room.w, h: room.h, tick: TICK_MS, specials: SPECIALS });
@@ -429,6 +472,16 @@ function join(ws, id, m) {
       } else if (m.t === 'teammode' && me.id === room.hostId && room.state === 'lobby') {
         room.teamMode = !!m.on;
         for (const p of room.players.values()) p.team = null; // last round's teams no longer apply
+        sendLobby(room);
+      } else if (m.t === 'color' && (m.d === 1 || m.d === -1)) {
+        // pick your color while you're not in play (dead, spectating or between rounds):
+        // any color normally, or a shade of your team's color in team mode
+        if (me.alive && room.state !== 'lobby') return;
+        if (me.team || room.teamMode) {
+          const mates = [...room.players.values()].filter(q => q.team && q.team === me.team).sort((a, b) => a.slot - b.slot);
+          const cur = me.shade ?? Math.max(0, mates.indexOf(me)) % TEAM_SHADES;
+          me.shade = (cur + m.d + TEAM_SHADES) % TEAM_SHADES;
+        } else me.color = ((me.color - 1 + m.d + FFA_COLORS) % FFA_COLORS) + 1;
         sendLobby(room);
       } else if (m.t === 'chat') {
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });

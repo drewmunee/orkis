@@ -13,6 +13,10 @@ body.snake-page { overflow:hidden; height:100vh; }
 #roomName { color:var(--dim); font-weight:600; letter-spacing:0; font-size:12px; }
 #players div { display:flex; align-items:center; gap:6px; padding:1px 0; }
 #players .dot { width:12px; height:12px; border-radius:3px; flex:none; }
+#players .cbtn { flex:none; width:18px; height:20px; padding:0; border-radius:4px; background:transparent; color:var(--text); border:1px solid var(--line); font-size:14px; line-height:1; font-weight:800; }
+#players .cbtn:hover { border-color:#3ccf6e; }
+#players .me .dot { width:16px; height:16px; }
+#players div { min-width:0; }
 #players .tm { color:#fff; font-size:9px; font-weight:900; width:14px; height:14px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex:none; }
 #players .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #players .me .nm { font-weight:800; }

@@ -68,8 +68,12 @@ HTML/CSS/JS clients in `public/`. The homepage has a ‹ › picker (arrow keys 
   Feast (+5), Shears (enemies lose 1/4 of their length, min 3; cut tail -> tiny food), Double (growth x2
   20 s), Slow (enemies half speed 5 s; an enemy with Speed just loses it), Extendo (8 s tongue 3 squares
   ahead; enemies whose head touches it die, never hurts you or teammates), Blockade (held: drops 5 tail
-  segments as a permanent wall that kills anyone, ghosts included).
-- Held items (Ghost, Blockade) go into a 3-slot queue shown on the right; Space uses the oldest.
+  segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
+  Bomb (held: dropped at your head, explodes after 5 s with radius 4: destroys food, specials and
+  blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
+- Held items (Ghost, Blockade, Bomb) go into a 3-slot queue shown on the right; Space uses the oldest.
+- Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
+  scoreboard: any of 12 colors normally, or one of 6 shades of their team's color in team mode.
 - **Team mode** (host toggle between rounds): random Red vs Blue each round. Red team = warm shades,
   blue team = cool shades, plus a team-colored ring on each head. Shears/Slow/Extendo hit the other team
   only. Revive tokens spawn only in team rounds, rarer as the round goes on; every 3 a team collects =

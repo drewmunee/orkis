@@ -17,7 +17,8 @@ const SPECIAL_INFO = {
   double: { name: 'Double', icon: 'x2', color: '#7bffb0', desc: 'all growth counts double for 20 seconds' },
   slow: { name: 'Slow', icon: '🐌', color: '#a0c4ff', desc: 'enemies move at half speed for 5 seconds (a sped-up enemy just loses its Speed)' },
   extendo: { name: 'Extendo', icon: '👅', color: '#ff8fb1', desc: 'an 8-second tongue reaching 3 squares ahead; enemies who touch it die' },
-  blockade: { name: 'Blockade', icon: '▦', color: '#aab0c4', desc: 'held item: press Space to drop 5 tail segments as a permanent wall' },
+  blockade: { name: 'Blockade', icon: '▦', color: '#aab0c4', desc: 'held item: press Space to drop 5 tail segments as a wall (max 5 on the board; ghosts pass through)' },
+  bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it at your head; after 5 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
   token: { name: 'Revive token', icon: '♥', color: '#ff4d6d', desc: 'team mode only: every 3 your team collects earns a revive' },
 };
 const KEYS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R', w: 'U', s: 'D', a: 'L', d: 'R', W: 'U', S: 'D', A: 'L', D: 'R' };
@@ -32,6 +33,7 @@ if (!name.trim()) { location.replace('/'); return; }
 
 let ws, myId = null, hostId = null, roomState = 'lobby', teamMode = false, GW = 112, GH = 63;
 let players = [], state = { snakes: [], food: [], drops: [], bits: [], walls: [], specials: [] };
+let booms = []; // recent explosions, for a quick flash
 let countdownEnd = 0, banner = null, best = null; // banner: {text, until}; best: classic high score once known
 
 const canvas = $('field'), ctx = canvas.getContext('2d');
@@ -43,8 +45,9 @@ const playerOf = id => players.find(q => q.id === id);
 function colorOf(id) {
   const p = playerOf(id);
   if (!p) return '#888';
-  if (p.team) { const mates = players.filter(q => q.team === p.team).sort((a, b) => a.slot - b.slot); return TEAM_SHADES[p.team][mates.indexOf(p) % 6]; }
-  return SNAKE_COLORS[p.slot];
+  if (p.team) { const mates = players.filter(q => q.team === p.team).sort((a, b) => a.slot - b.slot); return TEAM_SHADES[p.team][(p.shade ?? mates.indexOf(p)) % 6]; }
+  if (teamMode && roomState === 'lobby') return TEAM_SHADES.red[(p.shade ?? 0) % 6]; // previewing a team shade before teams are drawn
+  return SNAKE_COLORS[p.color || p.slot];
 }
 const nameOf = id => (playerOf(id) || {}).name || '?';
 const myTeam = () => (playerOf(myId) || {}).team;
@@ -69,9 +72,10 @@ function connect() {
         log('— Round started —'); renderPlayers();
         break;
       case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } renderScore(); updateLengths(); updateChat(); renderItems(); renderTeams(); break;
-      case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (m.special === 'ghost' || m.special === 'blockade' ? ' (saved)' : '!'), 900); } break;
+      case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
       case 'used': if (m.id === myId) flashBanner(SPECIAL_INFO[m.item].name + '!', 700); break;
       case 'note': flashBanner(m.msg, 1200); break;
+      case 'boom': booms = booms.filter(b => performance.now() - b.t < 500).concat({ cell: m.cell, r: m.r, t: performance.now() }); break;
       case 'gameover': {
         if (state.classic) break; // solo score arrives in its own 'classic' message
         let txt;
@@ -108,14 +112,19 @@ function renderScore() { // classic solo: show food eaten and the best so far
   if (state.classic) $('score').textContent = `Score ${me ? me.eaten : 0}` + (best != null ? ` · Best ${best}` : '');
 }
 function setStatus(s) { $('status').textContent = s; }
+const canPickColor = () => roomState === 'lobby' || !state.snakes.some(s => s.id === myId);
 function renderPlayers() {
   const lens = new Map(state.snakes.map(s => [s.id, s.body.length]));
   $('players').innerHTML = [...players].sort((a, b) => (a.team || '').localeCompare(b.team || '') || (lens.get(b.id) || 0) - (lens.get(a.id) || 0) || a.slot - b.slot).map(p => {
     const len = lens.get(p.id);
     const out = roomState !== 'lobby' && !len;
     const tag = p.team ? `<span class="tm" style="background:${TEAM_COLOR[p.team]}">${p.team === 'red' ? 'R' : 'B'}</span>` : '';
-    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}"><span class="dot" style="background:${colorOf(p.id)}"></span>${tag}<span class="nm">${esc(p.name)}${p.id === hostId ? ' 👑' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
+    // your own row gets ‹ › to change color whenever you're not in play
+    const pick = p.id === myId && canPickColor();
+    const dot = `<span class="dot" style="background:${colorOf(p.id)}"></span>`;
+    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}">${pick ? '<button class="cbtn" data-d="-1" title="Previous color">‹</button>' + dot + '<button class="cbtn" data-d="1" title="Next color">›</button>' : dot}${tag}<span class="nm" title="${esc(p.name)}">${esc(p.name)}${p.id === hostId ? ' 👑' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
   }).join('');
+  for (const b of $('players').querySelectorAll('.cbtn')) b.onclick = e => { net({ t: 'color', d: +b.dataset.d }); e.currentTarget.blur(); };
   const hostInLobby = myId === hostId && roomState === 'lobby', teamReady = teamMode && players.length >= 2;
   $('startBtn').classList.toggle('hidden', !hostInLobby);
   $('startBtn').textContent = players.length === 1 ? 'Start solo (classic)' : teamReady ? 'Start team round' : 'Start round';
@@ -209,6 +218,30 @@ function draw() {
   for (const c of state.drops) { ctx.beginPath(); ctx.arc(cx(c) + cs / 2, cy(c) + cs / 2, cs * 0.26, 0, 7); ctx.fill(); }
   ctx.fillStyle = '#ffd84d';
   for (const c of state.bits || []) { ctx.beginPath(); ctx.arc(cx(c) + cs / 2, cy(c) + cs / 2, Math.max(1.5, cs * 0.14), 0, 7); ctx.fill(); }
+  // bombs: blast radius and fuse countdown
+  for (const [c, left, r] of state.bombs || []) {
+    const bx = cx(c) + cs / 2, by = cy(c) + cs / 2, urgent = left < 1500;
+    ctx.fillStyle = `rgba(255,70,40,${urgent ? 0.18 + 0.12 * Math.sin(now / 60) : 0.14})`;
+    ctx.beginPath(); ctx.arc(bx, by, (r + 0.5) * cs, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#ff4628'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+    // icon and countdown keep a readable size even when the field's squares are small
+    const icon = Math.max(22, cs * 1.6), num = Math.max(20, cs * 1.5);
+    { // drawn bomb (not an emoji, so it looks the same everywhere): black ball, fuse, flickering spark
+      const br = icon * 0.36;
+      ctx.fillStyle = '#1b1b22'; ctx.beginPath(); ctx.arc(bx, by + br * 0.15, br, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(bx - br * 0.35, by - br * 0.2, br * 0.25, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#8a6a3a'; ctx.lineWidth = Math.max(2, br * 0.22); ctx.beginPath(); ctx.moveTo(bx + br * 0.5, by - br * 0.6); ctx.quadraticCurveTo(bx + br, by - br * 1.3, bx + br * 1.2, by - br * 1.1); ctx.stroke();
+      ctx.fillStyle = Math.floor(now / 90) % 2 ? '#ffd23f' : '#ff6a3d'; ctx.beginPath(); ctx.arc(bx + br * 1.25, by - br * 1.15, br * 0.3, 0, 7); ctx.fill();
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `900 ${Math.round(num)}px system-ui`; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.7)';
+    const n = String(Math.max(1, Math.ceil(left / 1000))), ny = by - icon * 0.5 - num * 0.6;
+    ctx.strokeText(n, bx, ny); ctx.fillStyle = urgent ? '#ffd23f' : '#fff'; ctx.fillText(n, bx, ny);
+  }
+  for (const f of booms) {
+    const k = (now - f.t) / 450; if (k > 1) continue;
+    ctx.fillStyle = `rgba(255,190,60,${0.6 * (1 - k)})`; ctx.beginPath(); ctx.arc(cx(f.cell) + cs / 2, cy(f.cell) + cs / 2, (f.r + 0.5) * cs * (0.6 + 0.4 * k), 0, 7); ctx.fill();
+  }
   // special foods pulse, and blink during their last 3 seconds
   for (const [c, type, left] of state.specials) {
     if (left < 3000 && Math.floor(now / 200) % 2) continue;
@@ -226,12 +259,18 @@ function draw() {
     // Extendo tongue
     if (s.tongue && s.tongue.length) {
       ctx.strokeStyle = '#ff5c8a'; ctx.lineWidth = Math.max(2, cs * 0.28); ctx.lineCap = 'round';
-      const last = s.tongue[s.tongue.length - 1], tx = cx(last) + cs / 2, ty = cy(last) + cs / 2;
-      const wraps = Math.abs(tx - hx) > cs * 4 || Math.abs(ty - hy) > cs * 4;
+      // go cell by cell; where the tongue wraps to the far side, stub it out to the edge and restart
+      // it at the opposite edge instead of drawing a line across the whole field
       ctx.beginPath(); ctx.moveTo(hx, hy);
-      if (!wraps) ctx.lineTo(tx, ty); else for (const c of s.tongue) ctx.lineTo(cx(c) + cs / 2, cy(c) + cs / 2);
+      let px = hx, py = hy;
+      for (const c of s.tongue) {
+        const nx = cx(c) + cs / 2, ny = cy(c) + cs / 2;
+        if (Math.abs(nx - px) > cs * 1.5 || Math.abs(ny - py) > cs * 1.5) { ctx.lineTo(px + dx * cs / 2, py + dy * cs / 2); ctx.moveTo(nx - dx * cs / 2, ny - dy * cs / 2); }
+        ctx.lineTo(nx, ny); px = nx; py = ny;
+      }
       ctx.stroke();
-      if (!wraps) { // forked tip
+      const last = s.tongue[s.tongue.length - 1], tx = cx(last) + cs / 2, ty = cy(last) + cs / 2;
+      { // forked tip
         const fx1 = tx + dx * cs * 0.4, fy1 = ty + dy * cs * 0.4;
         ctx.lineWidth = Math.max(1.5, cs * 0.16); ctx.beginPath();
         ctx.moveTo(tx, ty); ctx.lineTo(fx1 + dy * cs * 0.3, fy1 - dx * cs * 0.3);
