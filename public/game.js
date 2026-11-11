@@ -515,7 +515,7 @@ function connect(name, room, isDaily = false) {
 // ---------- input ----------
 document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
-  if (e.key === 'Enter' && !$('game').classList.contains('hidden')) { $('chat').focus(); e.preventDefault(); return; }
+  if ((e.key === 't' || e.key === 'T') && !$('game').classList.contains('hidden')) { $('chat').focus(); e.preventDefault(); return; } // T opens chat
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
   if (!playing || !piece || countingDown()) return;
   // the chosen scheme turns keys into actions; Inverted swaps those actions around

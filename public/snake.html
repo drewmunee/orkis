@@ -27,7 +27,7 @@
   </div>
   <div id="chatBox" class="sw-panel">
     <div id="log"></div>
-    <input id="chat" placeholder="Enter to chat · Esc to play" maxlength="200" autocomplete="off">
+    <input id="chat" placeholder="T to chat · Enter to send · Esc to play" maxlength="200" autocomplete="off">
   </div>
 </div>
 
@@ -45,8 +45,8 @@
     <p id="keysHelp"></p> <!-- filled in for the chosen control scheme -->
     <p>Playing alone is classic snake: small board, solid walls, +1 per food, and your score (food eaten) is your high score.</p>
     <p>With 2+ players: each food grows you by 2 (tiny yellow food by 1), food gets more plentiful as the round goes on, and the edges wrap around. Hitting any snake or blockade kills you and your body breaks into food. If two heads meet face to face both die; if you turn into someone's head from the side, only you die. After 2 minutes, or soon after someone dies (team mode: or once a team is down to its last snake), the board starts shrinking (10 s warning, new edge in red); anything left outside is cut off. Last snake (or team) alive wins.</p>
-    <p>Team mode (host's choice): random Red vs Blue; Red starts on the left, Blue on the right. Reds are warm colors, blues are cool colors. Collect revive tokens: every 3 brings a fallen teammate back.</p>
-    <p>Between rounds, or while you're out, use the ‹ › arrows by your name to pick your color (in team mode, a shade of your team's color).</p>
+    <p>Team mode (host's choice): Red vs Blue (pick your team with the color arrows, or get placed to balance the teams); Red starts on the left, Blue on the right. Reds are warm colors, blues are cool colors. Collect revive tokens (they show up more often right after someone dies): every 3 brings a fallen teammate back. A revived snake blinks where it will appear for 3 seconds, then is protected for 3 more.</p>
+    <p>Between rounds, or while you're out, use the ‹ › arrows by your name to pick your color. In team mode, between rounds, the arrows go through the red shades then the blue shades, so picking a color picks your team.</p>
     <p><b>Bonus tiles</b> show up often in battle rounds; the host picks which kind. <b>Fruit</b> (default): bananas, cherries and oranges; collect 3 of the same for a big bonus. <b>Letters</b>: collect 4 that can be arranged into a real word (CAKE, SNAP, ...); your rack holds 4 and a 5th pushes out the oldest. The bonus is +12 length, or everyone else loses a third.</p>
     <p>Type <b>/spectate</b> in chat to sit out the next rounds and just watch (👁 by your name); type it again to play.</p>
     <ul id="specialList"></ul>

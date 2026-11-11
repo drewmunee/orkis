@@ -17,7 +17,7 @@ const LAYOUT = {
     ['Deaths', [['deaths', 'Deaths'], ['deaths_self', 'Ran into yourself'], ['deaths_snake', 'Killed by a snake'], ['deaths_head_on', 'Head-on crashes'], ['deaths_tongue', 'Caught by a tongue'], ['deaths_blockade', 'Hit a blockade'], ['deaths_shrink', 'Caught by the shrink'], ['deaths_wall', 'Hit the wall (classic)'], ['bombed', 'Times bombed']]],
     ['Eating & items', [['food', 'Food eaten'], ['remains_eaten', 'Snake remains eaten'], ['tiny_food', 'Tiny food eaten'], ['tongue_food', 'Food licked up (Extendo)'], ['specials', 'Specials picked up'], ['ghosts_used', 'Ghosts used'], ['blockades_placed', 'Blockades placed'], ['bombs_dropped', 'Bombs dropped'], ['best_classic', 'Best classic score', 'best']]],
     ['Team play', [['tokens', 'Revive tokens'], ['revives_earned', 'Revives earned'], ['times_revived', 'Times revived']]],
-    ['Words & new items', [['fruit', 'Fruit collected'], ['fruit_sets', 'Fruit sets of 3'], ['letters', 'Letters collected'], ['words', 'Words spelled'], ['pacman_used', 'Pacman used'], ['pacman_bites', 'Pacman bites'], ['pacman_bitten', 'Times bitten'], ['poop_used', 'Poop trails']]],
+    ['Words & new items', [['fruit', 'Fruit collected'], ['fruit_sets', 'Fruit sets of 3'], ['letters', 'Letters collected'], ['words', 'Words spelled'], ['pacman_used', 'Pacman used'], ['pacman_bites', 'Pacman bites'], ['pacman_bitten', 'Times bitten'], ['poop_used', 'Poop trails'], ['stone_used', 'Stones used'], ['stone_kills', 'Kills while stone']]],
   ] },
   blockwar: { title: 'BLOCKWAR', sections: [
     ['Games', [['played', 'Games played'], ['wins_clear', 'Clear race wins'], ['wins_lives', 'Lives wins'], ['clear_games', 'Clear races'], ['lives_games', 'Lives games'], ['solo_runs', 'Solo runs']]],

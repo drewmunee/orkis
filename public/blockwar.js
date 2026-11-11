@@ -521,7 +521,7 @@ const moveKey = key => {
 const renderKeysHelp = () => { $('keysHelp').innerHTML = `<b>${{ wasd: 'A / D', arrows: '← / →' }[SW.controls()] || '← / → or A / D'}</b> move · <b>Space</b> launch (host: start) · <b>1–6</b> fire your next special at that player (1 = you) · <b>X</b> discard · or click a board · change keys in ⚙ Settings`; };
 document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
-  if (e.key === 'Enter') { $('chat').focus(); e.preventDefault(); return; }
+  if (e.key === 't' || e.key === 'T') { $('chat').focus(); e.preventDefault(); return; } // T opens chat
   const mv = moveKey(e.key);
   if (mv) { keys.add(mv); e.preventDefault(); return; }
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }

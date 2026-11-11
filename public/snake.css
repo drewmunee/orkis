@@ -86,3 +86,4 @@ body.snake-page { overflow:hidden; height:100vh; }
 #rack .fi { font-size:22px; width:28px; text-align:center; }
 #rack .pip { width:12px; height:12px; border-radius:50%; border:2px solid var(--line); }
 #rack .pip.on { background:#ffb020; border-color:#c27c00; }
+#rack .tile.fruit { background:transparent; border-color:var(--line); font-size:22px; }

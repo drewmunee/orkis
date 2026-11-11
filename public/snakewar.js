@@ -21,6 +21,7 @@ const SPECIAL_INFO = {
   bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 3 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
   pacman: { name: 'Pacman', icon: 'ᗧ', color: '#ffe14d', desc: 'held item: press Space for 6 seconds of sliding through enemy snakes and eating them: every square of a snake you pass through costs them 1 length and gives you 1. Heads and ghosts can\'t be bitten' },
   poop: { name: 'Poop', icon: '💩', color: '#b07a45', desc: 'held item: press Space to leave a slimy trail for 6 seconds; enemies who cross it are slowed (the slime lasts 8 s)' },
+  stone: { name: 'Stone', icon: '🪨', color: '#a3a3a3', desc: 'held item: press Space to turn to stone for 5 seconds: you stop moving and nothing can hurt you except the shrinking board, and any snake that runs into you dies (ghosts and Pacman too)' },
   token: { name: 'Revive token', icon: '♥', color: '#ff4d6d', desc: 'team mode only: every 3 your team collects earns a revive' },
 };
 // item icon as HTML: Pacman is drawn with CSS (no font has a dependable Pacman character)
@@ -32,7 +33,7 @@ const steerKey = key => {
   const c = SW.controls(), k = key.length === 1 ? key.toLowerCase() : key;
   return (c !== 'wasd' && ARROW_KEYS[k]) || (c !== 'arrows' && WASD_KEYS[k]) || null;
 };
-const renderKeysHelp = () => { $('keysHelp').innerHTML = `<b>${{ wasd: 'WASD', arrows: 'Arrow keys' }[SW.controls()] || 'Arrows / WASD'}</b> steer${{ nokia: ' (or <b>NOKIA</b>: numpad 1 / 9)', vim: ' (or <b>VIM</b>: H / L)' }[SW.snakeKeys()] || ''} · <b>Space</b> use your next held item (host: start round) · <b>Enter</b> chat · change keys in ⚙ Settings`; };
+const renderKeysHelp = () => { $('keysHelp').innerHTML = `<b>${{ wasd: 'WASD', arrows: 'Arrow keys' }[SW.controls()] || 'Arrows / WASD'}</b> steer${{ nokia: ' (or <b>NOKIA</b>: numpad 1 / 9)', vim: ' (or <b>VIM</b>: H / L)' }[SW.snakeKeys()] || ''} · <b>Space</b> use your next held item (host: start round) · <b>T</b> chat · change keys in ⚙ Settings`; };
 const ITEM_SLOTS = 3;
 // screen space kept free around the field for the side panels and the top bar
 const PAD = { left: 252, right: 156, top: 52, bottom: 10 };
@@ -60,7 +61,7 @@ function colorOf(id) {
   const p = playerOf(id);
   if (!p) return '#888888';
   if (p.team) { const mates = players.filter(q => q.team === p.team).sort((a, b) => a.slot - b.slot); return TEAM_SHADES[p.team][(p.shade ?? mates.indexOf(p)) % 6]; }
-  if (teamMode && roomState === 'lobby') return TEAM_SHADES.red[(p.shade ?? 0) % 6]; // previewing a team shade before teams are drawn
+  if (teamMode && roomState === 'lobby' && p.teamPick) return TEAM_SHADES[p.teamPick][(p.shade ?? 0) % 6]; // the team they picked for next round
   return SNAKE_COLORS[p.color || p.slot];
 }
 const nameOf = id => (playerOf(id) || {}).name || '?';
@@ -87,7 +88,7 @@ function connect() {
         log('— Round started —'); renderPlayers();
         break;
       case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } renderScore(); updateLengths(); updateChat(); renderItems(); renderLetters(); renderTeams(); break;
-      case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb', 'pacman', 'poop'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
+      case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb', 'pacman', 'poop', 'stone'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
       case 'used': if (m.id === myId) flashBanner(SPECIAL_INFO[m.item].name + '!', 700); break;
       case 'note': flashBanner(m.msg, 1200); break;
       case 'word': if (m.id === myId) flashBanner(`${FRUIT_ICON[m.word] ? FRUIT_ICON[m.word].repeat(3) : m.word}! ${m.reward === 'grow' ? 'Grow!' : 'Cut them!'}`, 1600); break;
@@ -117,7 +118,7 @@ function connect() {
 
 // ---------- side panels ----------
 // Chat stays out of the way while you're alive in a round: it shows for spectators, players who are
-// out, and between rounds. Alive players can still open it with Enter.
+// out, and between rounds. Alive players can still open it with T.
 function updateChat() {
   const inRound = roomState !== 'lobby', alive = state.snakes.some(s => s.id === myId);
   const box = $('chatBox'), wasHidden = box.classList.contains('hidden');
@@ -136,7 +137,8 @@ function renderPlayers() {
   $('players').innerHTML = [...players].sort((a, b) => (a.team || '').localeCompare(b.team || '') || (lens.get(b.id) || 0) - (lens.get(a.id) || 0) || a.slot - b.slot).map(p => {
     const len = lens.get(p.id);
     const out = roomState !== 'lobby' && !len;
-    const tag = p.team ? `<span class="tm" style="background:${TEAM_COLOR[p.team]}">${p.team === 'red' ? 'R' : 'B'}</span>` : '';
+    const tm = p.team || (teamMode && roomState === 'lobby' ? p.teamPick : null); // in the lobby: the team they've picked
+    const tag = tm ? `<span class="tm" style="background:${TEAM_COLOR[tm]}" title="${tm === 'red' ? 'Red' : 'Blue'} team">${tm === 'red' ? 'R' : 'B'}</span>` : '';
     // your own row gets ‹ › to change color whenever you're not in play
     const pick = p.id === myId && canPickColor();
     const dot = `<span class="dot" style="background:${colorOf(p.id)}"></span>`;
@@ -152,7 +154,7 @@ function renderPlayers() {
   $('tilesBtn').classList.toggle('hidden', !hostInLobby);
   $('tilesBtn').textContent = `Bonus tiles: ${TILE_LABEL[tileMode]} (change)`;
   const tilesTxt = roomState !== 'lobby' || players.filter(p => !p.spectating).length < 2 ? '' : `Bonus tiles: ${TILE_LABEL[tileMode]}`;
-  $('modeInfo').textContent = roomState !== 'lobby' ? '' : [teamReady ? 'Next round: Red vs Blue (teams picked at random)'
+  $('modeInfo').textContent = roomState !== 'lobby' ? '' : [teamReady ? 'Next round: Red vs Blue. Pick your team with ‹ › by your name (no pick = filled in to balance)'
     : teamMode ? 'Team mode needs 2+ players; starting now is classic solo' : '', tilesTxt].filter(Boolean).join(' · ');
 }
 let lastLens = '';
@@ -182,20 +184,20 @@ function renderItems() {
 // Letter rack: the letters you've collected (4 that make a word pay out), under the items
 let lastLetters = '';
 function renderLetters() {
-  const me = state.snakes.find(s => s.id === myId), ls = me ? me.letters || [] : [], fr = (me && me.fruit) || {};
+  const me = state.snakes.find(s => s.id === myId), ls = me ? me.letters || [] : [], fr = (me && Array.isArray(me.fruit) && me.fruit) || [];
   const mode = state.tileMode || 'fruit', show = !state.classic && roomState !== 'lobby' && mode !== 'none';
   const key = (show ? mode : '-') + ls.join('') + JSON.stringify(fr);
   if (key === lastLetters) return; lastLetters = key;
   $('lettersWrap').classList.toggle('hidden', !show);
   let html = '';
-  if (mode === 'fruit') { // each fruit with how many you have toward a set of 3
-    for (const f of Object.keys(FRUIT_ICON)) html += `<div class="fruitRow"><span class="fi">${FRUIT_ICON[f]}</span>${[0, 1, 2].map(i => `<span class="pip${i < (fr[f] || 0) ? ' on' : ''}"></span>`).join('')}</div>`;
-    $('rackLabel').textContent = 'Fruit'; $('rackHint').textContent = '3 of the same = bonus';
+  if (mode === 'fruit') { // one 3-slot queue: the last 3 fruit you ate; all 3 the same = bonus
+    for (let i = 0; i < 3; i++) html += fr[i] ? `<span class="tile fruit">${FRUIT_ICON[fr[i]]}</span>` : '<span class="tile empty"></span>';
+    $('rackLabel').textContent = 'Fruit'; $('rackHint').textContent = '3 of the same in a row = bonus';
   } else {
     for (let i = 0; i < 4; i++) html += ls[i] ? `<span class="tile">${ls[i]}</span>` : '<span class="tile empty"></span>';
     $('rackLabel').textContent = 'Letters'; $('rackHint').textContent = '4 that spell a word = bonus';
   }
-  $('rack').className = mode === 'fruit' ? 'fruit' : '';
+
   $('rack').innerHTML = html;
 }
 // Team matches: revive counts at the top, your team's token progress under the scoreboard
@@ -338,7 +340,9 @@ function draw() {
   }
   // snakes
   for (const s of state.snakes) {
-    const col = colorOf(s.id), mine = s.id === myId, fx = s.fx || {}, team = (playerOf(s.id) || {}).team;
+    // a revived snake blinks where it will come back in for 3 s before it starts moving
+    if (s.spawning && Math.floor(now / 150) % 2) continue;
+    const fx = s.fx || {}, col = fx.stone ? '#9c9c9c' : colorOf(s.id), mine = s.id === myId, team = (playerOf(s.id) || {}).team;
     const hc = s.body[0], hx = cx(hc) + cs / 2, hy = cy(hc) + cs / 2;
     const [dx, dy] = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] }[s.dir];
     // Extendo tongue
@@ -372,6 +376,13 @@ function draw() {
     // the head is drawn a little darker than the body so it's easier to spot
     s.body.forEach((c, i) => { const pad = i === 0 ? 0 : Math.max(1, cs * 0.08); ctx.fillStyle = i === 0 ? darker(col) : col; roundRect(cx(c) + pad, cy(c) + pad, cs - pad * 2, cs - pad * 2, cs * 0.3); });
     ctx.shadowBlur = 0;
+    // stone: cracked grey segments with a dark outline
+    if (fx.stone) {
+      ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = Math.max(1, cs * 0.1);
+      s.body.forEach(c => { ctx.beginPath(); ctx.roundRect(cx(c) + 1, cy(c) + 1, cs - 2, cs - 2, cs * 0.25); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx(c) + cs * 0.3, cy(c) + cs * 0.2); ctx.lineTo(cx(c) + cs * 0.5, cy(c) + cs * 0.55); ctx.lineTo(cx(c) + cs * 0.4, cy(c) + cs * 0.8); ctx.stroke(); });
+    }
+    // protected after a revive: a pulsing white ring around the head
+    if (fx.shield) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(2, cs * 0.18); ctx.globalAlpha = 0.5 + 0.5 * Math.sin(now / 90); ctx.beginPath(); ctx.arc(hx, hy, cs * 1.1, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
     // team matches: the head carries a ring in the pure team color
     if (team) { ctx.strokeStyle = TEAM_COLOR[team]; ctx.lineWidth = Math.max(2, cs * 0.14); ctx.beginPath(); ctx.roundRect(cx(hc) - 1, cy(hc) - 1, cs + 2, cs + 2, cs * 0.35); ctx.stroke(); }
     // Pacman: the head becomes a yellow chomping Pacman facing the way it's going
@@ -410,7 +421,7 @@ function draw() {
 // ---------- input ----------
 document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
-  if (e.key === 'Enter') { $('chatBox').classList.remove('hidden'); $('chat').focus(); updateChat(); e.preventDefault(); return; }
+  if (e.key === 't' || e.key === 'T') { $('chatBox').classList.remove('hidden'); $('chat').focus(); updateChat(); e.preventDefault(); return; } // T opens chat
   if (e.key === ' ') {
     // Space: host starts a round between rounds; during a round it uses your next held item
     if (roomState === 'lobby') { if (myId === hostId) net({ t: 'start' }); }

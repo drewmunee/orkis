@@ -212,11 +212,13 @@ New games must call the same `leaveRoom()` pattern.
   be bitten; teammates, your own body and blockades still
   kill; icon is a CSS/canvas shape, not a font glyph), Poop (held: 6 s of slime on the square your tail
   sits on, each lasting 8 s; an enemy head on slime loses Speed and is slowed 1.5 s; never you/your team,
-  not ghosts).
+  not ghosts), Stone (held: 5 s frozen in place; immune to everything except the shrinking board; any snake
+  that runs into it dies, ghosts and Pacman included; drawn grey and cracked; stats stone_used/stone_kills).
+  `immune(p)` (ghost, stone or revive shield) is the one check for "safe from other players' items".
 - **Bonus tiles** (battle rounds only, own spawner: ~1 per 4 s, max 4 on the field, 20 s each; never in the
   special pool). The host picks the kind in the lobby (`tilesBtn`, `{t:'tiles', mode}`, `room.tileMode`,
-  fixed per round as `room.roundTiles`): **fruit** (default: 🍌 🍒 🍊; per-player counts, the 3rd of the
-  same fruit pays out and resets that fruit), **letters** (weighted bag, no J/Q/X/Z; 4-letter rack, a 5th
+  fixed per round as `room.roundTiles`): **fruit** (default: 🍌 🍒 🍊; one 3-slot queue per player, a 4th
+  pushes out the oldest; when all 3 are the same fruit it pays out and clears), **letters** (weighted bag, no J/Q/X/Z; 4-letter rack, a 5th
   drops the oldest; 4 that can be arranged into a word from `words4.js` (5,466 words from the MIT
   `word-list` package, slurs removed) pay out and clear the rack) or **none**. The payout (`tileBonus`) is a
   coin flip: +12 length (x2 with Double) or every enemy loses a third (min 3, ghosts immune). Fruit counts /
@@ -230,12 +232,19 @@ New games must call the same `leaveRoom()` pattern.
 - Snake heads are drawn slightly darker than the body (`darker()` in `public/snakewar.js`) so heads are easy to spot.
 - Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
   scoreboard: any of 12 colors normally, or one of 6 shades of their team's color in team mode.
-- **Team mode** (host toggle between rounds): random Red vs Blue each round; Red spawns on the left facing
+- **Team mode** (host toggle between rounds): Red vs Blue each round. Between rounds in team mode the ‹ ›
+  color picker cycles 6 red shades then 6 blue shades, which sets `teamPick` (shown as R/B in the lobby);
+  `assignTeams` honours picks, puts unpicked players on the smaller team, and only if a team would be
+  empty moves random players over until the sizes differ by at most 1 (so picks can make e.g. 3v1). Red spawns on the left facing
   right, Blue on the right facing left (revives too). Red team = warm shades,
   blue team = cool shades, plus a team-colored ring on each head. Shears/Slow/Extendo hit the other team
   only. Revive tokens spawn only in team rounds, rarer as the round goes on; every 3 a team collects =
-  1 revive, used automatically to respawn a dead teammate. Team out = nobody alive. No team score yet.
-- Chat/log is hidden from players who are alive in a round (Enter opens it); it shows for
+  1 revive, used automatically to respawn a dead teammate. After any death in a team round, tokens spawn
+  4x as often for 20 s. A revived snake blinks in place for 3 s (`spawnUntil`: not moving, nothing can hit
+  it, others pass through), then has 3 s of `fx.shield` (passes through like a ghost, immune to items,
+  pulsing white ring). Team out = nobody alive. No team score yet.
+- Chat/log is hidden from players who are alive in a round (T opens it; in every game T opens chat and
+  Enter sends); it shows for
   spectators, eliminated players, and between rounds. It auto-scrolls unless you scrolled up.
 - **The two games must stay isolated.** Each connection belongs to one game for its life (Snakewar
   joins send `game: 'snake'`); they share only `base.css` (theme + base elements), `common.js` (browser ID +
