@@ -238,9 +238,11 @@ New games must call the same `leaveRoom()` pattern.
   (room ★ wins / `/podium`). The room closes when no people are left; the host is always a person.
   Bots play like people, not machines: they see other snakes as they were 2 ticks ago (`REACTION_TICKS`,
   plus each seen head projected forward along its direction, like anticipating it), so they can't dodge
-  within a single square; they only decide every 2-4 ticks and go straight 1-2 squares after a turn,
-  unless they see a crash up to 2 squares ahead; and they take L-shaped routes (straight until lined up
-  with the target, then turn) rather than the perfect staircase. Each decision: rule out crashing moves,
+  within a single square; they decide every 1-2 ticks and never turn twice in a row (no perfect
+  staircase), unless they see a crash up to 2 squares ahead; they take L-shaped routes (straight until
+  lined up with the target, then turn), following the BFS route instead when the L is blocked; a target
+  they get no closer to for ~1 s (`STALE_TICKS`, e.g. two bots side by side) is banned for 5 s; with nothing
+  to chase, or after a long straight run, they wander toward open space. Each decision: rule out crashing moves,
   score the rest by open space (capped flood fill), head-on risk (any other head, teammates too),
   bomb/shrink danger, the L-route and the BFS first step toward the best target (food, specials, tokens,
   fruit/letters, inside the shrink edge, enemy bodies while Pacman, or 3 squares ahead of a smaller
@@ -249,7 +251,7 @@ New games must call the same `leaveRoom()` pattern.
   seconds. Items: Ghost/Stone when trapped, Blockade/Poop when an enemy is behind, Bomb when enemies are
   near the tail, Pacman near enemy bodies, anything after holding a full hand 12 s.
   Once no people are alive, the host gets **End round** (`endBtn`, `{t:'endround'}`; no winner).
-  Tested with simulated rounds: ~75 s average with a person alive, ~1 min in a bot-only frenzy, ~20 ms worst tick.
+  Tested with simulated rounds (~60-75 s with a person alive, ~1 min bot-only frenzy, ~14 food per bot-minute vs ~20 for the old perfect bots, side-by-side bots split up in ~0.6 s, ~12-20 ms worst tick).
 - **/spectate** (chat command; Snakewar only, other games reply that it isn't available): toggles sitting out.
   Spectators are left out of the next rounds (field size, solo/classic and teams count only players), shown
   with a grey 👁 by their name. If everyone is spectating, the round doesn't start.
