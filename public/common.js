@@ -47,10 +47,25 @@ window.SW = (() => {
   }
 
   // ---------- settings menu (replaces the old theme dropdown on every page) ----------
+  // Avatars shown next to your name in every game (the item emojis from Snakewar, for now).
+  // The server keeps the same list (avatars.js) and ignores anything else.
+  const AVATARS = ['⚡', '👻', '✂', '🐌', '👅', '💣', '♥'];
   const OPTIONS = {
     theme: [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']],
     controls: [['arrows', 'Arrow keys'], ['wasd', 'WASD']],
+    // Snakewar only: extra two-key steering schemes (your normal steering keys keep working too)
+    snakeKeys: [['normal', 'Normal'], ['nokia', 'NOKIA'], ['vim', 'VIM']],
+    avatar: [['', 'None'], ...AVATARS.map(a => [a, a])],
   };
+  const DEFAULTS = { theme: 'system', controls: 'arrows', snakeKeys: 'normal', avatar: '' };
+  const SNAKE_HINTS = {
+    normal: 'Steer with your Controls keys above',
+    nokia: 'Numpad 1 / 9: moving sideways, 1 turns up and 9 turns down; moving up or down, 1 turns left and 9 turns right',
+    vim: 'H / L: moving sideways, H turns up and L turns down; moving up or down, H turns left and L turns right',
+  };
+  const avatar = () => AVATARS.includes(settings.avatar) ? settings.avatar : '';
+  // HTML for a player's avatar (from a player object sent by the server), or '' if they have none
+  const avatarHtml = p => p && AVATARS.includes(p.avatar) ? `<span class="av" aria-hidden="true">${p.avatar}</span>` : '';
   // Controls: 'arrows' or 'wasd'. Until someone picks, games that always took both (Snakewar, Blockwar)
   // keep accepting both, so nobody's keys stop working; Stackwar defaults to the arrow-key layout.
   const controls = () => settings.controls || null;
@@ -61,18 +76,21 @@ window.SW = (() => {
       <div class="settings-pop hidden" role="dialog" aria-label="Settings">
         <div class="settings-row"><div class="settings-label">Theme</div><div class="seg" data-key="theme"></div></div>
         <div class="settings-row"><div class="settings-label">Controls</div><div class="seg" data-key="controls"></div><div class="settings-hint" data-hint="controls"></div></div>
+        <div class="settings-row"><div class="settings-label">Snakewar steering</div><div class="seg" data-key="snakeKeys"></div><div class="settings-hint" data-hint="snakeKeys"></div></div>
+        <div class="settings-row"><div class="settings-label">Avatar <small>shown next to your name</small></div><div class="seg avatars" data-key="avatar"></div></div>
         <div class="settings-note">Saved for this browser.</div>
       </div>`;
     const btn = host.querySelector('.settings-btn'), pop = host.querySelector('.settings-pop');
     const render = () => {
       for (const seg of host.querySelectorAll('.seg')) {
-        const key = seg.dataset.key, cur = key === 'theme' ? (settings.theme || 'system') : (controls() || 'arrows');
+        const key = seg.dataset.key, cur = key === 'avatar' ? avatar() : (settings[key] || DEFAULTS[key]);
         seg.innerHTML = OPTIONS[key].map(([v, l]) => `<button type="button" data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('');
         for (const b of seg.children) b.onclick = () => { SW.set(key, b.dataset.v); };
       }
       host.querySelector('[data-hint="controls"]').textContent = (controls() || 'arrows') === 'wasd'
         ? 'WASD to move / steer (Stackwar: W/E rotate, Q rotate back, S soft drop, X discard)'
         : 'Arrow keys to move / steer (Stackwar: ↑/X rotate, Z rotate back, ↓ soft drop, D discard)';
+      host.querySelector('[data-hint="snakeKeys"]').textContent = SNAKE_HINTS[settings.snakeKeys] || SNAKE_HINTS.normal;
     };
     const open = on => { pop.classList.toggle('hidden', !on); btn.setAttribute('aria-expanded', on); if (on) render(); };
     btn.onclick = e => { e.stopPropagation(); open(pop.classList.contains('hidden')); btn.blur(); };
@@ -88,6 +106,8 @@ window.SW = (() => {
     set(k, v) { apply({ [k]: v }); saveRemote(); },
     onChange(fn) { listeners.push(fn); },
     controls,
+    snakeKeys: () => SNAKE_HINTS[settings.snakeKeys] ? settings.snakeKeys : 'normal',
+    AVATARS, avatar, avatarHtml,
     mountSettings,
     leaderboardText,
   };

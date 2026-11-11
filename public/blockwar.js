@@ -389,11 +389,11 @@ function frame(t) { const dt = Math.min(0.033, (t - last) / 1000); last = t; upd
 // other players' boards, from their snapshots
 function renderOpps() {
   const wrap = $('opps'), list = ordered().slice(1);
-  if (wrap.children.length !== list.length || [...wrap.children].some((el, i) => +el.dataset.id !== list[i].id)) {
+  if (wrap.children.length !== list.length || [...wrap.children].some((el, i) => +el.dataset.id !== list[i].id || el.dataset.av !== (list[i].avatar || ''))) {
     wrap.innerHTML = '';
     for (const p of list) {
-      const el = document.createElement('div'); el.className = 'opp'; el.dataset.id = p.id;
-      el.innerHTML = `<div class="oname"><span class="b"></span><span class="nm">${esc(p.name)}</span><span class="info"></span></div><canvas width="${W / 2}" height="${H / 2}"></canvas>`;
+      const el = document.createElement('div'); el.className = 'opp'; el.dataset.id = p.id; el.dataset.av = p.avatar || '';
+      el.innerHTML = `<div class="oname"><span class="b"></span><span class="nm">${SW.avatarHtml(p)}${esc(p.name)}</span><span class="info"></span></div><canvas width="${W / 2}" height="${H / 2}"></canvas>`;
       el.onclick = () => useSpecial(numOf(players.find(q => q.id === p.id)));
       wrap.appendChild(el);
     }
@@ -442,11 +442,11 @@ function renderEffects() {
 }
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
-  $('meName').innerHTML = me ? `${badge(1, true)}<span>${esc(me.name)}</span>` : '';
+  $('meName').innerHTML = me ? `${badge(1, true)}<span>${SW.avatarHtml(me)}${esc(me.name)}</span>` : '';
   $('players').innerHTML = ordered().map(p => {
     const b = p.id === myId ? null : others.get(p.id);
     const info = p.wins ? `${p.wins}★` : '';
-    return `<div class="${roomState !== 'lobby' && !p.alive ? 'dead' : ''}">${badge(numOf(p))}<span class="nm">${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span class="info">${info}</span></div>`;
+    return `<div class="${roomState !== 'lobby' && !p.alive ? 'dead' : ''}">${badge(numOf(p))}<span class="nm">${SW.avatarHtml(p)}${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span class="info">${info}</span></div>`;
   }).join('');
   const host = myId === hostId && roomState === 'lobby', multi = players.length > 1;
   $('modeBox').classList.toggle('hidden', !(host && multi));
@@ -461,7 +461,7 @@ let chatPinned = true;
 $('log').addEventListener('scroll', () => { const l = $('log'); if (l.clientHeight) chatPinned = l.scrollHeight - l.scrollTop - l.clientHeight < 30; });
 function addLine(d) { const l = $('log'); l.appendChild(d); while (l.children.length > 150) l.firstChild.remove(); if (chatPinned) l.scrollTop = l.scrollHeight; }
 function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
-function chatLine(id, msg) { const p = players.find(q => q.id === id), d = document.createElement('div'); d.innerHTML = `<span class="who" style="color:${p ? SLOT_COLORS[numOf(p)] : ''}">${esc(nameOf(id))}</span>`; d.appendChild(document.createTextNode(msg)); addLine(d); }
+function chatLine(id, msg) { const p = players.find(q => q.id === id), d = document.createElement('div'); d.innerHTML = `<span class="who" style="color:${p ? SLOT_COLORS[numOf(p)] : ''}">${SW.avatarHtml(p)}${esc(nameOf(id))}</span>`; d.appendChild(document.createTextNode(msg)); addLine(d); }
 
 // ---------- network ----------
 function net(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
@@ -475,7 +475,7 @@ function sync(force) {
 setInterval(() => { if (playing) sync(); }, SYNC_MS);
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', game: 'block', name, room: roomCode, bid: SW.bid });
+  ws.onopen = () => net({ t: 'join', game: 'block', name, room: roomCode, bid: SW.bid, avatar: SW.avatar() });
   ws.onclose = () => setStatus('Disconnected. Reload to rejoin.');
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
@@ -552,6 +552,9 @@ $('leaveBtn').onclick = e => {
 };
 SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
 SW.onChange(() => { readTheme(); renderKeysHelp(); keys.clear(); });
+// a new avatar picked in ⚙ Settings shows up for everyone in the room straight away
+let sentAvatar = SW.avatar();
+SW.onChange(() => { if (SW.avatar() !== sentAvatar) { sentAvatar = SW.avatar(); net({ t: 'avatar', a: sentAvatar }); } });
 renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="background:${SPECIALS[k][1]}">${k}</span><span><b>${SPECIALS[k][0]}</b> – ${SPECIALS[k][2]}</span></li>`).join('');

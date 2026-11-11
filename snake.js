@@ -4,6 +4,7 @@ const leaderboard = require('./leaderboard');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
 const commands = require('./commands');
+const avatars = require('./avatars');
 const stats = require('./stats');
 const GW = 112, GH = 63;           // full-size 16:9 field, fills most laptop/desktop screens
 // Field size depends on how many are in the room when a round starts: solo is classic snake on a small
@@ -83,7 +84,7 @@ function freeSlot(room) {
   return 0;
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null, color: p.color, shade: p.shade }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null, color: p.color, shade: p.shade, avatar: p.avatar || null }));
 }
 function sendLobby(room) { broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode }); }
 function log(room, msg) { broadcast(room, { t: 'log', msg }); }
@@ -535,7 +536,7 @@ function join(ws, id, m) {
   if (clash) clash.ws.terminate(); // same browser rejoining: drop its old connection
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
-  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null };
+  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null, avatar: avatars.clean(m.avatar) };
   room.players.set(id, me);
   if (room.state === 'lobby') setField(room, room.players.size); // preview the size the next round will use
   send(ws, { t: 'welcome', id, room: code, w: room.w, h: room.h, tick: TICK_MS, specials: SPECIALS });
@@ -545,9 +546,16 @@ function join(ws, id, m) {
 
   return {
     message(m) {
-      if (m.t === 'dir' && DIRS[m.d] && me.alive && me.queue.length < 3) {
+      if (m.t === 'dir' && (DIRS[m.d] || m.rel === 'a' || m.rel === 'b') && me.alive && me.queue.length < 3) {
         const last = me.queue.length ? me.queue[me.queue.length - 1] : me.dir;
-        if (m.d !== last && !isReverse(last, m.d)) me.queue.push(m.d);
+        // NOKIA / VIM steering sends a relative key instead of a direction: key A (numpad 1 / H) turns up
+        // when moving sideways and left when moving up or down; key B (numpad 9 / L) turns down / right.
+        // It's worked out from the last queued turn, so quick double taps still do what you expect.
+        const sideways = last === 'L' || last === 'R';
+        const d = DIRS[m.d] ? m.d : m.rel === 'a' ? (sideways ? 'U' : 'L') : (sideways ? 'D' : 'R');
+        if (d !== last && !isReverse(last, d)) me.queue.push(d);
+      } else if (m.t === 'avatar') { // picked a new avatar in ⚙ Settings
+        me.avatar = avatars.clean(m.a); sendLobby(room);
       } else if (m.t === 'use') {
         useItem(room, me);
       } else if (m.t === 'start' && me.id === room.hostId && room.state === 'lobby') {

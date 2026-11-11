@@ -8,6 +8,7 @@ const leaderboard = require('./leaderboard');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
 const commands = require('./commands');
+const avatars = require('./avatars');
 const stats = require('./stats');
 const MAX_PLAYERS = 6;
 const MODES = ['clear', 'lives'];
@@ -25,7 +26,7 @@ function freeSlot(room) {
   return 0;
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, avatar: p.avatar || null }));
 }
 function sendLobby(room) {
   broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, mode: room.mode });
@@ -69,7 +70,7 @@ function join(ws, id, m) {
   if (clash) clash.ws.terminate(); // same browser rejoining: drop its old connection
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
-  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, wins: 0, board: null };
+  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, wins: 0, board: null, avatar: avatars.clean(m.avatar) };
   room.players.set(id, me);
   send(ws, { t: 'welcome', id, room: code });
   sendLobby(room);
@@ -93,6 +94,9 @@ function join(ws, id, m) {
           sendLobby(room);
           break;
         }
+        case 'avatar': // picked a new avatar in ⚙ Settings
+          me.avatar = avatars.clean(m.a); sendLobby(room);
+          break;
         case 'mode':
           if (me.id !== room.hostId || room.state !== 'lobby' || !MODES.includes(m.mode)) return;
           room.mode = m.mode; sendLobby(room);

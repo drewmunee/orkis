@@ -28,7 +28,7 @@ const steerKey = key => {
   const c = SW.controls(), k = key.length === 1 ? key.toLowerCase() : key;
   return (c !== 'wasd' && ARROW_KEYS[k]) || (c !== 'arrows' && WASD_KEYS[k]) || null;
 };
-const renderKeysHelp = () => { $('keysHelp').innerHTML = `<b>${{ wasd: 'WASD', arrows: 'Arrow keys' }[SW.controls()] || 'Arrows / WASD'}</b> steer · <b>Space</b> use your next held item (host: start round) · <b>Enter</b> chat · change keys in ⚙ Settings`; };
+const renderKeysHelp = () => { $('keysHelp').innerHTML = `<b>${{ wasd: 'WASD', arrows: 'Arrow keys' }[SW.controls()] || 'Arrows / WASD'}</b> steer${{ nokia: ' (or <b>NOKIA</b>: numpad 1 / 9)', vim: ' (or <b>VIM</b>: H / L)' }[SW.snakeKeys()] || ''} · <b>Space</b> use your next held item (host: start round) · <b>Enter</b> chat · change keys in ⚙ Settings`; };
 const ITEM_SLOTS = 3;
 // screen space kept free around the field for the side panels and the top bar
 const PAD = { left: 252, right: 156, top: 52, bottom: 10 };
@@ -63,7 +63,7 @@ const myTeam = () => (playerOf(myId) || {}).team;
 function net(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', game: 'snake', name, room, bid: SW.bid });
+  ws.onopen = () => net({ t: 'join', game: 'snake', name, room, bid: SW.bid, avatar: SW.avatar() });
   ws.onclose = () => setStatus('Disconnected. Reload to rejoin.');
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
@@ -131,7 +131,7 @@ function renderPlayers() {
     // your own row gets ‹ › to change color whenever you're not in play
     const pick = p.id === myId && canPickColor();
     const dot = `<span class="dot" style="background:${colorOf(p.id)}"></span>`;
-    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}">${pick ? '<button class="cbtn" data-d="-1" title="Previous color">‹</button>' + dot + '<button class="cbtn" data-d="1" title="Next color">›</button>' : dot}${tag}<span class="nm" title="${esc(p.name)}">${esc(p.name)}${p.id === hostId ? ' 👑' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
+    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}">${pick ? '<button class="cbtn" data-d="-1" title="Previous color">‹</button>' + dot + '<button class="cbtn" data-d="1" title="Next color">›</button>' : dot}${tag}<span class="nm" title="${esc(p.name)}">${SW.avatarHtml(p)}${esc(p.name)}${p.id === hostId ? ' 👑' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
   }).join('');
   for (const b of $('players').querySelectorAll('.cbtn')) b.onclick = e => { net({ t: 'color', d: +b.dataset.d }); e.currentTarget.blur(); };
   const hostInLobby = myId === hostId && roomState === 'lobby', teamReady = teamMode && players.length >= 2;
@@ -150,7 +150,7 @@ let chatPinned = true;
 $('log').addEventListener('scroll', () => { const l = $('log'); if (l.clientHeight) chatPinned = l.scrollHeight - l.scrollTop - l.clientHeight < 30; });
 function addLine(d) { const l = $('log'); l.appendChild(d); while (l.children.length > 150) l.firstChild.remove(); if (chatPinned) l.scrollTop = l.scrollHeight; }
 function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
-function chatLine(id, msg) { const d = document.createElement('div'); d.innerHTML = `<span class="who" style="color:${colorOf(id)}">${esc(nameOf(id))}</span>`; d.appendChild(document.createTextNode(msg)); addLine(d); }
+function chatLine(id, msg) { const d = document.createElement('div'); d.innerHTML = `<span class="who" style="color:${colorOf(id)}">${SW.avatarHtml(playerOf(id))}${esc(nameOf(id))}</span>`; d.appendChild(document.createTextNode(msg)); addLine(d); }
 function flashBanner(text, ms) { banner = { text, until: performance.now() + ms }; }
 
 // Held items: big icons down the right side, readable from the corner of your eye
@@ -355,6 +355,11 @@ document.addEventListener('keydown', e => {
     else net({ t: 'use' });
     e.preventDefault(); return;
   }
+  // NOKIA (numpad 1 / 9) and VIM (H / L) steering: two keys that turn relative to where you're heading;
+  // the server works out the actual direction (see snake.js)
+  const scheme = SW.snakeKeys();
+  const rel = scheme === 'nokia' ? { Numpad1: 'a', Numpad9: 'b' }[e.code] : scheme === 'vim' ? { h: 'a', l: 'b' }[e.key.toLowerCase()] : null;
+  if (rel) { net({ t: 'dir', rel }); e.preventDefault(); return; }
   const d = steerKey(e.key);
   if (d) { net({ t: 'dir', d }); e.preventDefault(); }
 });
@@ -377,6 +382,9 @@ $('leaveBtn').onclick = e => {
 };
 SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
 SW.onChange(() => { readTheme(); renderKeysHelp(); });
+// a new avatar picked in ⚙ Settings shows up for everyone in the room straight away
+let sentAvatar = SW.avatar();
+SW.onChange(() => { if (SW.avatar() !== sentAvatar) { sentAvatar = SW.avatar(); net({ t: 'avatar', a: sentAvatar }); } });
 renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 $('specialList').innerHTML = Object.values(SPECIAL_INFO).map(s => `<li><span class="ic" style="background:${s.color}">${s.icon}</span><span><b>${s.name}</b> – ${s.desc}</span></li>`).join('');

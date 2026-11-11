@@ -47,12 +47,20 @@ New games must call the same `leaveRoom()` pattern.
 - **Settings** (`settings.js`, table `settings`): one small JSON object per browser ID, `GET/POST
   /api/settings`, max 4 KB. `SW.get/SW.set` keep them in localStorage too and sync to the server.
   Every page has a ⚙ Settings button (`SW.mountSettings`, styles in `base.css`) in place of the old theme
-  dropdown, with **Theme** (system/dark/light) and **Controls** (`arrows` | `wasd`). Add future preferences there.
+  dropdown, with **Theme** (system/dark/light), **Controls** (`arrows` | `wasd`), **Snakewar steering** and **Avatar**. Add future preferences there.
 - **Control schemes**: `SW.controls()` is 'arrows', 'wasd', or null (not chosen yet). Stackwar maps keys to
   actions per scheme (arrows: ←/→, ↑/X rotate, Z back, ↓ soft, D discard; WASD: A/D, W/E rotate, Q back,
   S soft, X discard; Space/C/Shift/1-6 in both) and Inverted swaps actions, not keys. Snakewar steers and
   Blockwar moves with the chosen keys; before a player chooses, both sets work there. Help text follows
   the chosen scheme. New games must honor `SW.controls()`.
+- **Snakewar steering** (setting `snakeKeys`: `normal` | `nokia` | `vim`, `SW.snakeKeys()`): two-key relative
+  steering on top of the normal keys. NOKIA = numpad 1 / 9 (`e.code`), VIM = H / L. Moving sideways, key 1/H
+  turns up and 9/L turns down; moving up or down, 1/H turns left and 9/L turns right. The client sends
+  `{t:'dir', rel:'a'|'b'}` and `snake.js` resolves it against the last queued direction.
+- **Avatars** (setting `avatar`): one of the Snakewar item emojis (`SW.AVATARS` in `common.js`, same list in
+  `avatars.js` on the server, which drops anything else). Sent on join and live via `{t:'avatar', a}`;
+  every game's `playerList` carries `avatar`, and clients show `SW.avatarHtml(p)` before names in the player
+  list, your name bar, opponent boards and chat. Not shown on homepage leaderboards/chat yet.
 - Storage: Postgres (Neon) when `DATABASE_URL` is set (`db.js`), else JSON files in `data/` for local play.
   Production's `DATABASE_URL` lives in Render's Environment settings (never commit it).
 

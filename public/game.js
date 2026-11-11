@@ -369,12 +369,12 @@ function draw() {
 function renderOpps() {
   const wrap = $('opponents');
   const others = ordered().slice(1);
-  if (wrap.children.length !== others.length || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id)) {
+  if (wrap.children.length !== others.length || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id || el.dataset.av !== (others[i].avatar || ''))) {
     wrap.innerHTML = '';
     for (const p of others) {
       const el = document.createElement('div');
-      el.className = 'opp'; el.dataset.id = p.id;
-      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><canvas width="${W * 14}" height="${H * 14}"></canvas>`;
+      el.className = 'opp'; el.dataset.id = p.id; el.dataset.av = p.avatar || '';
+      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${SW.avatarHtml(p)}${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><canvas width="${W * 14}" height="${H * 14}"></canvas>`;
       el.onclick = () => useSpecial(numOf(players.find(q => q.id === p.id)));
       wrap.appendChild(el);
     }
@@ -403,8 +403,8 @@ function renderInv() {
 }
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
-  $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${esc(me.name)}</span>${teamTag(me.team)}` : '';
-  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''} ${teamTag(p.team)}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
+  $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${SW.avatarHtml(me)}${esc(me.name)}</span>${teamTag(me.team)}` : '';
+  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${SW.avatarHtml(p)}${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''} ${teamTag(p.team)}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('');
   const hostInLobby = myId === hostId && roomState === 'lobby';
   $('startBtn').classList.toggle('hidden', !hostInLobby);
   const teamReady = teamMode && players.length >= 2; // team mode with one player is just a solo run
@@ -426,7 +426,7 @@ function addLine(d) {
 function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
 function chatLine(id, msg) {
   const p = players.find(q => q.id === id), d = document.createElement('div'); d.className = 'msg';
-  d.innerHTML = `${p ? badge(numOf(p)) : ''}<span class="who"${p ? ` style="color:${SLOT_COLORS[numOf(p)]}"` : ''}>${esc(p ? p.name : '?')}</span>`;
+  d.innerHTML = `${p ? badge(numOf(p)) : ''}<span class="who"${p ? ` style="color:${SLOT_COLORS[numOf(p)]}"` : ''}>${SW.avatarHtml(p)}${esc(p ? p.name : '?')}</span>`;
   d.appendChild(document.createTextNode(msg)); addLine(d);
 }
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -438,7 +438,7 @@ function net(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function connect(name, room, isDaily = false) {
   dailyRoom = isDaily;
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', name, room, bid: SW.bid, daily: isDaily });
+  ws.onopen = () => net({ t: 'join', name, room, bid: SW.bid, daily: isDaily, avatar: SW.avatar() });
   ws.onclose = () => { setStatus('Disconnected from server.'); playing = false; };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
@@ -714,6 +714,9 @@ $('specialList').innerHTML = SP_KEYS.map(k => `<li><span class="sp" style="backg
 try { $('name').value = localStorage.getItem('sw-name') || ''; } catch {}
 SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
 SW.onChange(() => { readTheme(); renderKeysHelp(); });
+// a new avatar picked in ⚙ Settings shows up for everyone in the room straight away
+let sentAvatar = SW.avatar();
+SW.onChange(() => { if (SW.avatar() !== sentAvatar) { sentAvatar = SW.avatar(); net({ t: 'avatar', a: sentAvatar }); } });
 renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
 readTheme();

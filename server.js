@@ -8,6 +8,7 @@ const settings = require('./settings');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
 const commands = require('./commands');
+const avatars = require('./avatars');
 const homechat = require('./homechat');
 const daily = require('./daily');
 const stats = require('./stats');
@@ -111,7 +112,7 @@ function broadcast(room, msg, exceptId) {
   for (const p of room.players.values()) if (p.id !== exceptId) send(p.ws, msg);
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null, avatar: p.avatar || null }));
 }
 function sendLobby(room) {
   broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode });
@@ -242,6 +243,7 @@ wss.on('connection', ws => {
       const slot = freeSlot(room);
       if (!slot) { send(ws, { t: 'error', msg: 'Room is full (6 players max).' }); room = null; return; }
       me.name = wanted;
+      me.avatar = avatars.clean(m.avatar);
       me.bid = typeof m.bid === 'string' ? m.bid.slice(0, 40) : null; // browser ID: one leaderboard spot per browser
       me.slot = slot;
       room.players.set(me.id, me);
@@ -258,6 +260,9 @@ wss.on('connection', ws => {
       case 'start':
         if (me.id !== room.hostId || room.state !== 'lobby') return;
         startRoom(room);
+        break;
+      case 'avatar': // picked a new avatar in ⚙ Settings
+        me.avatar = avatars.clean(m.a); sendLobby(room);
         break;
       case 'teammode':
         if (me.id !== room.hostId || room.state !== 'lobby' || room.daily) return;
