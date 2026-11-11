@@ -213,11 +213,16 @@ New games must call the same `leaveRoom()` pattern.
   kill; icon is a CSS/canvas shape, not a font glyph), Poop (held: 6 s of slime on the square your tail
   sits on, each lasting 8 s; an enemy head on slime loses Speed and is slowed 1.5 s; never you/your team,
   not ghosts).
-- **Letters** (battle rounds only, own spawner: ~1 per 4 s, max 4 on the field, 20 s each; weighted bag, no
-  J/Q/X/Z; never in the special pool): collected into a 4-letter rack (a 5th drops the oldest). When the 4
-  letters can be arranged into a word from `words4.js` (5,466 words from the MIT `word-list` package, slurs
-  removed), the rack clears and a coin flip gives +12 length (x2 with Double) or every enemy loses a third
-  (min 3, ghosts immune). Rack shown under the items. Stats: letters, words, pacman_used/bites/bitten, poop_used.
+- **Bonus tiles** (battle rounds only, own spawner: ~1 per 4 s, max 4 on the field, 20 s each; never in the
+  special pool). The host picks the kind in the lobby (`tilesBtn`, `{t:'tiles', mode}`, `room.tileMode`,
+  fixed per round as `room.roundTiles`): **fruit** (default: 🍌 🍒 🍊; per-player counts, the 3rd of the
+  same fruit pays out and resets that fruit), **letters** (weighted bag, no J/Q/X/Z; 4-letter rack, a 5th
+  drops the oldest; 4 that can be arranged into a word from `words4.js` (5,466 words from the MIT
+  `word-list` package, slurs removed) pay out and clear the rack) or **none**. The payout (`tileBonus`) is a
+  coin flip: +12 length (x2 with Double) or every enemy loses a third (min 3, ghosts immune). Fruit counts /
+  letter rack shown under the items. Tiles live in `room.letters` ({ch} or {fruit}). Fruit emoji must be
+  drawn with an opaque fillStyle (canvas applies its alpha to emoji). Stats: letters, words, fruit,
+  fruit_sets, pacman_used/bites/bitten, poop_used.
 - **/spectate** (chat command; Snakewar only, other games reply that it isn't available): toggles sitting out.
   Spectators are left out of the next rounds (field size, solo/classic and teams count only players), shown
   with a grey 👁 by their name. If everyone is spectating, the round doesn't start.

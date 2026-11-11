@@ -26,6 +26,7 @@ body.snake-page { overflow:hidden; height:100vh; }
 #modeInfo:empty { display:none; }
 #startBtn { width:100%; margin-top:8px; padding:6px; }
 #teamBtn { width:100%; margin-top:6px; padding:6px; background:transparent; color:var(--text); border:1px solid var(--line); font-weight:600; font-size:12px; }
+#tilesBtn { width:100%; margin-top:6px; padding:6px; background:transparent; color:var(--text); border:1px solid var(--line); font-weight:600; font-size:12px; }
 #teamBtn.on { border-color:#2f6bff; box-shadow:inset 4px 0 0 #ff2d2d, inset -4px 0 0 #2f6bff; }
 #status { color:var(--title); font-weight:700; margin-top:6px; }
 #status:empty { display:none; }
@@ -79,3 +80,9 @@ body.snake-page { overflow:hidden; height:100vh; }
 .pacman { display:inline-block; width:1em; height:1em; border-radius:50%; vertical-align:middle;
   background:conic-gradient(#ffd400 0 55deg, transparent 55deg 125deg, #ffd400 125deg 360deg); }
 #snakeHelp .ic .pacman { width:12px; height:12px; background:conic-gradient(#111 0 55deg, transparent 55deg 125deg, #111 125deg 360deg); }
+/* fruit counts (default bonus tiles): each fruit with 3 pips toward a set */
+#rack.fruit { flex-direction:column; align-items:center; gap:3px; }
+#rack .fruitRow { display:flex; align-items:center; gap:4px; }
+#rack .fi { font-size:22px; width:28px; text-align:center; }
+#rack .pip { width:12px; height:12px; border-radius:50%; border:2px solid var(--line); }
+#rack .pip.on { background:#ffb020; border-color:#c27c00; }

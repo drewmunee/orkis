@@ -42,7 +42,10 @@ try { name = localStorage.getItem('sw-name') || ''; } catch {}
 const room = new URLSearchParams(location.search).get('room') || 'lobby';
 if (!name.trim()) { location.replace('/'); return; }
 
-let ws, myId = null, hostId = null, roomState = 'lobby', teamMode = false, GW = 112, GH = 63;
+let ws, myId = null, hostId = null, roomState = 'lobby', teamMode = false, tileMode = 'fruit', GW = 112, GH = 63;
+// bonus tiles (host's choice): fruit (3 of a kind = bonus), letters (4 that spell a word) or none
+const FRUIT_ICON = { banana: '🍌', cherry: '🍒', orange: '🍊' };
+const TILE_LABEL = { fruit: '🍌 Fruit', letters: '🔤 Letters', none: 'None' };
 let players = [], state = { snakes: [], food: [], drops: [], bits: [], walls: [], specials: [] };
 let booms = []; // recent explosions, for a quick flash
 let countdownEnd = 0, banner = null, best = null; // banner: {text, until}; best: classic high score once known
@@ -76,7 +79,7 @@ function connect() {
       case 'welcome': myId = m.id; GW = m.w; GH = m.h; $('roomName').textContent = m.room; break;
       case 'lobby':
         if (!!m.teamMode !== teamMode && m.state === 'lobby') setStatus(''); // mode switched: last result no longer applies
-        players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; renderPlayers(); updateChat(); break;
+        players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; tileMode = m.tileMode || 'fruit'; renderPlayers(); updateChat(); break;
       case 'start':
         players = m.players; countdownEnd = performance.now() + m.countdown; banner = null;
         setStatus((playerOf(myId) || {}).spectating ? 'You\'re spectating this round (type /spectate to play).'
@@ -87,7 +90,7 @@ function connect() {
       case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb', 'pacman', 'poop'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
       case 'used': if (m.id === myId) flashBanner(SPECIAL_INFO[m.item].name + '!', 700); break;
       case 'note': flashBanner(m.msg, 1200); break;
-      case 'word': if (m.id === myId) flashBanner(`${m.word}! ${m.reward === 'grow' ? 'Grow!' : 'Cut them!'}`, 1600); break;
+      case 'word': if (m.id === myId) flashBanner(`${FRUIT_ICON[m.word] ? FRUIT_ICON[m.word].repeat(3) : m.word}! ${m.reward === 'grow' ? 'Grow!' : 'Cut them!'}`, 1600); break;
       case 'boom': booms = booms.filter(b => performance.now() - b.t < 500).concat({ cell: m.cell, r: m.r, t: performance.now() }); break;
       case 'gameover': {
         if (state.classic) break; // solo score arrives in its own 'classic' message
@@ -146,8 +149,11 @@ function renderPlayers() {
   $('teamBtn').classList.toggle('hidden', !hostInLobby);
   $('teamBtn').textContent = teamMode ? 'Team mode: ON (switch to free-for-all)' : 'Switch to team mode';
   $('teamBtn').classList.toggle('on', teamMode);
-  $('modeInfo').textContent = roomState !== 'lobby' ? '' : teamReady ? 'Next round: Red vs Blue (teams picked at random)'
-    : teamMode ? 'Team mode needs 2+ players; starting now is classic solo' : '';
+  $('tilesBtn').classList.toggle('hidden', !hostInLobby);
+  $('tilesBtn').textContent = `Bonus tiles: ${TILE_LABEL[tileMode]} (change)`;
+  const tilesTxt = roomState !== 'lobby' || players.filter(p => !p.spectating).length < 2 ? '' : `Bonus tiles: ${TILE_LABEL[tileMode]}`;
+  $('modeInfo').textContent = roomState !== 'lobby' ? '' : [teamReady ? 'Next round: Red vs Blue (teams picked at random)'
+    : teamMode ? 'Team mode needs 2+ players; starting now is classic solo' : '', tilesTxt].filter(Boolean).join(' · ');
 }
 let lastLens = '';
 function updateLengths() { const k = state.snakes.map(s => s.id + ':' + s.body.length).join(); if (k !== lastLens) { lastLens = k; renderPlayers(); } }
@@ -176,13 +182,20 @@ function renderItems() {
 // Letter rack: the letters you've collected (4 that make a word pay out), under the items
 let lastLetters = '';
 function renderLetters() {
-  const me = state.snakes.find(s => s.id === myId), ls = me ? me.letters || [] : [];
-  const show = !state.classic && roomState !== 'lobby';
-  const key = (show ? '1' : '0') + ls.join('');
+  const me = state.snakes.find(s => s.id === myId), ls = me ? me.letters || [] : [], fr = (me && me.fruit) || {};
+  const mode = state.tileMode || 'fruit', show = !state.classic && roomState !== 'lobby' && mode !== 'none';
+  const key = (show ? mode : '-') + ls.join('') + JSON.stringify(fr);
   if (key === lastLetters) return; lastLetters = key;
   $('lettersWrap').classList.toggle('hidden', !show);
   let html = '';
-  for (let i = 0; i < 4; i++) html += ls[i] ? `<span class="tile">${ls[i]}</span>` : '<span class="tile empty"></span>';
+  if (mode === 'fruit') { // each fruit with how many you have toward a set of 3
+    for (const f of Object.keys(FRUIT_ICON)) html += `<div class="fruitRow"><span class="fi">${FRUIT_ICON[f]}</span>${[0, 1, 2].map(i => `<span class="pip${i < (fr[f] || 0) ? ' on' : ''}"></span>`).join('')}</div>`;
+    $('rackLabel').textContent = 'Fruit'; $('rackHint').textContent = '3 of the same = bonus';
+  } else {
+    for (let i = 0; i < 4; i++) html += ls[i] ? `<span class="tile">${ls[i]}</span>` : '<span class="tile empty"></span>';
+    $('rackLabel').textContent = 'Letters'; $('rackHint').textContent = '4 that spell a word = bonus';
+  }
+  $('rack').className = mode === 'fruit' ? 'fruit' : '';
   $('rack').innerHTML = html;
 }
 // Team matches: revive counts at the top, your team's token progress under the scoreboard
@@ -307,9 +320,16 @@ function draw() {
     ctx.fillStyle = '#111'; ctx.font = `800 ${Math.round(cs * (label.length > 2 ? 0.6 : 0.75))}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, cx(c) + cs / 2, cy(c) + cs / 2 + 1);
   }
-  // letter tiles: cream squares with the letter, blinking in their last 3 seconds
+  // bonus tiles, blinking in their last 3 seconds: fruit (an emoji on a soft glow) or letters (cream squares)
   for (const [c, ch, left] of state.letters || []) {
     if (left < 3000 && Math.floor(now / 200) % 2) continue;
+    if (FRUIT_ICON[ch]) {
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(cx(c) + cs / 2, cy(c) + cs / 2, cs * 0.6, 0, 7); ctx.fill();
+      ctx.fillStyle = '#000'; // emoji take the fill's transparency, so draw them with a solid one
+      ctx.font = `${Math.round(cs * 1.05)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(FRUIT_ICON[ch], cx(c) + cs / 2, cy(c) + cs / 2 + 1);
+      continue;
+    }
     const pad = Math.max(1, cs * 0.06);
     ctx.fillStyle = '#f3e3b5'; ctx.strokeStyle = '#8a6d2f'; ctx.lineWidth = Math.max(1, cs * 0.08);
     ctx.beginPath(); ctx.roundRect(cx(c) + pad, cy(c) + pad, cs - pad * 2, cs - pad * 2, cs * 0.18); ctx.fill(); ctx.stroke();
@@ -413,6 +433,7 @@ $('chat').addEventListener('keydown', e => {
 $('chat').addEventListener('blur', updateChat);
 $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
 $('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
+$('tilesBtn').onclick = e => { const order = ['fruit', 'letters', 'none']; net({ t: 'tiles', mode: order[(order.indexOf(tileMode) + 1) % 3] }); e.target.blur(); };
 // Leave the room for real: tell the server first (so it drops you immediately), then close.
 function leaveRoom() { try { if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ t: 'leave' })); ws.close(); } } catch {} }
 window.addEventListener('pagehide', leaveRoom); // tab closed, reloaded, browser back, or Back to lobby
