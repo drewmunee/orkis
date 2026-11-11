@@ -643,7 +643,7 @@ function sendState(room) {
       tongue: p.fx.extendo > now ? tongueCells(room, p, p.body[0]) : undefined,
     })),
     food: [...room.food], drops: [...room.drops], bits: [...room.bits], walls: [...room.walls],
-    bombs: room.bombs.map(b => [b.cell, b.at - now, BOMB_RADIUS]),
+    bombs: room.bombs.map(b => [b.cell, b.at - now, BOMB_RADIUS, b.owner ? b.owner.id : null]), // only the owner's screen shows the blast area
     tileMode: room.roundTiles || room.tileMode || 'fruit',
     letters: [...(room.letters || [])].map(([c, l]) => [c, l.ch || l.fruit, l.until - now]), // a letter, or banana/cherry/orange
     slime: [...(room.slime || []).keys()],
@@ -735,6 +735,11 @@ function join(ws, id, m) {
       } else if (m.t === 'addbot' && me.id === room.hostId && room.state === 'lobby') {
         if (!addBot(room)) return send(ws, { t: 'note', msg: `Room is full (${MAX_PLAYERS} max)` });
         setField(room, Math.max(1, players(room).length)); sendState(room); sendLobby(room);
+      } else if (m.t === 'endround' && me.id === room.hostId && room.state !== 'lobby') {
+        // once every person in the round is out, the host can stop the bots playing on
+        if (alivePlayers(room).some(p => !p.bot)) return;
+        log(room, `${me.name} ended the round`);
+        endRound(room, { ended: true });
       } else if (m.t === 'removebot' && me.id === room.hostId && room.state === 'lobby') {
         const b = room.players.get(m.id);
         if (!b || !b.bot) return;

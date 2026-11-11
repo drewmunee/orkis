@@ -8,11 +8,18 @@
 //     Pacman makes them hunt enemy bodies.
 //  4. Use the held item when it fits: Ghost / Stone to escape traps, Blockade / Poop / Bomb against snakes
 //     following them, Pacman when enemy bodies are close.
-// Imperfections: short look-ahead, a small random wobble on every decision, an occasional missed tick,
-// a reaction delay before using items, and less caution while hunting.
+// Playing like a person, not a machine:
+//  - Reaction time: bots see other snakes where they were REACTION_TICKS moves ago, so they can't dodge
+//    something that happens within a single square. Walls and their own body are always seen as they are.
+//  - Plans, not twitches: a bot only makes a decision every 2-4 moves and goes straight at least 1-2
+//    squares after each turn, unless it sees a crash coming up to 2 squares ahead.
+//  - Human-shaped paths: it keeps going straight until it lines up with its target, then turns (an L),
+//    rather than following the perfect zig-zag staircase.
+//  - A small random wobble on each decision, item reaction delays, and less caution while hunting.
+// Once every person in the round is dead, the bots get much more aggressive with each other.
 const DIRS = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] };
 const OPP = { U: 'D', D: 'U', L: 'R', R: 'L' };
-const SEARCH_NODES = 1600, SPACE_CAP = 90, HUNT_MS = 6000;
+const SEARCH_NODES = 1600, SPACE_CAP = 90, HUNT_MS = 6000, REACTION_TICKS = 2;
 const rnd = n => Math.floor(Math.random() * n);
 
 // the square one step from c in direction d, wrapping inside the play area (or -1 off a classic wall)
@@ -28,12 +35,22 @@ const dist2 = (room, a, b) => { const dx = a % room.w - b % room.w, dy = Math.fl
 // move away this tick are left open). Cells near a bomb about to go off count as dangerous.
 function board(room, A, now) {
   if (room._bot && room._bot.tick === room.tickN) return room._bot;
+  // remember where every snake was each tick; bots plan with the view from REACTION_TICKS ago
+  const hist = room._botHist && room._botHist.round === room.playStart ? room._botHist : (room._botHist = { round: room.playStart, snaps: [] });
+  hist.snaps.push(A.alivePlayers(room).filter(q => !(q.spawnUntil > now)).map(q => [q, q.body.slice()]));
+  if (hist.snaps.length > REACTION_TICKS + 1) hist.snaps.shift();
+  const seen = hist.snaps[0];
   const solid = new Map(), danger = new Set();
   for (const c of room.walls) solid.set(c, 'wall');
-  for (const q of A.alivePlayers(room)) {
-    if (q.spawnUntil > now) continue;
-    const moving = !(q.fx.stone > now) && q.grow <= 0;
-    q.body.forEach((c, i) => { if (!(moving && i === q.body.length - 1)) solid.set(c, q); });
+  const heads = new Map(); // where each snake's head was, as the bots see it
+  for (const [q, body] of seen) if (q.alive) {
+    body.forEach(c => solid.set(c, q)); heads.set(q, body[0]);
+    // like a person, expect a moving snake to keep coming: its head's path for the next few squares
+    if (body.length > 1 && !(q.fx.stone > now)) {
+      const d = Object.keys(DIRS).find(k => stepCell(room, body[1], k) === body[0]);
+      let c = body[0];
+      if (d) for (let i = 0; i < REACTION_TICKS + 1; i++) { c = stepCell(room, c, d); if (c < 0) break; if (!solid.has(c)) solid.set(c, q); }
+    }
   }
   for (const bomb of room.bombs) if (bomb.at - now < 2200) {
     const bx = bomb.cell % room.w, by = Math.floor(bomb.cell / room.w), r = 6;
@@ -45,19 +62,23 @@ function board(room, A, now) {
     for (let y = room.bounds.y0; y < room.bounds.y1; y++) for (let x = room.bounds.x0; x < room.bounds.x1; x++)
       if (x < b.x0 || x >= b.x1 || y < b.y0 || y >= b.y1) danger.add(y * room.w + x);
   }
-  return (room._bot = { tick: room.tickN, solid, danger });
+  // frenzy: every person in this round is dead (or spectating), so bots go after each other
+  const frenzy = A.alivePlayers(room).every(q => q.bot);
+  return (room._bot = { tick: room.tickN, solid, danger, frenzy, heads });
 }
 
 function think(room, p, A) {
   const now = Date.now();
-  const st = p.brain || (p.brain = { aggro: 0.25 + Math.random() * 0.5, huntUntil: 0, huntId: null, nextHuntCheck: now + 4000 + rnd(6000), itemReadyAt: 0, holdingSince: 0 });
+  const st = p.brain || (p.brain = { aggro: 0.25 + Math.random() * 0.5, huntUntil: 0, huntId: null, nextHuntCheck: now + 4000 + rnd(6000), itemReadyAt: 0, holdingSince: 0, nextDecide: 0, straight: 0, minStraight: 1, lastDir: null });
   if (p.queue.length || p.fx.stone > now || p.spawnUntil > now) return;
-  const { solid, danger } = board(room, A, now);
+  const { solid, danger, frenzy, heads } = board(room, A, now);
   const ghostly = p.fx.ghost > now || p.fx.shield > now, pac = p.fx.pacman > now;
+  const own = new Set(p.body.slice(0, -1)); // our own body, as it really is (the tail moves away)
   const blocked = c => {
     if (c < 0) return true;
+    if (own.has(c) && !ghostly) return true;
     const s = solid.get(c);
-    if (!s) return false;
+    if (!s || s === p) return false;
     if (s !== 'wall' && s !== p && s.fx.stone > now) return true; // stone kills everyone
     if (ghostly) return false;
     if (s === 'wall') return true;
@@ -67,6 +88,15 @@ function think(room, p, A) {
   const head = p.body[0];
   const enemies = A.alivePlayers(room).filter(q => q !== p && A.enemies(room, p, q) && !(q.spawnUntil > now));
   const others = A.alivePlayers(room).filter(q => q !== p && !(q.spawnUntil > now));
+  if (frenzy) { st.aggro = 1; if (st.nextHuntCheck > now + 3000) st.nextHuntCheck = now + rnd(2000); }
+
+  // --- decide only now and then: keep going straight between decisions, unless a crash is coming ---
+  st.straight = p.dir === st.lastDir ? st.straight + 1 : 0; st.lastDir = p.dir;
+  const a1 = stepCell(room, head, p.dir), a2 = a1 < 0 ? -1 : stepCell(room, a1, p.dir);
+  const sb0 = room.shrink && room.shrink.bounds;
+  const seesDanger = blocked(a1) || (blocked(a2) && Math.random() < 0.75) || (sb0 && danger.has(a1) && !danger.has(head));
+  if (!seesDanger && (room.tickN < st.nextDecide || st.straight < st.minStraight)) { useItems(room, p, A, st, enemies, now); return; }
+  st.nextDecide = room.tickN + 2 + rnd(3); st.minStraight = 1 + rnd(2);
 
   // --- 1. the three possible moves, each with the open space it leads to and its risk ---
   const options = Object.keys(DIRS).filter(d => d !== OPP[p.dir]).map(d => {
@@ -81,7 +111,7 @@ function think(room, p, A) {
     }
     // a head that could arrive on the same square next tick: dangerous unless we're clearly bigger
     // (teammates count too: heads crash whatever team they're on)
-    const headRisk = others.some(q => !(q.fx.stone > now) && Object.keys(DIRS).some(dd => dd !== OPP[q.dir] && stepCell(room, q.body[0], dd) === c) && (!enemies.includes(q) || q.body.length >= p.body.length - 2));
+    const headRisk = others.some(q => heads.has(q) && !(q.fx.stone > now) && Object.keys(DIRS).some(dd => stepCell(room, heads.get(q), dd) === c) && (!enemies.includes(q) || q.body.length >= p.body.length - 2));
     return { d, c, space: seen.size - 1, cap, headRisk, danger: danger.has(c) };
   });
   const alive = options.filter(o => !o.dead);
@@ -91,8 +121,10 @@ function think(room, p, A) {
   const trapped = !alive.length || best < Math.min(p.body.length, 12);
   if (trapped && p.items.length && (p.items[0] === 'ghost' || p.items[0] === 'stone') && Math.random() < 0.85) { A.useItem(room, p); return; }
 
-  // --- 2 & 3. what to go for ---
-  const targetDir = chooseTarget(room, p, A, st, enemies, blocked, now);
+  // --- 2 & 3. what to go for: an L-shaped route (straight until lined up, then turn), with the
+  // search's first step as a smaller hint for getting around obstacles ---
+  const goal = chooseTarget(room, p, A, st, enemies, blocked, now, frenzy);
+  const bfsDir = goal && goal.dir, lDir = goal && lShape(room, head, p.dir, goal.cell);
 
   // --- pick the move ---
   const hunting = st.huntUntil > now;
@@ -103,15 +135,14 @@ function think(room, p, A) {
   for (const o of alive) {
     let score = o.space >= o.cap ? 60 : o.space * 60 / o.cap;   // open space matters most
     if (o.space < p.body.length) score -= 80;                       // likely a dead end
-    if (o.headRisk) score -= hunting ? 15 : 45;                     // hunters are a bit reckless
+    if (o.headRisk) score -= hunting && !frenzy ? 20 : 45;         // hunters are a bit reckless
     if (o.danger && !escaping) score -= 40;                         // bomb blast / outside the shrink
-    if (o.d === targetDir) score += escaping ? 90 : 30;
+    if (o.d === lDir) score += escaping ? 70 : 28;
+    if (o.d === bfsDir) score += escaping ? 40 : 14;
     if (o.d === p.dir) score += 3;                                  // slight preference for going straight
     score += Math.random() * 12;                                    // imperfection
     if (score > top) { top = score; choice = o; }
   }
-  // now and then a bot is a beat late and just carries on (only if straight ahead isn't a crash)
-  if (Math.random() < 0.06 && options.some(o => o.d === p.dir && !o.dead)) choice = options.find(o => o.d === p.dir);
   if (choice && choice.d !== p.dir) p.queue.push(choice.d);
 
   // --- 4b. using items (with a short reaction delay) ---
@@ -120,7 +151,7 @@ function think(room, p, A) {
 
 // One breadth-first search from the head; every reached cell remembers the first move toward it. Returns
 // the first move toward the best target (value / distance), or null.
-function chooseTarget(room, p, A, st, enemies, blocked, now) {
+function chooseTarget(room, p, A, st, enemies, blocked, now, frenzy) {
   const head = p.body[0], first = new Map([[head, null]]), dist = new Map([[head, 0]]), queue = [head];
   while (queue.length && first.size < SEARCH_NODES) {
     const c = queue.shift();
@@ -131,11 +162,11 @@ function chooseTarget(room, p, A, st, enemies, blocked, now) {
       first.set(n, c === head ? d : first.get(c)); dist.set(n, dist.get(c) + 1); queue.push(n);
     }
   }
-  let bestDir = null, bestScore = 0;
+  let best = null, bestScore = 0;
   const consider = (c, value) => {
     if (!first.has(c) || c === head) return;
     const s = value / (dist.get(c) + 2);
-    if (s > bestScore) { bestScore = s; bestDir = first.get(c); }
+    if (s > bestScore) { bestScore = s; best = { dir: first.get(c), cell: c }; }
   };
   for (const c of room.food) consider(c, 10);
   for (const c of room.drops) consider(c, 10);
@@ -150,16 +181,30 @@ function chooseTarget(room, p, A, st, enemies, blocked, now) {
   if (p.fx.pacman > now) for (const q of enemies) if (!A.immune(q, now)) q.body.slice(1).forEach(c => consider(c, 30));
   // Hunting: now and then, if a nearby enemy is smaller, aim a few squares in front of its head
   if (now > st.nextHuntCheck) {
-    st.nextHuntCheck = now + 5000 + rnd(8000);
-    const prey = enemies.filter(q => !A.immune(q, now) && q.body.length < p.body.length * 1.1 && dist2(room, head, q.body[0]) < 400);
+    st.nextHuntCheck = now + (frenzy ? 2000 + rnd(2000) : 5000 + rnd(8000));
+    // normally only smaller snakes nearby; in a frenzy (no people left alive) anyone within reach
+    const prey = enemies.filter(q => !A.immune(q, now) && (frenzy ? dist2(room, head, q.body[0]) < 1600 : q.body.length < p.body.length * 1.1 && dist2(room, head, q.body[0]) < 400));
     if (prey.length && Math.random() < st.aggro) { st.huntId = prey[rnd(prey.length)].id; st.huntUntil = now + HUNT_MS; }
   }
   if (st.huntUntil > now) {
     const q = enemies.find(e => e.id === st.huntId);
     if (!q) st.huntUntil = 0;
-    else { let c = q.body[0]; for (let i = 0; i < 3; i++) { const n = stepCell(room, c, q.dir); if (n < 0) break; c = n; } consider(c, 60); }
+    else { let c = q.body[0]; for (let i = 0; i < 3; i++) { const n = stepCell(room, c, q.dir); if (n < 0) break; c = n; } consider(c, frenzy ? 120 : 60); }
   }
-  return bestDir;
+  return best;
+}
+
+// The move a person would make toward a target: keep going while it's still ahead on this axis, turn
+// toward it once lined up (or if it's behind). Distances wrap around the play area like the snakes do.
+function lShape(room, head, dir, target) {
+  const b = room.bounds, W = b.x1 - b.x0, H = b.y1 - b.y0;
+  const wrap = (d, n) => room.classic ? d : ((d % n) + n + n / 2) % n - n / 2;
+  const dx = wrap(target % room.w - head % room.w, W), dy = wrap(Math.floor(target / room.w) - Math.floor(head / room.w), H);
+  const horiz = dir === 'L' || dir === 'R', along = horiz ? dx : dy, across = horiz ? dy : dx;
+  const sign = dir === 'R' || dir === 'D' ? 1 : -1;
+  if (along * sign > 0) return dir;                              // still ahead: carry on
+  if (across !== 0) return horiz ? (across > 0 ? 'D' : 'U') : (across > 0 ? 'R' : 'L'); // lined up / behind: turn toward it
+  return horiz ? 'U' : 'L';                                       // straight behind us: start turning round
 }
 
 function useItems(room, p, A, st, enemies, now) {

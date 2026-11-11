@@ -18,7 +18,7 @@ const SPECIAL_INFO = {
   slow: { name: 'Slow', icon: '🐌', color: '#a0c4ff', desc: 'enemies move at half speed for 5 seconds (a sped-up enemy just loses its Speed)' },
   extendo: { name: 'Extendo', icon: '👅', color: '#ff8fb1', desc: 'a 12-second tongue reaching 5 squares ahead: enemies who run into it die, and it eats any food it touches' },
   blockade: { name: 'Blockade', icon: '▦', color: '#aab0c4', desc: 'held item: press Space to drop 5 tail segments as a wall (max 5 on the board; ghosts pass through)' },
-  bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 3 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
+  bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 3 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!). Only you can see how far the blast reaches' },
   pacman: { name: 'Pacman', icon: 'ᗧ', color: '#ffe14d', desc: 'held item: press Space for 6 seconds of sliding through enemy snakes and eating them: every square of a snake you pass through costs them 1 length and gives you 1. Heads and ghosts can\'t be bitten' },
   poop: { name: 'Poop', icon: '💩', color: '#b07a45', desc: 'held item: press Space to leave a slimy trail for 6 seconds; enemies who cross it are slowed (the slime lasts 8 s)' },
   stone: { name: 'Stone', icon: '🪨', color: '#a3a3a3', desc: 'held item: press Space to turn to stone for 5 seconds: you stop moving and nothing can hurt you except the shrinking board, and any snake that runs into you dies (ghosts and Pacman too)' },
@@ -88,7 +88,7 @@ function connect() {
           : players.filter(p => !p.spectating).length === 1 ? 'Classic snake: walls are solid. Eat as much as you can!' : m.teamMatch ? `You're on team ${myTeam() === 'red' ? 'Red' : 'Blue'}!` : '');
         log('— Round started —'); renderPlayers();
         break;
-      case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } renderScore(); updateLengths(); updateChat(); renderItems(); renderLetters(); renderTeams(); break;
+      case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } renderScore(); updateLengths(); updateChat(); renderItems(); renderLetters(); renderTeams(); renderEndBtn(); break;
       case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb', 'pacman', 'poop', 'stone'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
       case 'used': if (m.id === myId) flashBanner(SPECIAL_INFO[m.item].name + '!', 700); break;
       case 'note': flashBanner(m.msg, 1200); break;
@@ -188,6 +188,11 @@ function renderItems() {
   }
   $('items').innerHTML = html;
 }
+// Host: once every person in the round is out and only bots are left, offer to end the round
+function renderEndBtn() {
+  const show = myId === hostId && roomState !== 'lobby' && players.some(p => p.bot) && state.snakes.length > 0 && state.snakes.every(s => (playerOf(s.id) || {}).bot);
+  $('endBtn').classList.toggle('hidden', !show);
+}
 // Letter rack: the letters you've collected (4 that make a word pay out), under the items
 let lastLetters = '';
 function renderLetters() {
@@ -280,8 +285,9 @@ function draw() {
   ctx.fillStyle = '#ffd84d';
   for (const c of state.bits || []) { ctx.beginPath(); ctx.arc(cx(c) + cs / 2, cy(c) + cs / 2, Math.max(1.5, cs * 0.14), 0, 7); ctx.fill(); }
   // bombs: blast radius and fuse countdown
-  for (const [c, left, r] of state.bombs || []) {
+  for (const [c, left, r, owner] of state.bombs || []) {
     const bx = cx(c) + cs / 2, by = cy(c) + cs / 2, urgent = left < 1500;
+    if (owner === myId) { // the blast area is only shown to whoever dropped the bomb; everyone else has to guess
     // exactly the squares the blast will hit (same rule as the server), tinted, with a solid outline
     const tiles = blastTiles(c, r), hitSet = new Set(tiles.map(([x, y]) => x + ',' + y));
     ctx.fillStyle = `rgba(255,70,40,${urgent ? 0.3 + 0.15 * Math.sin(now / 60) : 0.24})`;
@@ -295,6 +301,7 @@ function draw() {
       if (!hitSet.has((x + 1) + ',' + y)) { ctx.moveTo(X + cs, Y); ctx.lineTo(X + cs, Y + cs); }
     }
     ctx.stroke();
+    }
     // icon and countdown keep a readable size even when the field's squares are small
     const icon = Math.max(22, cs * 1.6), num = Math.max(20, cs * 1.5);
     { // drawn bomb (not an emoji, so it looks the same everywhere): black ball, fuse, flickering spark
@@ -456,6 +463,7 @@ $('chat').addEventListener('keydown', e => {
 $('chat').addEventListener('blur', updateChat);
 $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
 $('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
+$('endBtn').onclick = e => { net({ t: 'endround' }); e.target.blur(); };
 $('teamChoiceBtn').onclick = e => { net({ t: 'teamchoice', mode: teamChoice === 'choose' ? 'random' : 'choose' }); e.target.blur(); };
 $('tilesBtn').onclick = e => { const order = ['fruit', 'letters', 'none']; net({ t: 'tiles', mode: order[(order.indexOf(tileMode) + 1) % 3] }); e.target.blur(); };
 // Leave the room for real: tell the server first (so it drops you immediately), then close.

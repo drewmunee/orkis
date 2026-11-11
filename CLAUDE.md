@@ -208,7 +208,8 @@ New games must call the same `leaveRoom()` pattern.
   ahead; enemies whose head touches it die, never hurts you or teammates; it also eats food, remains and
   tiny food it touches, not special items), Blockade (held: drops 5 tail
   segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
-  Bomb (held: dropped out of your tail, explodes after 3 s with radius 5, the exact squares shown on the field: destroys food, specials and
+  Bomb (held: dropped out of your tail, explodes after 3 s with radius 5; the exact squares are shown only
+  to the player who dropped it (state bombs carry the owner id), everyone else sees just the bomb and fuse: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
   Pacman (held: 6 s sliding through enemy snakes; each enemy square you pass through is -1 length for them
   (taken off their tail end so the body stays whole, never below 3) and +1 for you; heads and ghosts can't
@@ -235,14 +236,20 @@ New games must call the same `leaveRoom()` pattern.
   normal battle round (never classic), and they fill teams like unpicked players. Never get stats
   (`stats.js` skips `p.bot`) or leaderboard scores; their kills don't credit them; they can win rounds
   (room ★ wins / `/podium`). The room closes when no people are left; the host is always a person.
-  Each tick, before moving, `bots.think()` per bot: rule out crashing moves, score the rest by open space
-  (capped flood fill), head-on risk from any other head (teammates too), bomb/shrink danger, and the first
-  step toward the best target from one BFS (food, specials, tokens, fruit/letters, inside the shrink edge,
-  enemy bodies while Pacman, or 3 squares ahead of a smaller enemy's head while "hunting", which each bot
-  does now and then based on its own aggression). Items: Ghost/Stone when trapped, Blockade/Poop when an
-  enemy is behind, Bomb when enemies are near the tail, Pacman near enemy bodies, anything after holding
-  a full hand 12 s. Imperfect on purpose: random wobble, 6% missed turns, item reaction delays, reckless
-  while hunting. Tested with bot-only simulated rounds (no stalls; ~20 ms worst tick with 11 bots).
+  Bots play like people, not machines: they see other snakes as they were 2 ticks ago (`REACTION_TICKS`,
+  plus each seen head projected forward along its direction, like anticipating it), so they can't dodge
+  within a single square; they only decide every 2-4 ticks and go straight 1-2 squares after a turn,
+  unless they see a crash up to 2 squares ahead; and they take L-shaped routes (straight until lined up
+  with the target, then turn) rather than the perfect staircase. Each decision: rule out crashing moves,
+  score the rest by open space (capped flood fill), head-on risk (any other head, teammates too),
+  bomb/shrink danger, the L-route and the BFS first step toward the best target (food, specials, tokens,
+  fruit/letters, inside the shrink edge, enemy bodies while Pacman, or 3 squares ahead of a smaller
+  enemy's head while "hunting", which each bot does now and then based on its own aggression).
+  **Frenzy**: once every person in the round is dead/spectating, bots hunt anyone within reach every few
+  seconds. Items: Ghost/Stone when trapped, Blockade/Poop when an enemy is behind, Bomb when enemies are
+  near the tail, Pacman near enemy bodies, anything after holding a full hand 12 s.
+  Once no people are alive, the host gets **End round** (`endBtn`, `{t:'endround'}`; no winner).
+  Tested with simulated rounds: ~75 s average with a person alive, ~1 min in a bot-only frenzy, ~20 ms worst tick.
 - **/spectate** (chat command; Snakewar only, other games reply that it isn't available): toggles sitting out.
   Spectators are left out of the next rounds (field size, solo/classic and teams count only players), shown
   with a grey 👁 by their name. If everyone is spectating, the round doesn't start.
