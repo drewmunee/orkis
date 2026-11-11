@@ -7,6 +7,7 @@ const leaderboard = require('./leaderboard');
 const settings = require('./settings');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
+const commands = require('./commands');
 const stats = require('./stats');
 const db = require('./db');
 const { validBid } = db;
@@ -276,6 +277,8 @@ wss.on('connection', ws => {
         checkGameOver(room);
         break;
       case 'chat':
+        // /commands (see commands.js) answer only the sender and aren't chat
+        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'stackwar' }, line => send(ws, { t: 'log', msg: line }))) break;
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
         if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => broadcast(room, { t: 'log', msg: line }), e => console.error('swear jar failed:', e.message)); // a quarter in the jar
         break;

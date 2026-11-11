@@ -100,6 +100,13 @@ New games must call the same `leaveRoom()` pattern.
   snapshots; server counts the increase, capped), specials, best solo score and level.
 - New games should record stats the same way and add a card to `statspage.js`.
 
+## Chat commands (all games)
+- `commands.js`, shared by all three games' chat handlers: a chat message starting with `/` is a command,
+  not chat (never broadcast, no swear jar). One word, case-insensitive, extra words ignored. Replies go
+  only to the sender as log lines. Same commands everywhere; results depend on the game/room.
+- `/help` lists them; `/podium` (alias `/leaderboard`): top 3 players in this lobby by wins (room wins,
+  reset on rejoin). Add new commands to `COMMANDS` (use `alias` for alternate names).
+
 ## Moderation and the swear jar
 - `moderation.js`: usernames containing racial slurs are refused at join for every game (checked once in
   `server.js` before routing) and on the homepage (`GET /api/name-ok`). Ordinary swearing is allowed in
@@ -160,7 +167,7 @@ New games must call the same `leaveRoom()` pattern.
 - Food: regular food and dead-snake drops +2, "tiny food" (cut tails) +1. Regular food starts at one per
   player and rises through the round (x2 after 1 min, x3 after 2 min, max x5 / 100).
 - **Shrinking board**: 10 s warning (new edge shown in red) starts 2 min in or 3 s after a death (team rounds:
-  4 min in, or 3 s after a team of 2+ is down to its last snake); each
+  also 2 min in, or 3 s after a team of 2+ is down to its last snake); each
   shrink keeps the middle ~80% (min 24x14), then the next warning comes 30 s later or 3 s after a death.
   A snake loses everything from its first segment outside the new edge to its tail (that cut part's
   inside cells become tiny food); a snake whose head is outside dies.

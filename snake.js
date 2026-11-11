@@ -3,6 +3,7 @@
 const leaderboard = require('./leaderboard');
 const moderation = require('./moderation');
 const swearjar = require('./swearjar');
+const commands = require('./commands');
 const stats = require('./stats');
 const GW = 112, GH = 63;           // full-size 16:9 field, fills most laptop/desktop screens
 // Field size depends on how many are in the room when a round starts: solo is classic snake on a small
@@ -51,7 +52,7 @@ const FFA_COLORS = 12, TEAM_SHADES = 6;        // palette sizes (the colors them
 const TOKEN_CHANCE = 1 / 90, MAX_TOKENS = 2;
 // Shrinking board (battle rounds only): a 10 s warning starts 2 minutes in, or 3 s after someone dies,
 // whichever comes first; after each shrink the next warning comes 30 s later (or 3 s after a death).
-const SHRINK_FIRST_TEAM_MS = 240000; // team rounds: 4 minutes, or once a team (of 2+) is down to its last snake
+const SHRINK_FIRST_TEAM_MS = 120000; // team rounds: 2 minutes, or once a team (of 2+) is down to its last snake
 const FEAST_BASE = 5, FEAST_PER_MIN = 5, FEAST_GROW_MS = 3000, MAX_FEASTS = 2;
 const SHRINK_FIRST_MS = 120000, SHRINK_AFTER_DEATH_MS = 3000, SHRINK_WARN_MS = 10000, SHRINK_EVERY_MS = 30000;
 const SHRINK_FACTOR = 0.8, SHRINK_MIN_W = 24, SHRINK_MIN_H = 14;
@@ -566,6 +567,8 @@ function join(ws, id, m) {
         } else me.color = ((me.color - 1 + m.d + FFA_COLORS) % FFA_COLORS) + 1;
         sendLobby(room);
       } else if (m.t === 'chat') {
+        // /commands (see commands.js) answer only the sender and aren't chat
+        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'snakewar' }, line => send(ws, { t: 'log', msg: line }))) return;
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
         if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => log(room, line), e => console.error('swear jar failed:', e.message)); // a quarter in the jar
       }
