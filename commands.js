@@ -4,7 +4,8 @@
 // Replies go only to the player who typed the command (as log lines), so nobody's chat gets spammed.
 //
 // To add a command: add an entry to COMMANDS with a short description and run(ctx), which returns the
-// lines to show. ctx = { me, players: [...the room's players], game: 'stackwar' | 'snakewar' | 'blockwar' }.
+// lines to show. ctx = { me, players: [...the room's players], game: 'stackwar' | 'snakewar' | 'blockwar' }
+// plus optional per-game hooks (spectate).
 const GAME_NAMES = { stackwar: 'Stackwar', snakewar: 'Snakewar', blockwar: 'Blockwar' };
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -23,6 +24,8 @@ const COMMANDS = {
   }).join(' · ')] },
   podium: { desc: 'top 3 players in this lobby by wins', run: podium },
   leaderboard: { alias: 'podium', run: podium },
+  // games that support it pass ctx.spectate (toggles sitting out, returns the reply); Snakewar only for now
+  spectate: { desc: 'sit out the next rounds and just watch; type it again to play (Snakewar)', run: ctx => [ctx.spectate ? ctx.spectate() : 'Spectating is only in Snakewar for now.'] },
 };
 
 // Returns true if msg was a command (it's then handled and must not be sent as chat).

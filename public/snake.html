@@ -43,12 +43,15 @@
     <summary>How to play</summary>
     <p id="keysHelp"></p> <!-- filled in for the chosen control scheme -->
     <p>Playing alone is classic snake: small board, solid walls, +1 per food, and your score (food eaten) is your high score.</p>
-    <p>With 2+ players: each food grows you by 2 (tiny yellow food by 1), food gets more plentiful as the round goes on, and the edges wrap around. Hitting any snake or blockade kills you and your body breaks into food. If two heads meet face to face both die; if you turn into someone's head from the side, only you die. After 2 minutes, or soon after someone dies (team mode: after 4 minutes, or once a team is down to its last snake), the board starts shrinking (10 s warning, new edge in red); anything left outside is cut off. Last snake (or team) alive wins.</p>
+    <p>With 2+ players: each food grows you by 2 (tiny yellow food by 1), food gets more plentiful as the round goes on, and the edges wrap around. Hitting any snake or blockade kills you and your body breaks into food. If two heads meet face to face both die; if you turn into someone's head from the side, only you die. After 2 minutes, or soon after someone dies (team mode: or once a team is down to its last snake), the board starts shrinking (10 s warning, new edge in red); anything left outside is cut off. Last snake (or team) alive wins.</p>
     <p>Team mode (host's choice): random Red vs Blue; Red starts on the left, Blue on the right. Reds are warm colors, blues are cool colors. Collect revive tokens: every 3 brings a fallen teammate back.</p>
     <p>Between rounds, or while you're out, use the ‹ › arrows by your name to pick your color (in team mode, a shade of your team's color).</p>
+    <p><b>Letters</b> (cream tiles) show up often in battle rounds. Collect 4 that can be arranged into a real word (CAKE, SNAP, ...) for a big bonus: +12 length, or everyone else loses a third. Your rack holds 4; a 5th letter pushes out the oldest.</p>
+    <p>Type <b>/spectate</b> in chat to sit out the next rounds and just watch (👁 by your name); type it again to play.</p>
     <ul id="specialList"></ul>
   </details>
   <div id="itemsWrap"><div class="itemsLabel">Items</div><div id="items"></div></div>
+  <div id="lettersWrap" class="hidden"><div class="itemsLabel">Letters</div><div id="rack"></div><div class="rackHint">4 that spell a word = bonus</div></div>
 </div>
 <script src="common.js"></script>
 <script src="snakewar.js"></script>

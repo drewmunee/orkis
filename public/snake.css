@@ -66,3 +66,16 @@ body.snake-page { overflow:hidden; height:100vh; }
 .item .lb { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:4px; color:var(--text); }
 .item.next { box-shadow:0 0 0 4px var(--panel), 0 0 0 7px var(--c), 0 0 22px var(--c); }
 .item.empty { border:3px dashed var(--line); background:transparent; width:96px; height:96px; }
+
+/* letter rack (battle rounds): collected letter tiles under the items */
+#lettersWrap { margin-bottom:8px; }
+#rack { display:flex; justify-content:center; gap:4px; }
+#rack .tile { width:30px; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900; background:#f3e3b5; color:#3b2a10; border:2px solid #8a6d2f; }
+#rack .tile.empty { background:transparent; border:2px dashed var(--line); }
+.rackHint { text-align:center; color:var(--dim); font-size:10px; margin-top:4px; }
+/* spectators: a grey eye by their name */
+#players .spec { filter:grayscale(1); opacity:.75; }
+/* the Pacman item icon (CSS, so it looks the same everywhere): a yellow disc with a mouth facing right */
+.pacman { display:inline-block; width:1em; height:1em; border-radius:50%; vertical-align:middle;
+  background:conic-gradient(#ffd400 0 55deg, transparent 55deg 125deg, #ffd400 125deg 360deg); }
+#snakeHelp .ic .pacman { width:12px; height:12px; background:conic-gradient(#111 0 55deg, transparent 55deg 125deg, #111 125deg 360deg); }

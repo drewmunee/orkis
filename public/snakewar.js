@@ -18,9 +18,13 @@ const SPECIAL_INFO = {
   slow: { name: 'Slow', icon: '🐌', color: '#a0c4ff', desc: 'enemies move at half speed for 5 seconds (a sped-up enemy just loses its Speed)' },
   extendo: { name: 'Extendo', icon: '👅', color: '#ff8fb1', desc: 'a 12-second tongue reaching 5 squares ahead: enemies who run into it die, and it eats any food it touches' },
   blockade: { name: 'Blockade', icon: '▦', color: '#aab0c4', desc: 'held item: press Space to drop 5 tail segments as a wall (max 5 on the board; ghosts pass through)' },
-  bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 5 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
+  bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 3 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
+  pacman: { name: 'Pacman', icon: 'ᗧ', color: '#ffe14d', desc: 'held item: press Space for 6 seconds of sliding through enemy snakes and eating them: you bite off the part you go through (+1 length per bite) and the rest of their tail becomes tiny food. Heads and ghosts can\'t be bitten' },
+  poop: { name: 'Poop', icon: '💩', color: '#b07a45', desc: 'held item: press Space to leave a slimy trail for 6 seconds; enemies who cross it are slowed (the slime lasts 8 s)' },
   token: { name: 'Revive token', icon: '♥', color: '#ff4d6d', desc: 'team mode only: every 3 your team collects earns a revive' },
 };
+// item icon as HTML: Pacman is drawn with CSS (no font has a dependable Pacman character)
+const iconHtml = (type, info) => type === 'pacman' ? '<span class="pacman"></span>' : info.icon;
 // steering keys for each control scheme (⚙ Settings); before a player picks one, both work
 const ARROW_KEYS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R' };
 const WASD_KEYS = { w: 'U', s: 'D', a: 'L', d: 'R' };
@@ -75,13 +79,15 @@ function connect() {
         players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; renderPlayers(); updateChat(); break;
       case 'start':
         players = m.players; countdownEnd = performance.now() + m.countdown; banner = null;
-        setStatus(players.length === 1 ? 'Classic snake: walls are solid. Eat as much as you can!' : m.teamMatch ? `You're on team ${myTeam() === 'red' ? 'Red' : 'Blue'}!` : '');
+        setStatus((playerOf(myId) || {}).spectating ? 'You\'re spectating this round (type /spectate to play).'
+          : players.filter(p => !p.spectating).length === 1 ? 'Classic snake: walls are solid. Eat as much as you can!' : m.teamMatch ? `You're on team ${myTeam() === 'red' ? 'Red' : 'Blue'}!` : '');
         log('— Round started —'); renderPlayers();
         break;
-      case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } renderScore(); updateLengths(); updateChat(); renderItems(); renderTeams(); break;
-      case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
+      case 'state': state = m; if (m.w) { GW = m.w; GH = m.h; } renderScore(); updateLengths(); updateChat(); renderItems(); renderLetters(); renderTeams(); break;
+      case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb', 'pacman', 'poop'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
       case 'used': if (m.id === myId) flashBanner(SPECIAL_INFO[m.item].name + '!', 700); break;
       case 'note': flashBanner(m.msg, 1200); break;
+      case 'word': if (m.id === myId) flashBanner(`${m.word}! ${m.reward === 'grow' ? 'Grow!' : 'Cut them!'}`, 1600); break;
       case 'boom': booms = booms.filter(b => performance.now() - b.t < 500).concat({ cell: m.cell, r: m.r, t: performance.now() }); break;
       case 'gameover': {
         if (state.classic) break; // solo score arrives in its own 'classic' message
@@ -131,7 +137,7 @@ function renderPlayers() {
     // your own row gets ‹ › to change color whenever you're not in play
     const pick = p.id === myId && canPickColor();
     const dot = `<span class="dot" style="background:${colorOf(p.id)}"></span>`;
-    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}">${pick ? '<button class="cbtn" data-d="-1" title="Previous color">‹</button>' + dot + '<button class="cbtn" data-d="1" title="Next color">›</button>' : dot}${tag}<span class="nm" title="${esc(p.name)}">${SW.avatarHtml(p)}${esc(p.name)}${p.id === hostId ? ' 👑' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
+    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}">${pick ? '<button class="cbtn" data-d="-1" title="Previous color">‹</button>' + dot + '<button class="cbtn" data-d="1" title="Next color">›</button>' : dot}${tag}<span class="nm" title="${esc(p.name)}">${SW.avatarHtml(p)}${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.spectating ? ' <span class="spec" title="Spectating (not playing)">👁</span>' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
   }).join('');
   for (const b of $('players').querySelectorAll('.cbtn')) b.onclick = e => { net({ t: 'color', d: +b.dataset.d }); e.currentTarget.blur(); };
   const hostInLobby = myId === hostId && roomState === 'lobby', teamReady = teamMode && players.length >= 2;
@@ -162,10 +168,22 @@ function renderItems() {
   let html = '';
   for (let i = 0; i < ITEM_SLOTS; i++) {
     const it = items[i], info = it && SPECIAL_INFO[it];
-    html += info ? `<div class="item${i === 0 ? ' next' : ''}" style="--c:${info.color}"><span class="ic">${info.icon}</span><span class="lb">${i === 0 ? 'SPACE' : info.name}</span></div>`
+    html += info ? `<div class="item${i === 0 ? ' next' : ''}" style="--c:${info.color}"><span class="ic">${iconHtml(it, info)}</span><span class="lb">${i === 0 ? 'SPACE' : info.name}</span></div>`
       : '<div class="item empty"></div>';
   }
   $('items').innerHTML = html;
+}
+// Letter rack: the letters you've collected (4 that make a word pay out), under the items
+let lastLetters = '';
+function renderLetters() {
+  const me = state.snakes.find(s => s.id === myId), ls = me ? me.letters || [] : [];
+  const show = !state.classic && roomState !== 'lobby';
+  const key = (show ? '1' : '0') + ls.join('');
+  if (key === lastLetters) return; lastLetters = key;
+  $('lettersWrap').classList.toggle('hidden', !show);
+  let html = '';
+  for (let i = 0; i < 4; i++) html += ls[i] ? `<span class="tile">${ls[i]}</span>` : '<span class="tile empty"></span>';
+  $('rack').innerHTML = html;
 }
 // Team matches: revive counts at the top, your team's token progress under the scoreboard
 function renderTeams() {
@@ -229,6 +247,9 @@ function draw() {
     ctx.fillStyle = '#5b6178'; ctx.fillRect(cx(c), cy(c), cs, cs);
     ctx.strokeStyle = '#2b2f40'; ctx.lineWidth = Math.max(1, cs * 0.12); ctx.strokeRect(cx(c) + 1, cy(c) + 1, cs - 2, cs - 2);
   }
+  // slime from the Poop item: a brownish-green smear
+  ctx.fillStyle = 'rgba(128,96,36,.5)';
+  for (const c of state.slime || []) roundRect(cx(c) + 1, cy(c) + 1, cs - 2, cs - 2, cs * 0.4);
   // food: regular (red), dropped by dead snakes (orange), tiny (yellow dots)
   ctx.fillStyle = '#ff4d5e';
   for (const c of state.food) { ctx.beginPath(); ctx.arc(cx(c) + cs / 2, cy(c) + cs / 2, cs * 0.38, 0, 7); ctx.fill(); }
@@ -277,9 +298,23 @@ function draw() {
     const info = SPECIAL_INFO[type], r = cs * (0.55 + 0.1 * Math.sin(now / 150));
     ctx.fillStyle = info.color; ctx.shadowColor = info.color; ctx.shadowBlur = cs;
     ctx.beginPath(); ctx.arc(cx(c) + cs / 2, cy(c) + cs / 2, r, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+    if (type === 'pacman') { // a little dark Pacman on the yellow ball
+      const px = cx(c) + cs / 2, py = cy(c) + cs / 2, pr = cs * 0.38;
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.moveTo(px, py); ctx.arc(px, py, pr, 0.25 * Math.PI, 1.75 * Math.PI); ctx.closePath(); ctx.fill();
+      continue;
+    }
     const label = type === 'feast' ? '+' + value : info.icon; // a feast shows what it's worth right now
     ctx.fillStyle = '#111'; ctx.font = `800 ${Math.round(cs * (label.length > 2 ? 0.6 : 0.75))}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, cx(c) + cs / 2, cy(c) + cs / 2 + 1);
+  }
+  // letter tiles: cream squares with the letter, blinking in their last 3 seconds
+  for (const [c, ch, left] of state.letters || []) {
+    if (left < 3000 && Math.floor(now / 200) % 2) continue;
+    const pad = Math.max(1, cs * 0.06);
+    ctx.fillStyle = '#f3e3b5'; ctx.strokeStyle = '#8a6d2f'; ctx.lineWidth = Math.max(1, cs * 0.08);
+    ctx.beginPath(); ctx.roundRect(cx(c) + pad, cy(c) + pad, cs - pad * 2, cs - pad * 2, cs * 0.18); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3b2a10'; ctx.font = `900 ${Math.round(cs * 0.72)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ch, cx(c) + cs / 2, cy(c) + cs / 2 + 1);
   }
   // snakes
   for (const s of state.snakes) {
@@ -312,11 +347,18 @@ function draw() {
     if (fx.speed) { ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = cs * 0.8; }
     else if (fx.slow) { ctx.shadowColor = '#a0c4ff'; ctx.shadowBlur = cs * 0.8; }
     else if (fx.double) { ctx.shadowColor = '#7bffb0'; ctx.shadowBlur = cs * 0.6; }
+    if (fx.pacman) { ctx.shadowColor = '#ffe14d'; ctx.shadowBlur = cs; }
+    else if (fx.poop) { ctx.shadowColor = '#8a5a2b'; ctx.shadowBlur = cs * 0.8; }
     // the head is drawn a little darker than the body so it's easier to spot
     s.body.forEach((c, i) => { const pad = i === 0 ? 0 : Math.max(1, cs * 0.08); ctx.fillStyle = i === 0 ? darker(col) : col; roundRect(cx(c) + pad, cy(c) + pad, cs - pad * 2, cs - pad * 2, cs * 0.3); });
     ctx.shadowBlur = 0;
     // team matches: the head carries a ring in the pure team color
     if (team) { ctx.strokeStyle = TEAM_COLOR[team]; ctx.lineWidth = Math.max(2, cs * 0.14); ctx.beginPath(); ctx.roundRect(cx(hc) - 1, cy(hc) - 1, cs + 2, cs + 2, cs * 0.35); ctx.stroke(); }
+    // Pacman: the head becomes a yellow chomping Pacman facing the way it's going
+    if (fx.pacman) {
+      const open = 0.15 + 0.25 * Math.abs(Math.sin(now / 90)), ang = Math.atan2(dy, dx), r = cs * 0.7;
+      ctx.fillStyle = '#ffe14d'; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.arc(hx, hy, r, ang + open * Math.PI, ang - open * Math.PI + 2 * Math.PI); ctx.closePath(); ctx.fill();
+    }
     // eyes on the head, facing the direction of travel
     ctx.fillStyle = '#fff';
     for (const side of [-1, 1]) { const ex = hx + dx * cs * 0.15 + dy * side * cs * 0.22, ey = hy + dy * cs * 0.15 - dx * side * cs * 0.22; ctx.beginPath(); ctx.arc(ex, ey, cs * 0.13, 0, 7); ctx.fill(); }
@@ -387,7 +429,7 @@ let sentAvatar = SW.avatar();
 SW.onChange(() => { if (SW.avatar() !== sentAvatar) { sentAvatar = SW.avatar(); net({ t: 'avatar', a: sentAvatar }); } });
 renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);
-$('specialList').innerHTML = Object.values(SPECIAL_INFO).map(s => `<li><span class="ic" style="background:${s.color}">${s.icon}</span><span><b>${s.name}</b> – ${s.desc}</span></li>`).join('');
+$('specialList').innerHTML = Object.entries(SPECIAL_INFO).map(([k, s]) => `<li><span class="ic" style="background:${s.color}">${iconHtml(k, s)}</span><span><b>${s.name}</b> – ${s.desc}</span></li>`).join('');
 
 readTheme(); renderItems(); connect(); requestAnimationFrame(draw);
 })();

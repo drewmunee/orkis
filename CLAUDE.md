@@ -87,7 +87,7 @@ New games must call the same `leaveRoom()` pattern.
 - Getting the same timed effect again adds its full duration to what's left instead of restarting it:
   Stackwar Haste/Darkness/Inverted, Snakewar Speed/Ghost/Double/Slow/Extendo, Blockwar Slow/Fast Ball,
   Big/Tiny Paddle and Explosivo. Opposites still cancel/replace (Snakewar Slow cancels Speed; Blockwar Big vs Tiny,
-  Slow vs Fast replace each other). Exception: the Snakewar bomb fuse is always 5 s.
+  Slow vs Fast replace each other). Exception: the Snakewar bomb fuse is always 3 s.
 - Timed effects shown as pills blink (every 250 ms) in their last 3 s: Blockwar's pills (on the board,
   top right, above the blocks) and Stackwar's Haste/Inverted pills (`#fx` beside the specials hand).
   Darkness deliberately has no pill. Blockwar Big Paddle also fades in and out in its last 3 s.
@@ -131,7 +131,7 @@ New games must call the same `leaveRoom()` pattern.
   not chat (never broadcast, no swear jar). One word, case-insensitive, extra words ignored. Replies go
   only to the sender as log lines. Same commands everywhere; results depend on the game/room.
 - `/help` lists them; `/podium` (alias `/leaderboard`): top 3 players in this lobby by wins (room wins,
-  reset on rejoin). Add new commands to `COMMANDS` (use `alias` for alternate names).
+  reset on rejoin); `/spectate` (Snakewar: sit out / rejoin; games pass an optional `ctx.spectate` hook). Add new commands to `COMMANDS` (use `alias` for alternate names).
 
 ## Moderation and the swear jar
 - `moderation.js`: usernames containing racial slurs are refused at join for every game (checked once in
@@ -205,9 +205,22 @@ New games must call the same `leaveRoom()` pattern.
   ahead; enemies whose head touches it die, never hurts you or teammates; it also eats food, remains and
   tiny food it touches, not special items), Blockade (held: drops 5 tail
   segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
-  Bomb (held: dropped out of your tail, explodes after 5 s with radius 5, the exact squares shown on the field: destroys food, specials and
+  Bomb (held: dropped out of your tail, explodes after 3 s with radius 5, the exact squares shown on the field: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
-- Held items (Ghost, Blockade, Bomb) go into a 3-slot queue shown on the right; Space uses the oldest.
+  Pacman (held: 6 s sliding through enemy snakes; the segment you enter is eaten (+1 length) and the rest of
+  that tail becomes tiny food; heads and ghosts can't be bitten; teammates, your own body and blockades still
+  kill; icon is a CSS/canvas shape, not a font glyph), Poop (held: 6 s of slime on the square your tail
+  sits on, each lasting 8 s; an enemy head on slime loses Speed and is slowed 1.5 s; never you/your team,
+  not ghosts).
+- **Letters** (battle rounds only, own spawner: ~1 per 4 s, max 4 on the field, 20 s each; weighted bag, no
+  J/Q/X/Z; never in the special pool): collected into a 4-letter rack (a 5th drops the oldest). When the 4
+  letters can be arranged into a word from `words4.js` (5,466 words from the MIT `word-list` package, slurs
+  removed), the rack clears and a coin flip gives +12 length (x2 with Double) or every enemy loses a third
+  (min 3, ghosts immune). Rack shown under the items. Stats: letters, words, pacman_used/bites/bitten, poop_used.
+- **/spectate** (chat command; Snakewar only, other games reply that it isn't available): toggles sitting out.
+  Spectators are left out of the next rounds (field size, solo/classic and teams count only players), shown
+  with a grey 👁 by their name. If everyone is spectating, the round doesn't start.
+- Held items (Ghost, Blockade, Bomb, Pacman, Poop) go into a 3-slot queue shown on the right; Space uses the oldest.
 - Snake heads are drawn slightly darker than the body (`darker()` in `public/snakewar.js`) so heads are easy to spot.
 - Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
   scoreboard: any of 12 colors normally, or one of 6 shades of their team's color in team mode.
