@@ -495,7 +495,7 @@ function connect(name, room, isDaily = false) {
       case 'daily': { // the server's official result for a daily run
         const msg = m.failed ? `Daily run over: topped out at ${m.lines}/${dailyRun ? dailyRun.goal : 40} lines. Press Play again to retry.`
           : m.error ? `Daily run: ${fmtTime(m.ms)} (not saved, please try again later).`
-          : `Daily run: ${fmtTime(m.ms)}! ` + (m.prevBest && m.ms >= m.prevBest ? `Your best today is still ${fmtTime(m.prevBest)}. ` : m.prevBest ? 'New personal best for today! ' : '')
+          : `Daily run: ${fmtTime(m.ms)}! ` + (m.firstTry ? '⚡ First try! ' : '') + (m.prevBest && m.ms >= m.prevBest ? `Your best today is still ${fmtTime(m.prevBest)}. ` : m.prevBest ? 'New personal best for today! ' : '')
             + (m.onBoard ? `You're #${m.rank} on today's board.` : `Rank #${m.rank} today.`);
         dailyRun = null; setStatus(msg); log(msg);
         break;
@@ -579,7 +579,7 @@ function loadDaily() {
     const h = Math.floor(d.resetsInMs / 3600000), m = Math.floor(d.resetsInMs / 60000) % 60;
     $('dailyReset').textContent = `New run in ${h ? h + 'h ' : ''}${m}m`;
     $('dailyList').innerHTML = d.top.length
-      ? d.top.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><b>${fmtTime(r.ms)}</b></li>`).join('')
+      ? d.top.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><b>${fmtTime(r.ms)}</b>${r.firstTry ? '<span class="ft" title="Set on their first try today">⚡</span>' : '<span class="ft"></span>'}</li>`).join('')
       : '<li class="empty">No times yet today. Be the first!</li>';
   }).catch(() => { $('dailyList').innerHTML = '<li class="empty">Daily run unavailable right now.</li>'; });
 }

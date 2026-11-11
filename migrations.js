@@ -59,7 +59,17 @@ const MIGRATIONS = [
         achieved_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (day, player_key))`);
     },
   },
-  // { id: 3, name: '...', async up(q) { await q('ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT ...'); } },
+  {
+    id: 3, name: 'daily run attempts + first-try flag',
+    async up(q) {
+      // how many daily runs each player has started per day (topped-out and quit runs count too)
+      await q(`CREATE TABLE IF NOT EXISTS daily_attempts (
+        day text NOT NULL, player_key text NOT NULL, attempts integer NOT NULL DEFAULT 0, PRIMARY KEY (day, player_key))`);
+      // true when the player's best time that day came from their very first attempt (shown as ⚡)
+      await q(`ALTER TABLE daily_runs ADD COLUMN IF NOT EXISTS first_try boolean NOT NULL DEFAULT false`);
+    },
+  },
+  // { id: 4, name: '...', async up(q) { await q('ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT ...'); } },
 ];
 
 const LOCK_ID = 7314021; // any constant; shared by every server instance

@@ -79,6 +79,12 @@ async function snapshot(pool) {
   await daily.submit(day, p, 30000); await daily.submit(day, p, 45000);
   const dtop = await daily.top(day);
   assert.strictEqual(dtop.length, 1); assert.strictEqual(dtop[0].ms, 30000); ok('daily run keeps the best time, one entry per player');
+  const q2 = { bid: '22222222-2222-4222-8222-222222222222', name: 'Quick' };
+  assert.strictEqual(await daily.attempt(day, q2), 1); assert.strictEqual(await daily.attempt(day, q2), 2); ok('daily attempts counted per player');
+  await daily.submit(day, q2, 20000, true); await daily.submit(day, q2, 25000, false);
+  assert.strictEqual((await daily.top(day)).find(r => r.name === 'Quick').firstTry, true); ok('a slower later run keeps the first-try badge');
+  await daily.submit(day, q2, 15000, false);
+  assert.strictEqual((await daily.top(day)).find(r => r.name === 'Quick').firstTry, false); ok('a better later run drops the first-try badge');
 
   console.log('4. restarting with no new migrations changes nothing');
   let before = await snapshot(pool);

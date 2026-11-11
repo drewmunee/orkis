@@ -29,7 +29,7 @@ New games must call the same `leaveRoom()` pattern.
   stackwar = lines in a solo run, snakewar = food in classic solo, blockwar = solo points.
   `GET /api/leaderboard?game=...`. Shown on the homepage next to the lobby list for the selected game
   (`SHOW_LEADERBOARD` in `public/game.js`). The top 3 names tile the homepage background in a moving
-  checkerboard (gold/silver/bronze text, each row offset by one name, neighbouring rows drifting opposite ways).
+  checkerboard (gold/silver/bronze text, bronze darkened to #8a5222, each row offset by one name, neighbouring rows drifting opposite ways).
   The board lists each username once (case-insensitive): if a name has spots from several browsers, only
   its best is shown and ranked (rank/cutoff are per name too).
   Old per-username tables (`leaderboard`, `snake_leaderboard`) are copied in once, then renamed to
@@ -114,7 +114,9 @@ New games must call the same `leaveRoom()` pattern.
   (under 12 s is rejected), keeps each player's best per day (one entry per username on the board, top 10),
   and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries.
   The client shows a live x/40 + timer in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top}.
-  Stats: `daily_runs`, `daily_finishes`.
+  Stats: `daily_runs`, `daily_finishes`. Every run started counts as an attempt (`daily_attempts`, topped-out
+  and quit runs too); a best time set on attempt 1 shows a ⚡ on the board (`first_try`), and a better time
+  from a later attempt replaces it without the badge (a slower later run keeps it).
 
 ## Chat commands (all games)
 - `commands.js`, shared by all three games' chat handlers: a chat message starting with `/` is a command,

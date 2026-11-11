@@ -99,6 +99,7 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 /* Stackwar daily run: today's top 10 times, next to the leaderboard */
 #daily { width:260px; text-align:left; }
 #dailyList b { font-variant-numeric:tabular-nums; }
+#dailyList .ft { width:16px; margin-left:-6px; text-align:center; } /* ⚡ time set on their first try */
 #dailyList li:nth-child(2) .rk { color:#9aa3b5; }
 #dailyList li:nth-child(3) .rk { color:#c98a5a; }
 #dailyBtn { width:100%; margin-top:8px; }
@@ -174,7 +175,7 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #marquee .row span { padding-right:1.2em; }
 #marquee .m1 { color:#d4a017; }  /* gold */
 #marquee .m2 { color:#9aa4b2; }  /* silver */
-#marquee .m3 { color:#b87333; }  /* bronze */
+#marquee .m3 { color:#8a5222; }  /* bronze (darker, so it reads as bronze rather than orange) */
 :root[data-theme="dark"] #marquee .row { opacity:.12; }
 @media (prefers-color-scheme: dark) { :root[data-theme="system"] #marquee .row { opacity:.12; } }
 #join.hidden ~ #marquee { display:none; }

@@ -13,23 +13,29 @@ function seedFor(day) { let h = 2166136261; for (const ch of 'stackwar-daily-' +
 
 // tables are created by migrations.js
 function postgresDaily(pool) {
-  const topQuery = (day, limit) => pool.query(`SELECT name, ms, achieved_at FROM (
-      SELECT DISTINCT ON (lower(name)) name, ms, achieved_at FROM daily_runs WHERE day = $1 ORDER BY lower(name), ms ASC, achieved_at ASC
+  const topQuery = (day, limit) => pool.query(`SELECT name, ms, achieved_at, first_try FROM (
+      SELECT DISTINCT ON (lower(name)) name, ms, achieved_at, first_try FROM daily_runs WHERE day = $1 ORDER BY lower(name), ms ASC, achieved_at ASC
     ) t ORDER BY ms ASC, achieved_at ASC LIMIT $2`, [day, limit]);
   return {
-    submit: (day, key, name, ms) => transaction(async c => {
+    async attempt(day, key) {
+      await ready();
+      return (await pool.query(`INSERT INTO daily_attempts (day, player_key, attempts) VALUES ($1, $2, 1)
+        ON CONFLICT (day, player_key) DO UPDATE SET attempts = daily_attempts.attempts + 1 RETURNING attempts`, [day, key])).rows[0].attempts;
+    },
+    submit: (day, key, name, ms, firstTry) => transaction(async c => {
       const prev = (await c.query('SELECT ms FROM daily_runs WHERE day = $1 AND player_key = $2', [day, key])).rows[0];
       // keep the best (lowest) time; always show the latest name
-      await c.query(`INSERT INTO daily_runs (day, player_key, name, ms) VALUES ($1, $2, $3, $4)
+      await c.query(`INSERT INTO daily_runs (day, player_key, name, ms, first_try) VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (day, player_key) DO UPDATE SET name = EXCLUDED.name, ms = LEAST(daily_runs.ms, EXCLUDED.ms),
-          achieved_at = CASE WHEN EXCLUDED.ms < daily_runs.ms THEN now() ELSE daily_runs.achieved_at END`, [day, key, name, ms]);
+          achieved_at = CASE WHEN EXCLUDED.ms < daily_runs.ms THEN now() ELSE daily_runs.achieved_at END,
+          first_try = CASE WHEN EXCLUDED.ms < daily_runs.ms THEN EXCLUDED.first_try ELSE daily_runs.first_try END`, [day, key, name, ms, !!firstTry]);
       const best = Math.min(ms, prev ? prev.ms : Infinity);
       const nameBest = Math.min(best, +((await c.query('SELECT MIN(ms) AS m FROM daily_runs WHERE day = $1 AND lower(name) = lower($2)', [day, name])).rows[0].m ?? best));
       const rank = +(await c.query(`SELECT count(*) + 1 AS r FROM (SELECT lower(name) AS n, MIN(ms) AS m FROM daily_runs WHERE day = $1 GROUP BY lower(name)) t
         WHERE t.n <> lower($2) AND t.m < $3`, [day, name, nameBest])).rows[0].r;
       return { best, prevBest: prev ? prev.ms : 0, rank, onBoard: rank <= TOP_N };
     }),
-    async top(day) { await ready(); return (await topQuery(day, TOP_N)).rows.map(r => ({ name: r.name, ms: r.ms, at: r.achieved_at })); },
+    async top(day) { await ready(); return (await topQuery(day, TOP_N)).rows.map(r => ({ name: r.name, ms: r.ms, at: r.achieved_at, firstTry: r.first_try })); },
   };
 }
 function fileDaily() {
@@ -40,9 +46,13 @@ function fileDaily() {
     return [...byName.values()].sort((a, b) => a.ms - b.ms || a.at.localeCompare(b.at));
   };
   return {
-    async submit(day, key, name, ms) {
+    async attempt(day, key) {
+      const a = f.data.attempts = f.data.attempts || {}, k = day + '|' + key;
+      a[k] = (a[k] || 0) + 1; f.save(); return a[k];
+    },
+    async submit(day, key, name, ms, firstTry) {
       const board = f.data[day] = f.data[day] || {}, prev = board[key];
-      board[key] = !prev || ms < prev.ms ? { name, ms, at: new Date().toISOString() } : { ...prev, name };
+      board[key] = !prev || ms < prev.ms ? { name, ms, at: new Date().toISOString(), firstTry: !!firstTry } : { ...prev, name };
       f.save();
       const best = board[key].ms, list = sorted(day);
       const nameBest = Math.min(best, ...list.filter(e => e.name.toLowerCase() === name.toLowerCase()).map(e => e.ms));
@@ -58,6 +68,8 @@ const store = pool ? postgresDaily(pool) : fileDaily();
 
 module.exports = {
   GOAL, TOP_N, MIN_MS, today, msUntilReset, seedFor,
-  submit: (day, p, ms) => store.submit(day, playerKey(p.bid, p.name), p.name, ms),
+  // attempt(day, p) -> this player's attempt number today (counted when a run starts)
+  attempt: (day, p) => store.attempt(day, playerKey(p.bid, p.name)),
+  submit: (day, p, ms, firstTry) => store.submit(day, playerKey(p.bid, p.name), p.name, ms, firstTry),
   top: day => store.top(day),
 };

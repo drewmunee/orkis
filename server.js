@@ -143,7 +143,8 @@ function finishDaily(room, p) {
   if (ms < daily.MIN_MS) { console.warn(`ignored implausible daily time ${ms} ms from ${p.name}`); send(p.ws, { t: 'daily', ms, error: true }); }
   else {
     stats.add(p, 'stackwar', 'daily_finishes');
-    daily.submit(room.dailyDay, p, ms).then(r => send(p.ws, { t: 'daily', ms, ...r }),
+    const firstTry = p.dailyAttempt === 1;
+    daily.submit(room.dailyDay, p, ms, firstTry).then(r => send(p.ws, { t: 'daily', ms, firstTry, ...r }),
       e => { console.error('daily write failed:', e.message); send(p.ws, { t: 'daily', ms, error: true }); });
   }
   broadcast(room, { t: 'gameover', winnerId: null, winnerName: null, daily: true });
@@ -155,7 +156,11 @@ function startRoom(room) {
   room.startedAt = Date.now();
   for (const p of room.players.values()) stats.add(p, 'stackwar', { played: 1, [room.daily ? 'daily_runs' : room.players.size === 1 ? 'solo_runs' : room.teamMode ? 'team_games' : 'ffa_games']: 1 });
   let seed = (Math.random() * 2 ** 31) | 0;
-  if (room.daily) { room.dailyDay = daily.today(); seed = daily.seedFor(room.dailyDay); room.startedAt = Date.now() + COUNTDOWN_MS; }
+  if (room.daily) {
+    room.dailyDay = daily.today(); seed = daily.seedFor(room.dailyDay); room.startedAt = Date.now() + COUNTDOWN_MS;
+    // count the attempt; a time set on attempt 1 earns the ⚡ first-try badge
+    for (const p of room.players.values()) { p.dailyAttempt = null; daily.attempt(room.dailyDay, p).then(n => { p.dailyAttempt = n; }, e => console.error('daily attempt write failed:', e.message)); }
+  }
   for (const p of room.players.values()) { p.alive = true; p.board = ''; p.lines = 0; }
   room.firstFourDone = !!room.daily; // first 4-line clear of each match earns a bonus (never in the daily run: same run for everyone)
   // Team mode: shuffle everyone into red and blue (sizes differ by at most one), new teams every match.
