@@ -130,7 +130,7 @@ New games must call the same `leaveRoom()` pattern.
 - `commands.js`, shared by all three games' chat handlers: a chat message starting with `/` is a command,
   not chat (never broadcast, no swear jar). One word, case-insensitive, extra words ignored. Replies go
   only to the sender as log lines. Same commands everywhere; results depend on the game/room.
-- `/help` lists them; `/podium` (alias `/leaderboard`): top 3 players in this lobby by wins (room wins,
+- `/help` (also `/list`, `/?`, or just `/`) lists them all; `/podium` (alias `/leaderboard`): top 3 players in this lobby by wins (room wins,
   reset on rejoin); `/spectate` (Snakewar: sit out / rejoin; games pass an optional `ctx.spectate` hook). Add new commands to `COMMANDS` (use `alias` for alternate names).
 
 ## Moderation and the swear jar
@@ -207,8 +207,9 @@ New games must call the same `leaveRoom()` pattern.
   segments as a wall that kills anyone except ghosts; max 5 on the board, a 6th removes the oldest),
   Bomb (held: dropped out of your tail, explodes after 3 s with radius 5, the exact squares shown on the field: destroys food, specials and
   blockades inside, and every snake with any part inside, the bomber included, loses a quarter).
-  Pacman (held: 6 s sliding through enemy snakes; the segment you enter is eaten (+1 length) and the rest of
-  that tail becomes tiny food; heads and ghosts can't be bitten; teammates, your own body and blockades still
+  Pacman (held: 6 s sliding through enemy snakes; each enemy square you pass through is -1 length for them
+  (taken off their tail end so the body stays whole, never below 3) and +1 for you; heads and ghosts can't
+  be bitten; teammates, your own body and blockades still
   kill; icon is a CSS/canvas shape, not a font glyph), Poop (held: 6 s of slime on the square your tail
   sits on, each lasting 8 s; an enemy head on slime loses Speed and is slowed 1.5 s; never you/your team,
   not ghosts).

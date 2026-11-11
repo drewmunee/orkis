@@ -41,8 +41,8 @@ const SPECIAL_CHANCE = 1 / 70;     // per tick, while below MAX_SPECIALS (~ one 
 //  as a permanent wall · token (team mode only): every 3 a team collects = 1 revive
 //  bomb (held): dropped out of your tail, explodes after 3 s; everything within its radius is destroyed
 //  (food, specials, blockades) and every snake with any part inside loses a quarter of its length
-//  pacman (held): for 6 s you pass through enemy snakes and eat them: the segment you enter and the rest
-//  of their tail come off (you grow 1 per bite, the tail becomes tiny food); heads and ghosts are safe
+//  pacman (held): for 6 s you pass through enemy snakes and eat them: each enemy square you pass through
+//  takes 1 off their length and adds 1 to yours; heads and ghosts are safe
 //  poop (held): for 6 s you leave a slimy trail; enemies whose head crosses it are slowed
 const SPECIALS = { speed: 5000, ghost: 6000, feast: 0, shears: 0, double: 20000, slow: 5000, extendo: 12000, blockade: 0, bomb: 0, token: 0, pacman: 6000, poop: 6000 };
 const HELD = new Set(['ghost', 'blockade', 'bomb', 'pacman', 'poop']);   // these go to the player's item queue and are used with Space
@@ -328,14 +328,13 @@ function step(room, movers) {
     const slime = room.slime.get(nc);
     if (slime && slime.owner !== p && enemies(room, slime.owner, p) && !ghost(p)) { delete p.fx.speed; p.fx.slow = Math.max(p.fx.slow || 0, now + SLIME_SLOW_MS); }
   }
-  // Pacman bites: the bitten segment is eaten (+1 length) and the rest of that tail becomes tiny food.
-  // Heads can't be bitten (and a snake always keeps its head).
+  // Pacman bites: each enemy square you pass through costs them 1 length (taken off the end of their
+  // tail, so their body stays in one piece) and gives you 1. Heads can't be bitten, and nobody drops
+  // below MIN_LEN.
   for (const [p, q, c] of bites) {
     if (!p.alive || !q.alive || dead.has(p)) continue;
-    const i = q.body.indexOf(c);
-    if (i < 1) continue;
-    q.body.splice(i, 1);
-    cutTail(room, q, i);
+    if (q.body.indexOf(c) < 1 || q.body.length <= MIN_LEN) continue;
+    q.body.pop();
     p.grow += p.fx.double > now ? 2 : 1;
     p.maxLen = Math.max(p.maxLen || 0, p.body.length + p.grow);
     stats.add(p, 'snakewar', 'pacman_bites'); stats.add(q, 'snakewar', 'pacman_bitten');

@@ -19,7 +19,7 @@ const SPECIAL_INFO = {
   extendo: { name: 'Extendo', icon: '👅', color: '#ff8fb1', desc: 'a 12-second tongue reaching 5 squares ahead: enemies who run into it die, and it eats any food it touches' },
   blockade: { name: 'Blockade', icon: '▦', color: '#aab0c4', desc: 'held item: press Space to drop 5 tail segments as a wall (max 5 on the board; ghosts pass through)' },
   bomb: { name: 'Bomb', icon: '💣', color: '#ff6a3d', desc: 'held item: press Space to drop it out of your tail; after 3 s it destroys everything in its radius and every snake touching the blast loses a quarter of its length (you too!)' },
-  pacman: { name: 'Pacman', icon: 'ᗧ', color: '#ffe14d', desc: 'held item: press Space for 6 seconds of sliding through enemy snakes and eating them: you bite off the part you go through (+1 length per bite) and the rest of their tail becomes tiny food. Heads and ghosts can\'t be bitten' },
+  pacman: { name: 'Pacman', icon: 'ᗧ', color: '#ffe14d', desc: 'held item: press Space for 6 seconds of sliding through enemy snakes and eating them: every square of a snake you pass through costs them 1 length and gives you 1. Heads and ghosts can\'t be bitten' },
   poop: { name: 'Poop', icon: '💩', color: '#b07a45', desc: 'held item: press Space to leave a slimy trail for 6 seconds; enemies who cross it are slowed (the slime lasts 8 s)' },
   token: { name: 'Revive token', icon: '♥', color: '#ff4d6d', desc: 'team mode only: every 3 your team collects earns a revive' },
 };

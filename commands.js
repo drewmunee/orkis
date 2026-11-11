@@ -17,11 +17,16 @@ function podium({ players, game }) {
   return [`🏆 Most wins in this lobby: ` + ranked.map((p, i) => `${medals[i]} ${p.name} (${plural(p.wins, 'win')})`).join('  ')];
 }
 
+// every command with its other names, e.g. "/help or /list or /? – list the chat commands"
+const listCommands = () => ['Commands: ' + Object.entries(COMMANDS).filter(([, c]) => !c.alias).map(([n, c]) => {
+  const also = Object.keys(COMMANDS).filter(k => COMMANDS[k].alias === n).map(k => ' or /' + k).join('');
+  return `/${n}${also} – ${c.desc}`;
+}).join(' · ')];
+
 const COMMANDS = {
-  help: { desc: 'list the chat commands', run: () => ['Commands: ' + Object.entries(COMMANDS).filter(([, c]) => !c.alias).map(([n, c]) => {
-    const also = Object.keys(COMMANDS).filter(k => COMMANDS[k].alias === n).map(k => ' or /' + k).join('');
-    return `/${n}${also} – ${c.desc}`;
-  }).join(' · ')] },
+  help: { desc: 'list the chat commands', run: () => listCommands() },
+  list: { alias: 'help', run: () => listCommands() },
+  '?': { alias: 'help', run: () => listCommands() },
   podium: { desc: 'top 3 players in this lobby by wins', run: podium },
   leaderboard: { alias: 'podium', run: podium },
   // games that support it pass ctx.spectate (toggles sitting out, returns the reply); Snakewar only for now
@@ -33,7 +38,7 @@ function handle(msg, ctx, reply) {
   const m = /^\s*\/(\S*)/.exec(String(msg || ''));
   if (!m) return false;
   const name = m[1].toLowerCase(), cmd = COMMANDS[name];
-  const lines = !name ? ['Type /help for the list of commands.']
+  const lines = !name ? listCommands() // just "/" lists everything too
     : cmd ? cmd.run({ ...ctx, players: [...ctx.players] })
     : [`Unknown command /${name}. Type /help for the list.`];
   for (const line of lines) reply(line);
