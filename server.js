@@ -265,6 +265,10 @@ wss.on('connection', ws => {
         if (me.id !== room.hostId || room.state !== 'lobby') return;
         startRoom(room);
         break;
+      case 'restart': // daily run only: R starts a fresh attempt at any time, even mid-run
+        if (!room.daily || me.id !== room.hostId) return;
+        startRoom(room);
+        break;
       case 'avatar': // picked a new avatar in ⚙ Settings
         me.avatar = avatars.clean(m.a); sendLobby(room);
         break;

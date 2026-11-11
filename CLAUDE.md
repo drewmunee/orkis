@@ -121,7 +121,9 @@ New games must call the same `leaveRoom()` pattern.
   `/api/lobbies`, nobody else can join) that starts at once. Goal: 40 lines; no garbage, no first-4-line
   bonus, team mode off. The server times it from the end of the 3 s countdown to the clear reaching 40
   (under 12 s is rejected), keeps each player's best per day (one entry per username on the board, top 10),
-  and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries.
+  and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries, and
+  **R** restarts instantly at any time, even mid-run (`{t:'restart'}`, daily rooms only; same seed, new
+  attempt, 3 s countdown).
   The client shows a live x/40 + timer in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top}.
   Stats: `daily_runs`, `daily_finishes`, plus `daily_wins` / `daily_podiums` (1st / top 3 on finished days,
   worked out from `daily_runs` by `daily.placings` when `/api/stats` is read; shown in the Stackwar card). Every run started counts as an attempt (`daily_attempts`, topped-out

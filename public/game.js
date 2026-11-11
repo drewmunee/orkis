@@ -459,7 +459,7 @@ function connect(name, room, isDaily = false) {
         players = m.players; roomState = 'playing'; renderPlayers();
         soloRun = m.players.length === 1; dailyRun = m.daily || null; dailyDone = 0;
         log(dailyRun ? '— Daily run started —' : soloRun ? '— Solo run started —' : '— Game started —'); startGame(m.seed);
-        if (dailyRun) setStatus(`Daily run: clear ${dailyRun.goal} lines as fast as you can.`);
+        if (dailyRun) setStatus(`Daily run: clear ${dailyRun.goal} lines as fast as you can. R restarts.`);
         else if (m.players.length === 1) setStatus('Solo run: clear as many lines as you can. It speeds up every 10 lines.');
         break;
       case 'board': boards.set(m.id, m.cells); renderOpps(); break;
@@ -493,11 +493,11 @@ function connect(name, room, isDaily = false) {
         renderInv(); log(`Bonus for the first 4-line clear: ${SPECIALS[s][0]}`);
       } break;
       case 'daily': { // the server's official result for a daily run
-        const msg = m.failed ? `Daily run over: topped out at ${m.lines}/${dailyRun ? dailyRun.goal : 40} lines. Press Play again to retry.`
+        const msg = m.failed ? `Daily run over: topped out at ${m.lines}/${dailyRun ? dailyRun.goal : 40} lines. Press R (or Play again) to retry.`
           : m.error ? `Daily run: ${fmtTime(m.ms)} (not saved, please try again later).`
           : `Daily run: ${fmtTime(m.ms)}! ` + (m.firstTry ? '⚡ First try! ' : '') + (m.prevBest && m.ms >= m.prevBest ? `Your best today is still ${fmtTime(m.prevBest)}. ` : m.prevBest ? 'New personal best for today! ' : '')
             + (m.onBoard ? `You're #${m.rank} on today's board.` : `Rank #${m.rank} today.`);
-        dailyRun = null; setStatus(msg); log(msg);
+        dailyRun = null; setStatus(msg + (m.failed ? '' : ' R to go again.')); log(msg);
         break;
       }
       case 'solo': {
@@ -516,6 +516,8 @@ function connect(name, room, isDaily = false) {
 document.addEventListener('keydown', e => {
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;
   if ((e.key === 't' || e.key === 'T') && !$('game').classList.contains('hidden')) { $('chat').focus(); e.preventDefault(); return; } // T opens chat
+  // daily run: R restarts straight away (new attempt, same seed, 3-2-1 countdown), mid-run or after
+  if ((e.key === 'r' || e.key === 'R') && dailyRoom && !e.repeat) { net({ t: 'restart' }); e.preventDefault(); return; }
   if (/^[1-6]$/.test(e.key)) { useSpecial(+e.key); return; }
   if (!playing || !piece || countingDown()) return;
   // the chosen scheme turns keys into actions; Inverted swaps those actions around
