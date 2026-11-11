@@ -6,6 +6,7 @@ const swearjar = require('./swearjar');
 const commands = require('./commands');
 const avatars = require('./avatars');
 const WORDS = require('./words4');
+const bots = require('./snakebot');
 const stats = require('./stats');
 const GW = 112, GH = 63;           // full-size 16:9 field, fills most laptop/desktop screens
 // Field size depends on how many are in the room when a round starts: solo is classic snake on a small
@@ -115,7 +116,7 @@ function freeSlot(room) {
   return 0;
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null, color: p.color, shade: p.shade, avatar: p.avatar || null, spectating: !!p.spectating, teamPick: p.teamPick || null }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null, color: p.color, shade: p.shade, avatar: p.avatar || null, spectating: !!p.spectating, teamPick: p.teamPick || null, bot: !!p.bot }));
 }
 function sendLobby(room) { broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode, teamChoice: room.teamChoice || 'random', tileMode: room.tileMode || 'fruit' }); }
 function log(room, msg) { broadcast(room, { t: 'log', msg }); }
@@ -167,6 +168,22 @@ function spawnSnake(room, p, occ) {
   return false;
 }
 
+// ---------- bots ----------
+// Bots are players with no connection (a stub socket nothing is ever sent to). The host adds them between
+// rounds with the ＋ button; their brain lives in snakebot.js. They never get stats or leaderboard scores.
+const BOT_API = { alivePlayers, enemies: (...a) => enemies(...a), immune: (...a) => immune(...a), useItem: (...a) => useItem(...a) };
+const humans = room => [...room.players.values()].filter(p => !p.bot);
+let nextBotId = 1e6;
+function addBot(room) {
+  const slot = freeSlot(room);
+  if (!slot) return false;
+  const taken = new Set([...room.players.values()].map(p => p.name.toLowerCase()));
+  const name = 'Bot ' + (bots.BOT_NAMES.find(n => !taken.has(('bot ' + n).toLowerCase())) || slot);
+  const id = nextBotId++;
+  room.players.set(id, { id, ws: { readyState: 3, send() {}, terminate() {} }, bot: true, slot, name, alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null, avatar: null });
+  log(room, `${name} joined`);
+  return true;
+}
 // Players who typed /spectate sit the next rounds out and just watch.
 const players = room => [...room.players.values()].filter(p => !p.spectating);
 function startRound(room) {
@@ -568,6 +585,7 @@ function tick(room) {
   const now0 = Date.now(), odd = room.tickN++ % 2 === 1;
   const slowed = p => p.fx.slow > now0;
   const frozen = p => p.fx.stone > now0 || p.spawnUntil > now0; // stone, or still blinking in after a revive
+  for (const p of alivePlayers(room)) if (p.bot) bots.think(room, p, BOT_API); // bots pick a direction / use items
   step(room, alivePlayers(room).filter(p => !(slowed(p) && odd) && !frozen(p)));      // slowed snakes skip every other tick
   const fast = alivePlayers(room).filter(p => p.fx.speed > Date.now() && !slowed(p) && !frozen(p));
   if (fast.length) step(room, fast);
@@ -714,6 +732,14 @@ function join(ws, id, m) {
         room.teamMode = !!m.on;
         for (const p of room.players.values()) p.team = null; // last round's teams no longer apply
         sendLobby(room);
+      } else if (m.t === 'addbot' && me.id === room.hostId && room.state === 'lobby') {
+        if (!addBot(room)) return send(ws, { t: 'note', msg: `Room is full (${MAX_PLAYERS} max)` });
+        setField(room, Math.max(1, players(room).length)); sendState(room); sendLobby(room);
+      } else if (m.t === 'removebot' && me.id === room.hostId && room.state === 'lobby') {
+        const b = room.players.get(m.id);
+        if (!b || !b.bot) return;
+        room.players.delete(b.id); log(room, `${b.name} left`);
+        setField(room, Math.max(1, players(room).length)); sendState(room); sendLobby(room);
       } else if (m.t === 'teamchoice' && me.id === room.hostId && room.state === 'lobby' && ['random', 'choose'].includes(m.mode)) {
         room.teamChoice = m.mode; // random teams, or players pick theirs with the color picker
         sendLobby(room);
@@ -755,8 +781,8 @@ function join(ws, id, m) {
     close() {
       if (room.classic && room.state !== 'lobby' && me.alive) { recordClassic(room, me); room.classic = false; } // closing the tab still saves a solo score
       room.players.delete(me.id);
-      if (!room.players.size) { stopRound(room); rooms.delete(room.code); return; }
-      if (room.hostId === me.id) room.hostId = room.players.values().next().value.id;
+      if (!humans(room).length) { stopRound(room); rooms.delete(room.code); return; } // only bots left: close the room
+      if (room.hostId === me.id) room.hostId = humans(room)[0].id;
       if (me.alive) kill(room, me, 'left', { kind: 'left' });
       else log(room, `${me.name} left`);
       checkRoundOver(room);
@@ -768,7 +794,7 @@ function join(ws, id, m) {
 
 // Public lobby list for the homepage browser
 function lobbies() {
-  return [...rooms.values()].map(r => ({ room: r.code, players: r.players.size, names: [...r.players.values()].map(p => p.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
+  return [...rooms.values()].map(r => ({ room: r.code, players: r.players.size, bots: [...r.players.values()].filter(p => p.bot).length, names: [...r.players.values()].map(p => (p.bot ? '🤖 ' : '') + p.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
 }
 
 module.exports = { join, lobbies, _rooms: rooms, _tick: tick, _useItem: useItem }; // underscored exports are for tests

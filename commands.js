@@ -8,6 +8,21 @@
 // plus optional per-game hooks (spectate).
 const GAME_NAMES = { stackwar: 'Stackwar', snakewar: 'Snakewar', blockwar: 'Blockwar' };
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const stats = require('./stats');
+
+// /leaderboard: the people in this lobby ranked by their all-time wins in this game (every wins_* stat:
+// free-for-all, team, clear race, lives...). Bots have no stats and aren't listed.
+async function allTimeWins({ players, game }) {
+  const people = players.filter(p => !p.bot);
+  const rows = await Promise.all(people.map(async p => {
+    const s = (await stats.forBrowser(p.bid, p.name)).games[game] || {};
+    return { name: p.name, wins: Object.entries(s).filter(([k]) => k.startsWith('wins_')).reduce((n, [, v]) => n + v, 0) };
+  }));
+  const ranked = rows.filter(r => r.wins > 0).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name)).slice(0, 3);
+  if (!ranked.length) return [`🏆 Nobody in this lobby has won a ${GAME_NAMES[game]} game yet.`];
+  const medals = ['🥇', '🥈', '🥉'];
+  return ['🏆 All-time ' + GAME_NAMES[game] + ' wins in this lobby: ' + ranked.map((r, i) => `${medals[i]} ${r.name} (${plural(r.wins, 'win')})`).join('  ')];
+}
 
 function podium({ players, game }) {
   // top 3 by wins in this room (wins reset when a player leaves and rejoins)
@@ -27,8 +42,8 @@ const COMMANDS = {
   help: { desc: 'list the chat commands', run: () => listCommands() },
   list: { alias: 'help', run: () => listCommands() },
   '?': { alias: 'help', run: () => listCommands() },
-  podium: { desc: 'top 3 players in this lobby by wins', run: podium },
-  leaderboard: { alias: 'podium', run: podium },
+  podium: { desc: 'top 3 players in this lobby by wins this session', run: podium },
+  leaderboard: { desc: 'top 3 players in this lobby by all-time wins in this game', run: allTimeWins },
   // games that support it pass ctx.spectate (toggles sitting out, returns the reply); Snakewar only for now
   spectate: { desc: 'sit out the next rounds and just watch; type it again to play (Snakewar)', run: ctx => [ctx.spectate ? ctx.spectate() : 'Spectating is only in Snakewar for now.'] },
 };
@@ -41,7 +56,8 @@ function handle(msg, ctx, reply) {
   const lines = !name ? listCommands() // just "/" lists everything too
     : cmd ? cmd.run({ ...ctx, players: [...ctx.players] })
     : [`Unknown command /${name}. Type /help for the list.`];
-  for (const line of lines) reply(line);
+  // a command may answer later (e.g. /leaderboard reads saved stats)
+  Promise.resolve(lines).then(ls => { for (const line of ls) reply(line); }, e => { console.error('command failed:', e.message); reply('That command failed, try again in a moment.'); });
   return true;
 }
 

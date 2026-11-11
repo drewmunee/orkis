@@ -85,6 +85,18 @@ async function snapshot(pool) {
   assert.strictEqual((await daily.top(day)).find(r => r.name === 'Quick').firstTry, true); ok('a slower later run keeps the first-try badge');
   await daily.submit(day, q2, 15000, false);
   assert.strictEqual((await daily.top(day)).find(r => r.name === 'Quick').firstTry, false); ok('a better later run drops the first-try badge');
+  // daily wins / podiums: finished days only, ranked one entry per name
+  const B2 = '33333333-3333-4333-8333-333333333333', B3 = '44444444-4444-4444-8444-444444444444';
+  for (const [d, a1, a2, a3] of [['2026-01-01', 20000, 25000, 30000], ['2026-01-02', 40000, 25000, 30000], ['2026-01-03', 50000, 25000, 30000]]) {
+    await daily.submit(d, { bid: BID, name: 'DG' }, a1); await daily.submit(d, { bid: B2, name: 'Two' }, a2); await daily.submit(d, { bid: B3, name: 'Three' }, a3);
+  }
+  await daily.submit('2026-01-04', { bid: B2, name: 'Two' }, 30000); await daily.submit('2026-01-04', { bid: B3, name: 'Three' }, 35000);
+  await daily.submit('2026-01-04', { bid: '66666666-6666-4666-8666-666666666666', name: 'Five' }, 20000);
+  await daily.submit('2026-01-04', { bid: '55555555-5555-4555-8555-555555555555', name: 'Four' }, 1000);
+  assert.deepStrictEqual(await daily.placings(BID, 'DG'), { wins: 1, podiums: 3 }); ok('daily placings: 1 win and 3 podiums');
+  assert.deepStrictEqual(await daily.placings(B3, 'Three'), { wins: 0, podiums: 3 }); ok('daily placings: 4th place on a day is no podium');
+  await daily.submit(daily.today(), { bid: B3, name: 'Three' }, 13000);
+  assert.deepStrictEqual(await daily.placings(B3, 'Three'), { wins: 0, podiums: 3 }); ok("today's board isn't counted until the day is over");
 
   console.log('4. restarting with no new migrations changes nothing');
   let before = await snapshot(pool);

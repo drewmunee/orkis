@@ -8,7 +8,7 @@ const pending = new Map(); // "key|game|stat|op" -> number   (op: add | max)
 const names = new Map();   // key -> latest name
 
 function record(p, game, stat, n, op) {
-  if (!p || !p.name || !n) return;
+  if (!p || !p.name || !n || p.bot) return; // bots (Snakewar) never get stats
   const key = playerKey(p.bid, p.name);
   names.set(key, p.name);
   const k = `${key}|${game}|${stat}|${op}`;

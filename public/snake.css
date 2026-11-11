@@ -91,3 +91,9 @@ body.snake-page { overflow:hidden; height:100vh; }
 #rack .fd { font-size:10px; color:var(--dim); width:38px; margin-left:2px; }
 #teamRevives .pips { font-size:14px; letter-spacing:1px; color:inherit; }
 #teamRevives .pips .off { opacity:.25; }
+/* bots: ＋ Add bot under the player list (host, between rounds), × to remove one */
+#addBot { width:100%; margin-top:6px; padding:5px; background:transparent; color:var(--text); border:1px dashed var(--line); border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; }
+#addBot:hover { border-color:#3ccf6e; color:#3ccf6e; }
+#players .botTag { margin-right:3px; }
+#players .rmBot { padding:0 5px; margin-left:4px; line-height:16px; font-size:13px; background:transparent; color:var(--dim); border:1px solid var(--line); border-radius:4px; cursor:pointer; }
+#players .rmBot:hover { color:#ff4d5e; border-color:#ff4d5e; }

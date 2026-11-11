@@ -64,8 +64,12 @@ const server = http.createServer((req, res) => {
     // all-time stats for one browser: ?bid=<browser id>
     const bid = q.get('bid');
     if (!validBid(bid)) return json(400, { error: 'bad id' });
-    Promise.all([stats.forBrowser(bid), swearjar.mine(bid), swearjar.total()])
-      .then(([s, mine, total]) => json(200, { ...s, swearJar: { mine, total } }), e => { console.error('stats read failed:', e.message); json(500, { error: 'unavailable' }); });
+    Promise.all([stats.forBrowser(bid), swearjar.mine(bid), swearjar.total(), daily.placings(bid)])
+      .then(([s, mine, total, placed]) => {
+        // daily-run wins / podium finishes are worked out from the daily boards (finished days only)
+        if (placed.wins || placed.podiums || (s.games.stackwar && s.games.stackwar.daily_runs)) s.games.stackwar = { ...(s.games.stackwar || {}), daily_wins: placed.wins, daily_podiums: placed.podiums };
+        json(200, { ...s, swearJar: { mine, total } });
+      }, e => { console.error('stats read failed:', e.message); json(500, { error: 'unavailable' }); });
     return;
   }
   if (p === '/api/name-ok') {

@@ -10,6 +10,7 @@ const LAYOUT = {
     ['Games', [['played', 'Games played'], ['wins_ffa', 'Free-for-all wins'], ['wins_team', 'Team wins'], ['ffa_games', 'Free-for-all games'], ['team_games', 'Team games'], ['solo_runs', 'Solo runs']]],
     ['Line clears', [['lines', 'Lines cleared'], ['tetrises', 'Tetrises (4 lines)'], ['triples', 'Triples'], ['doubles', 'Doubles'], ['singles', 'Singles'], ['best_solo', 'Best solo run (lines)', 'best']]],
     ['Battle', [['garbage_sent', 'Garbage lines sent'], ['first_tetris_bonus', 'First 4-line bonuses'], ['topouts', 'Times topped out'], ['specials_sent', 'Specials sent'], ['specials_received', 'Specials received'], ['specials_self', 'Specials used on self']]],
+    ['Daily run', [['daily_runs', 'Daily attempts'], ['daily_finishes', 'Runs finished (40 lines)'], ['daily_wins', 'Daily wins (1st)'], ['daily_podiums', 'Podium finishes (top 3)']]],
   ] },
   snakewar: { title: 'SNAKEWAR', sections: [
     ['Games', [['played', 'Games played'], ['wins_ffa', 'Free-for-all wins'], ['wins_team', 'Team wins'], ['ffa_games', 'Free-for-all games'], ['team_games', 'Team games'], ['classic_runs', 'Classic solo runs']]],

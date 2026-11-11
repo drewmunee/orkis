@@ -36,6 +36,15 @@ function postgresDaily(pool) {
       return { best, prevBest: prev ? prev.ms : 0, rank, onBoard: rank <= TOP_N };
     }),
     async top(day) { await ready(); return (await topQuery(day, TOP_N)).rows.map(r => ({ name: r.name, ms: r.ms, at: r.achieved_at, firstTry: r.first_try })); },
+    // finished days (before `today`) where this player's best ranked 1st / top 3 (one entry per name)
+    async placings(key, today) {
+      await ready();
+      const r = (await pool.query(`WITH best AS (SELECT day, lower(name) AS n, MIN(ms) AS m FROM daily_runs WHERE day < $2 GROUP BY day, lower(name)),
+          mine AS (SELECT day, lower(MIN(name)) AS n, MIN(ms) AS m FROM daily_runs WHERE player_key = $1 AND day < $2 GROUP BY day)
+        SELECT count(*) FILTER (WHERE rk = 1) AS wins, count(*) FILTER (WHERE rk <= 3) AS podiums FROM (
+          SELECT (SELECT count(*) FROM best b WHERE b.day = mine.day AND b.n <> mine.n AND b.m < mine.m) + 1 AS rk FROM mine) t`, [key, today])).rows[0];
+      return { wins: +r.wins, podiums: +r.podiums };
+    },
   };
 }
 function fileDaily() {
@@ -60,6 +69,15 @@ function fileDaily() {
       return { best, prevBest: prev ? prev.ms : 0, rank, onBoard: rank <= TOP_N };
     },
     async top(day) { return sorted(day).slice(0, TOP_N); },
+    async placings(key, today) {
+      let wins = 0, podiums = 0;
+      for (const day of Object.keys(f.data)) {
+        if (!/^\d{4}-\d\d-\d\d$/.test(day) || day >= today || !f.data[day][key]) continue;
+        const mine = f.data[day][key], rk = sorted(day).filter(e => e.name.toLowerCase() !== mine.name.toLowerCase() && e.ms < mine.ms).length + 1;
+        if (rk === 1) wins++; if (rk <= 3) podiums++;
+      }
+      return { wins, podiums };
+    },
   };
 }
 
@@ -72,4 +90,6 @@ module.exports = {
   attempt: (day, p) => store.attempt(day, playerKey(p.bid, p.name)),
   submit: (day, p, ms, firstTry) => store.submit(day, playerKey(p.bid, p.name), p.name, ms, firstTry),
   top: day => store.top(day),
+  // { wins, podiums }: finished days this player (browser) won / placed top 3 on the daily board
+  placings: (bid, name) => store.placings(playerKey(bid, name), today()),
 };

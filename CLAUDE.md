@@ -123,7 +123,8 @@ New games must call the same `leaveRoom()` pattern.
   (under 12 s is rejected), keeps each player's best per day (one entry per username on the board, top 10),
   and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries.
   The client shows a live x/40 + timer in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top}.
-  Stats: `daily_runs`, `daily_finishes`. Every run started counts as an attempt (`daily_attempts`, topped-out
+  Stats: `daily_runs`, `daily_finishes`, plus `daily_wins` / `daily_podiums` (1st / top 3 on finished days,
+  worked out from `daily_runs` by `daily.placings` when `/api/stats` is read; shown in the Stackwar card). Every run started counts as an attempt (`daily_attempts`, topped-out
   and quit runs too); a best time set on attempt 1 shows a ⚡ on the board (`first_try`), and a better time
   from a later attempt replaces it without the badge (a slower later run keeps it).
 
@@ -131,8 +132,9 @@ New games must call the same `leaveRoom()` pattern.
 - `commands.js`, shared by all three games' chat handlers: a chat message starting with `/` is a command,
   not chat (never broadcast, no swear jar). One word, case-insensitive, extra words ignored. Replies go
   only to the sender as log lines. Same commands everywhere; results depend on the game/room.
-- `/help` (also `/list`, `/?`, or just `/`) lists them all; `/podium` (alias `/leaderboard`): top 3 players in this lobby by wins (room wins,
-  reset on rejoin); `/spectate` (Snakewar: sit out / rejoin; games pass an optional `ctx.spectate` hook). Add new commands to `COMMANDS` (use `alias` for alternate names).
+- `/help` (also `/list`, `/?`, or just `/`) lists them all; `/podium`: top 3 players in this lobby by wins this
+  session (room wins, reset on rejoin); `/leaderboard`: top 3 people in this lobby by all-time wins in this
+  game (sum of their `wins_*` stats; commands may return a Promise); `/spectate` (Snakewar: sit out / rejoin; games pass an optional `ctx.spectate` hook). Add new commands to `COMMANDS` (use `alias` for alternate names).
 
 ## Moderation and the swear jar
 - `moderation.js`: usernames containing racial slurs are refused at join for every game (checked once in
@@ -227,6 +229,20 @@ New games must call the same `leaveRoom()` pattern.
   letter rack shown under the items. Tiles live in `room.letters` ({ch} or {fruit}). Fruit emoji must be
   drawn with an opaque fillStyle (canvas applies its alpha to emoji). Stats: letters, words, fruit,
   fruit_sets, pacman_used/bites/bitten, poop_used.
+- **Bots** (`snakebot.js`, wired in `snake.js`): the host adds them between rounds with **＋ Add bot** under
+  the player list (`{t:'addbot'}`), × removes one (`{t:'removebot', id}`); up to the 12-player limit, named
+  "Bot Rex" etc., shown with 🤖. They're players with a stub socket (`bot: true`), so 1 person + bots is a
+  normal battle round (never classic), and they fill teams like unpicked players. Never get stats
+  (`stats.js` skips `p.bot`) or leaderboard scores; their kills don't credit them; they can win rounds
+  (room ★ wins / `/podium`). The room closes when no people are left; the host is always a person.
+  Each tick, before moving, `bots.think()` per bot: rule out crashing moves, score the rest by open space
+  (capped flood fill), head-on risk from any other head (teammates too), bomb/shrink danger, and the first
+  step toward the best target from one BFS (food, specials, tokens, fruit/letters, inside the shrink edge,
+  enemy bodies while Pacman, or 3 squares ahead of a smaller enemy's head while "hunting", which each bot
+  does now and then based on its own aggression). Items: Ghost/Stone when trapped, Blockade/Poop when an
+  enemy is behind, Bomb when enemies are near the tail, Pacman near enemy bodies, anything after holding
+  a full hand 12 s. Imperfect on purpose: random wobble, 6% missed turns, item reaction delays, reckless
+  while hunting. Tested with bot-only simulated rounds (no stalls; ~20 ms worst tick with 11 bots).
 - **/spectate** (chat command; Snakewar only, other games reply that it isn't available): toggles sitting out.
   Spectators are left out of the next rounds (field size, solo/classic and teams count only players), shown
   with a grey 👁 by their name. If everyone is spectating, the round doesn't start.
