@@ -124,7 +124,7 @@ New games must call the same `leaveRoom()` pattern.
   and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries, and
   **R** restarts instantly at any time, even mid-run (`{t:'restart'}`, daily rooms only; same seed, new
   attempt, 3 s countdown; once R is used, no run in that session can get the ⚡ badge).
-  The client shows a live x/40 + timer in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top}.
+  The client shows the live timer under Level (`#timeStat`, daily runs only; it holds the final time) and x/40 in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top}.
   Stats: `daily_runs`, `daily_finishes`, plus `daily_wins` / `daily_podiums` (1st / top 3 on finished days,
   worked out from `daily_runs` by `daily.placings` when `/api/stats` is read; shown in the Stackwar card). Every run started counts as an attempt (`daily_attempts`, topped-out
   and quit runs too); a best time set on attempt 1 shows a ⚡ on the board (`first_try`), and a better time

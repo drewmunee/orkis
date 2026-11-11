@@ -249,9 +249,13 @@ function frame(t) {
   }
   draw();
   renderEffects();
-  if (dailyRun && playing && !countingDown()) { // live timer while a daily run is on
-    const txt = `Daily run: ${Math.min(lines, dailyRun.goal)}/${dailyRun.goal} lines · ${fmtTime(performance.now() - countdownEnd)}`;
-    if ($('status').textContent !== txt) setStatus(txt);
+  // daily run: the live timer sits under Level (easy to see from the corner of your eye); 0:00.00 during the
+  // countdown, and it stays on the final time once you're done
+  $('timeStat').classList.toggle('hidden', !dailyRoom);
+  if (dailyRoom) {
+    const t = dailyRun && playing ? (countingDown() ? 0 : performance.now() - countdownEnd) : dailyDone ? dailyDone - countdownEnd : null;
+    if (t != null) { const txt = fmtTime(t); if ($('runTime').textContent !== txt) $('runTime').textContent = txt; }
+    if (dailyRun && playing && !countingDown()) { const st = `Daily run: ${Math.min(lines, dailyRun.goal)}/${dailyRun.goal} lines. R restarts.`; if ($('status').textContent !== st) setStatus(st); }
   }
   requestAnimationFrame(frame);
 }

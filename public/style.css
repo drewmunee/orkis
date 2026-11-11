@@ -59,6 +59,7 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #runStats { margin-top:14px; text-align:center; }
 #runStats div { margin-bottom:12px; }
 #runStats span { display:block; color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:1px; }
+#runStats #runTime { font-size:24px; }
 #runStats b { display:block; font-size:30px; font-weight:900; line-height:1.1; font-variant-numeric:tabular-nums; }
 #pieces { width:112px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 6px; }
 #pieces .nextLabel { margin-top:12px; }
