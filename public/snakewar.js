@@ -43,10 +43,11 @@ try { name = localStorage.getItem('sw-name') || ''; } catch {}
 const room = new URLSearchParams(location.search).get('room') || 'lobby';
 if (!name.trim()) { location.replace('/'); return; }
 
-let ws, myId = null, hostId = null, roomState = 'lobby', teamMode = false, tileMode = 'fruit', GW = 112, GH = 63;
+let ws, myId = null, hostId = null, roomState = 'lobby', teamMode = false, teamChoice = 'random', tileMode = 'fruit', GW = 112, GH = 63;
 // bonus tiles (host's choice): fruit (3 of a kind = bonus), letters (4 that spell a word) or none
 const FRUIT_ICON = { banana: '🍌', cherry: '🍒', orange: '🍊' };
 const TILE_LABEL = { fruit: '🍌 Fruit', letters: '🔤 Letters', none: 'None' };
+const FRUIT_DOES = { banana: 'grow', cherry: 'cut', orange: '2 items' }; // what 3 of each fruit does
 let players = [], state = { snakes: [], food: [], drops: [], bits: [], walls: [], specials: [] };
 let booms = []; // recent explosions, for a quick flash
 let countdownEnd = 0, banner = null, best = null; // banner: {text, until}; best: classic high score once known
@@ -61,7 +62,7 @@ function colorOf(id) {
   const p = playerOf(id);
   if (!p) return '#888888';
   if (p.team) { const mates = players.filter(q => q.team === p.team).sort((a, b) => a.slot - b.slot); return TEAM_SHADES[p.team][(p.shade ?? mates.indexOf(p)) % 6]; }
-  if (teamMode && roomState === 'lobby' && p.teamPick) return TEAM_SHADES[p.teamPick][(p.shade ?? 0) % 6]; // the team they picked for next round
+  if (teamMode && roomState === 'lobby' && teamChoice === 'choose' && p.teamPick) return TEAM_SHADES[p.teamPick][(p.shade ?? 0) % 6]; // the team they picked for next round
   return SNAKE_COLORS[p.color || p.slot];
 }
 const nameOf = id => (playerOf(id) || {}).name || '?';
@@ -71,7 +72,7 @@ const myTeam = () => (playerOf(myId) || {}).team;
 function net(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', game: 'snake', name, room, bid: SW.bid, avatar: SW.avatar() });
+  ws.onopen = () => net({ t: 'join', game: 'snake', name, room, bid: SW.bid, avatar: SW.avatar(), shade: SW.teamShade() });
   ws.onclose = () => setStatus('Disconnected. Reload to rejoin.');
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
@@ -80,7 +81,7 @@ function connect() {
       case 'welcome': myId = m.id; GW = m.w; GH = m.h; $('roomName').textContent = m.room; break;
       case 'lobby':
         if (!!m.teamMode !== teamMode && m.state === 'lobby') setStatus(''); // mode switched: last result no longer applies
-        players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; tileMode = m.tileMode || 'fruit'; renderPlayers(); updateChat(); break;
+        players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; teamChoice = m.teamChoice || 'random'; tileMode = m.tileMode || 'fruit'; renderPlayers(); updateChat(); break;
       case 'start':
         players = m.players; countdownEnd = performance.now() + m.countdown; banner = null;
         setStatus((playerOf(myId) || {}).spectating ? 'You\'re spectating this round (type /spectate to play).'
@@ -91,7 +92,7 @@ function connect() {
       case 'ate': if (m.id === myId) { const i = SPECIAL_INFO[m.special]; flashBanner(i.name + (['ghost', 'blockade', 'bomb', 'pacman', 'poop', 'stone'].includes(m.special) ? ' (saved)' : '!'), 900); } break;
       case 'used': if (m.id === myId) flashBanner(SPECIAL_INFO[m.item].name + '!', 700); break;
       case 'note': flashBanner(m.msg, 1200); break;
-      case 'word': if (m.id === myId) flashBanner(`${FRUIT_ICON[m.word] ? FRUIT_ICON[m.word].repeat(3) : m.word}! ${m.reward === 'grow' ? 'Grow!' : 'Cut them!'}`, 1600); break;
+      case 'word': if (m.id === myId) flashBanner(`${FRUIT_ICON[m.word] ? FRUIT_ICON[m.word].repeat(3) : m.word}! ${m.reward === 'grow' ? 'Grow!' : m.reward === 'items' ? (m.items || []).map(i => SPECIAL_INFO[i] ? SPECIAL_INFO[i].name : i).join(' + ') : 'Cut them!'}`, 1800); break;
       case 'boom': booms = booms.filter(b => performance.now() - b.t < 500).concat({ cell: m.cell, r: m.r, t: performance.now() }); break;
       case 'gameover': {
         if (state.classic) break; // solo score arrives in its own 'classic' message
@@ -137,7 +138,7 @@ function renderPlayers() {
   $('players').innerHTML = [...players].sort((a, b) => (a.team || '').localeCompare(b.team || '') || (lens.get(b.id) || 0) - (lens.get(a.id) || 0) || a.slot - b.slot).map(p => {
     const len = lens.get(p.id);
     const out = roomState !== 'lobby' && !len;
-    const tm = p.team || (teamMode && roomState === 'lobby' ? p.teamPick : null); // in the lobby: the team they've picked
+    const tm = p.team || (teamMode && roomState === 'lobby' && teamChoice === 'choose' ? p.teamPick : null); // in the lobby: the team they've picked
     const tag = tm ? `<span class="tm" style="background:${TEAM_COLOR[tm]}" title="${tm === 'red' ? 'Red' : 'Blue'} team">${tm === 'red' ? 'R' : 'B'}</span>` : '';
     // your own row gets ‹ › to change color whenever you're not in play
     const pick = p.id === myId && canPickColor();
@@ -154,7 +155,9 @@ function renderPlayers() {
   $('tilesBtn').classList.toggle('hidden', !hostInLobby);
   $('tilesBtn').textContent = `Bonus tiles: ${TILE_LABEL[tileMode]} (change)`;
   const tilesTxt = roomState !== 'lobby' || players.filter(p => !p.spectating).length < 2 ? '' : `Bonus tiles: ${TILE_LABEL[tileMode]}`;
-  $('modeInfo').textContent = roomState !== 'lobby' ? '' : [teamReady ? 'Next round: Red vs Blue. Pick your team with ‹ › by your name (no pick = filled in to balance)'
+  $('teamChoiceBtn').classList.toggle('hidden', !hostInLobby || !teamMode);
+  $('teamChoiceBtn').textContent = teamChoice === 'choose' ? 'Teams: players choose (switch to random)' : 'Teams: random (switch to players choose)';
+  $('modeInfo').textContent = roomState !== 'lobby' ? '' : [teamReady ? (teamChoice === 'choose' ? 'Next round: Red vs Blue. Pick your team with ‹ › by your name (no pick = filled in to balance)' : 'Next round: Red vs Blue, random teams')
     : teamMode ? 'Team mode needs 2+ players; starting now is classic solo' : '', tilesTxt].filter(Boolean).join(' · ');
 }
 let lastLens = '';
@@ -184,31 +187,31 @@ function renderItems() {
 // Letter rack: the letters you've collected (4 that make a word pay out), under the items
 let lastLetters = '';
 function renderLetters() {
-  const me = state.snakes.find(s => s.id === myId), ls = me ? me.letters || [] : [], fr = (me && Array.isArray(me.fruit) && me.fruit) || [];
+  const me = state.snakes.find(s => s.id === myId), ls = me ? me.letters || [] : [], fr = (me && me.fruit) || {};
   const mode = state.tileMode || 'fruit', show = !state.classic && roomState !== 'lobby' && mode !== 'none';
   const key = (show ? mode : '-') + ls.join('') + JSON.stringify(fr);
   if (key === lastLetters) return; lastLetters = key;
   $('lettersWrap').classList.toggle('hidden', !show);
   let html = '';
-  if (mode === 'fruit') { // one 3-slot queue: the last 3 fruit you ate; all 3 the same = bonus
-    for (let i = 0; i < 3; i++) html += fr[i] ? `<span class="tile fruit">${FRUIT_ICON[fr[i]]}</span>` : '<span class="tile empty"></span>';
-    $('rackLabel').textContent = 'Fruit'; $('rackHint').textContent = '3 of the same in a row = bonus';
+  if (mode === 'fruit') { // each fruit with its count toward 3, and what 3 of it does
+    for (const f of Object.keys(FRUIT_ICON)) html += `<div class="fruitRow" title="3 ${f === 'cherry' ? 'cherries' : f + 's'}: ${FRUIT_DOES[f]}"><span class="fi">${FRUIT_ICON[f]}</span>${[0, 1, 2].map(i => `<span class="pip${i < (fr[f] || 0) ? ' on' : ''}"></span>`).join('')}<span class="fd">${FRUIT_DOES[f]}</span></div>`;
+    $('rackLabel').textContent = 'Fruit'; $('rackHint').textContent = 'collect 3 of a kind';
   } else {
     for (let i = 0; i < 4; i++) html += ls[i] ? `<span class="tile">${ls[i]}</span>` : '<span class="tile empty"></span>';
     $('rackLabel').textContent = 'Letters'; $('rackHint').textContent = '4 that spell a word = bonus';
   }
 
+  $('rack').className = mode === 'fruit' ? 'fruit' : '';
   $('rack').innerHTML = html;
 }
 // Team matches: revive counts at the top, your team's token progress under the scoreboard
+// Team rounds: each team's banked revives with its revive-token progress (3 = 1 revive) beside it, for everyone
 function renderTeams() {
   const t = state.teams;
   $('teamRevives').classList.toggle('hidden', !t);
-  $('tokens').classList.toggle('hidden', !t || !myTeam());
   if (!t) return;
-  $('teamRevives').innerHTML = `<span class="red">RED ♥ ${t.red.revives}</span><span class="blue">BLUE ♥ ${t.blue.revives}</span>`;
-  const mine = t[myTeam()];
-  if (mine) $('tokens').innerHTML = `Revive tokens <span class="pips">${'♥'.repeat(mine.tokens)}<span class="off">${'♥'.repeat(3 - mine.tokens)}</span></span><small>3 tokens = 1 team revive</small>`;
+  const pips = n => `<small class="pips" title="Revive tokens: ${n}/3 toward the next revive">${'●'.repeat(n)}<span class="off">${'●'.repeat(Math.max(0, 3 - n))}</span></small>`;
+  $('teamRevives').innerHTML = `<span class="red">${pips(t.red.tokens)} RED ♥ ${t.red.revives}</span><span class="blue">BLUE ♥ ${t.blue.revives} ${pips(t.blue.tokens)}</span>`;
 }
 
 // ---------- drawing ----------
@@ -431,7 +434,12 @@ document.addEventListener('keydown', e => {
   // NOKIA (numpad 1 / 9) and VIM (H / L) steering: two keys that turn relative to where you're heading;
   // the server works out the actual direction (see snake.js)
   const scheme = SW.snakeKeys();
-  const rel = scheme === 'nokia' ? { Numpad1: 'a', Numpad9: 'b' }[e.code] : scheme === 'vim' ? { h: 'a', l: 'b' }[e.key.toLowerCase()] : null;
+  // NOKIA uses the numeric keypad's 1 and 9 only (never the 1/9 in the top row). e.code is Numpad1/Numpad9
+  // with Num Lock on or off; e.location 3 (keypad) covers browsers that report the key as End/PageUp.
+  const pad = e.location === 3 || /^Numpad/.test(e.code);
+  const nokia = pad && (e.code === 'Numpad1' || e.key === 'End' || (e.key === '1' && e.location === 3)) ? 'a'
+    : pad && (e.code === 'Numpad9' || e.key === 'PageUp' || (e.key === '9' && e.location === 3)) ? 'b' : null;
+  const rel = scheme === 'nokia' ? nokia : scheme === 'vim' ? { h: 'a', l: 'b' }[e.key.toLowerCase()] : null;
   if (rel) { net({ t: 'dir', rel }); e.preventDefault(); return; }
   const d = steerKey(e.key);
   if (d) { net({ t: 'dir', d }); e.preventDefault(); }
@@ -444,6 +452,7 @@ $('chat').addEventListener('keydown', e => {
 $('chat').addEventListener('blur', updateChat);
 $('startBtn').onclick = e => { net({ t: 'start' }); e.target.blur(); };
 $('teamBtn').onclick = e => { net({ t: 'teammode', on: !teamMode }); e.target.blur(); };
+$('teamChoiceBtn').onclick = e => { net({ t: 'teamchoice', mode: teamChoice === 'choose' ? 'random' : 'choose' }); e.target.blur(); };
 $('tilesBtn').onclick = e => { const order = ['fruit', 'letters', 'none']; net({ t: 'tiles', mode: order[(order.indexOf(tileMode) + 1) % 3] }); e.target.blur(); };
 // Leave the room for real: tell the server first (so it drops you immediately), then close.
 function leaveRoom() { try { if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ t: 'leave' })); ws.close(); } } catch {} }
@@ -457,7 +466,8 @@ $('leaveBtn').onclick = e => {
 SW.mountSettings($('themeBar')); // ⚙ Settings: theme + controls, saved per browser
 SW.onChange(() => { readTheme(); renderKeysHelp(); });
 // a new avatar picked in ⚙ Settings shows up for everyone in the room straight away
-let sentAvatar = SW.avatar();
+let sentAvatar = SW.avatar(), sentShade = SW.teamShade();
+SW.onChange(() => { if (SW.teamShade() !== sentShade) { sentShade = SW.teamShade(); if (sentShade != null) net({ t: 'shade', i: sentShade }); } });
 SW.onChange(() => { if (SW.avatar() !== sentAvatar) { sentAvatar = SW.avatar(); net({ t: 'avatar', a: sentAvatar }); } });
 renderKeysHelp();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', readTheme);

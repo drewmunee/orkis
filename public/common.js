@@ -50,14 +50,21 @@ window.SW = (() => {
   // Avatars shown next to your name in every game (the item emojis from Snakewar, for now).
   // The server keeps the same list (avatars.js) and ignores anything else.
   const AVATARS = ['⚡', '👻', '✂', '🐌', '👅', '💣', '♥'];
+  // Snakewar's team shades (same order as TEAM_SHADES in snakewar.js)
+  const TEAM_SHADES = {
+    red: ['#ff3b3b', '#ff9a1f', '#ffd400', '#ff5fa8', '#b3122e', '#ffb38a'],
+    blue: ['#2f6bff', '#1fbf5a', '#9b5cff', '#19c8e6', '#0f8f8a', '#8fb4ff'],
+  };
   const OPTIONS = {
     theme: [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']],
     controls: [['arrows', 'Arrow keys'], ['wasd', 'WASD']],
     // Snakewar only: extra two-key steering schemes (your normal steering keys keep working too)
     snakeKeys: [['normal', 'Normal'], ['nokia', 'NOKIA'], ['vim', 'VIM']],
     avatar: [['', 'None'], ...AVATARS.map(a => [a, a])],
+    // Snakewar team mode: which of the 6 team shades your snake uses (the same shade on red or blue)
+    teamShade: [['', 'Any'], ...[0, 1, 2, 3, 4, 5].map(i => [String(i), `<span class="shade2" title="Shade ${i + 1}"><i style="background:${TEAM_SHADES.red[i]}"></i><i style="background:${TEAM_SHADES.blue[i]}"></i></span>`])],
   };
-  const DEFAULTS = { theme: 'system', controls: 'arrows', snakeKeys: 'normal', avatar: '' };
+  const DEFAULTS = { theme: 'system', controls: 'arrows', snakeKeys: 'normal', avatar: '', teamShade: '' };
   const SNAKE_HINTS = {
     normal: 'Steer with your Controls keys above',
     nokia: 'Numpad 1 / 9: moving sideways, 1 turns up and 9 turns down; moving up or down, 1 turns left and 9 turns right',
@@ -78,6 +85,7 @@ window.SW = (() => {
         <div class="settings-row"><div class="settings-label">Controls</div><div class="seg" data-key="controls"></div><div class="settings-hint" data-hint="controls"></div></div>
         <div class="settings-row"><div class="settings-label">Snakewar steering</div><div class="seg" data-key="snakeKeys"></div><div class="settings-hint" data-hint="snakeKeys"></div></div>
         <div class="settings-row"><div class="settings-label">Avatar <small>shown next to your name</small></div><div class="seg avatars" data-key="avatar"></div></div>
+        <div class="settings-row"><div class="settings-label">Team shade <small>Snakewar team mode</small></div><div class="seg avatars" data-key="teamShade"></div></div>
         <div class="settings-note">Saved for this browser.</div>
       </div>`;
     const btn = host.querySelector('.settings-btn'), pop = host.querySelector('.settings-pop');
@@ -108,6 +116,8 @@ window.SW = (() => {
     controls,
     snakeKeys: () => SNAKE_HINTS[settings.snakeKeys] ? settings.snakeKeys : 'normal',
     AVATARS, avatar, avatarHtml,
+    // preferred Snakewar team shade 0-5, or null for "any"
+    teamShade: () => /^[0-5]$/.test(String(settings.teamShade ?? '')) ? +settings.teamShade : null,
     mountSettings,
     leaderboardText,
   };

@@ -71,7 +71,9 @@ const LETTER_BAG = 'EEEEEEEEEAAAAAAAIIIIIIOOOOOOUUURRRRRSSSSSTTTTTTLLLLNNNNNNDDD
 // Bonus tiles: the host picks what spawns (same spawn rules either way): 'fruit' (default) - banana,
 // cherries or orange; 3 of the same fruit pays the same bonus as a word - or 'letters', or 'none'.
 const TILE_MODES = ['fruit', 'letters', 'none'];
-const FRUITS = ['banana', 'cherry', 'orange'], FRUIT_SET = 3; // one 3-slot fruit queue: 3 of the same = bonus
+// fruit: collect any fruit; every 3rd of a kind pays that fruit's reward: banana = grow, cherry = cut every
+// enemy, orange = two random special items
+const FRUITS = ['banana', 'cherry', 'orange'], FRUIT_SET = 3, ORANGE_ITEMS = 2;
 const ANAGRAMS = new Map(); // sorted letters -> a word they spell
 for (const w of WORDS) { const k = [...w.toUpperCase()].sort().join(''); if (!ANAGRAMS.has(k)) ANAGRAMS.set(k, w.toUpperCase()); }
 const FFA_COLORS = 12, TEAM_SHADES = 6;        // palette sizes (the colors themselves live in the client)
@@ -115,7 +117,7 @@ function freeSlot(room) {
 function playerList(room) {
   return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, len: p.body.length, team: p.team || null, color: p.color, shade: p.shade, avatar: p.avatar || null, spectating: !!p.spectating, teamPick: p.teamPick || null }));
 }
-function sendLobby(room) { broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode, tileMode: room.tileMode || 'fruit' }); }
+function sendLobby(room) { broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode, teamChoice: room.teamChoice || 'random', tileMode: room.tileMode || 'fruit' }); }
 function log(room, msg) { broadcast(room, { t: 'log', msg }); }
 function setField(room, n) {
   Object.assign(room, fieldFor(n));
@@ -158,7 +160,7 @@ function spawnSnake(room, p, occ) {
     let clear = true; // keep a clear zone around the new snake
     for (const c of body) { const [cx, cy] = xy(room, c); for (let ox = -3; ox <= 3 && clear; ox++) for (let oy = -3; oy <= 3; oy++) if (occ.has(cell(room, cx + ox, cy + oy))) { clear = false; break; } }
     if (!clear) continue;
-    p.body = body; p.dir = dir; p.queue = []; p.grow = 0; p.fx = {}; p.alive = true; p.items = []; p.letters = []; p.fruit = []; p.spawnUntil = 0;
+    p.body = body; p.dir = dir; p.queue = []; p.grow = 0; p.fx = {}; p.alive = true; p.items = []; p.letters = []; p.fruit = { banana: 0, cherry: 0, orange: 0 }; p.spawnUntil = 0;
     for (const c of body) occ.add(c);
     return true;
   }
@@ -185,7 +187,7 @@ function startRound(room) {
   for (const p of room.players.values()) if (p.spectating) { p.team = null; p.inRound = false; p.alive = false; }
   for (let i = order.length - 1; i > 0; i--) { const j = rnd(i + 1); [order[i], order[j]] = [order[j], order[i]]; }
   order.forEach(p => { p.team = null; p.eaten = 0; p.inRound = true; });
-  if (room.teamMatch) assignTeams(order);
+  if (room.teamMatch) assignTeams(order, room.teamChoice === 'choose');
   room.teams = { red: { tokens: 0, revives: 0 }, blue: { tokens: 0, revives: 0 } };
   room.wallOwner = new Map();
   for (const p of order) { p.maxLen = START_LEN; stats.add(p, 'snakewar', { played: 1, [room.classic ? 'classic_runs' : room.teamMatch ? 'team_games' : 'ffa_games']: 1 }); }
@@ -204,11 +206,13 @@ function startRound(room) {
     room.timer = setInterval(() => tick(room), room.tickMs);
   }, COUNTDOWN_MS);
 }
-// Team rounds: everyone who picked a team (with the ‹ › color picker) gets it; the rest are shuffled onto
-// the smaller team. If that leaves a team empty, random players move over until the teams differ by at
-// most one (so a round can never be all one team).
-function assignTeams(order) {
+// Team rounds. The host picks how teams are made (room.teamChoice):
+//  'random' (default): shuffled and split evenly (sizes differ by at most one)
+//  'choose': everyone who picked a team (with the ‹ › color picker) gets it; the rest go onto the smaller
+//  team. If that leaves a team empty, random players move over until the sizes differ by at most one.
+function assignTeams(order, choose) {
   const size = t => order.filter(p => p.team === t).length;
+  if (!choose) { order.forEach((p, i) => { p.team = i % 2 ? 'blue' : 'red'; }); return; } // order is already shuffled
   for (const p of order) if (p.teamPick === 'red' || p.teamPick === 'blue') p.team = p.teamPick;
   for (const p of order) if (!p.team) p.team = size('red') <= size('blue') ? 'red' : 'blue';
   for (const [from, to] of [['red', 'blue'], ['blue', 'red']]) {
@@ -235,7 +239,7 @@ function topUpFood(room) {
 // own blockade), snake (ran into someone / turned into a head), tongue, blockade, head_on (nobody gets
 // credit), wall (classic), shrink, left (not counted as a death)
 function kill(room, p, why, info = {}) {
-  p.alive = false; p.items = []; p.letters = []; p.fruit = [];
+  p.alive = false; p.items = []; p.letters = []; p.fruit = { banana: 0, cherry: 0, orange: 0 };
   stats.best(p, 'snakewar', 'longest', p.maxLen || p.body.length);
   if (info.kind && info.kind !== 'left') {
     stats.add(p, 'snakewar', { deaths: 1, ['deaths_' + info.kind]: 1 });
@@ -400,22 +404,29 @@ function takeLetter(room, p, ch, x2) {
   stats.add(p, 'snakewar', 'words');
   tileBonus(room, p, x2, `spelled ${word}`, word);
 }
-// Fruit goes into a 3-slot queue (a 4th pushes out the oldest); when all 3 are the same fruit, the queue
-// clears and pays the bonus.
+// Each fruit counts toward its own set of 3; the 3rd of a kind pays that fruit's reward and resets its count.
 function takeFruit(room, p, fruit, x2) {
-  p.fruit.push(fruit);
-  if (p.fruit.length > FRUIT_SET) p.fruit.splice(0, p.fruit.length - FRUIT_SET);
+  p.fruit[fruit] = (p.fruit[fruit] || 0) + 1;
   stats.add(p, 'snakewar', 'fruit');
-  if (p.fruit.length < FRUIT_SET || p.fruit.some(f => f !== fruit)) return;
-  p.fruit = [];
+  if (p.fruit[fruit] < FRUIT_SET) return;
+  p.fruit[fruit] = 0;
   stats.add(p, 'snakewar', 'fruit_sets');
-  tileBonus(room, p, x2, `collected 3 ${fruit === 'cherry' ? 'cherries' : fruit + 's'}`, fruit);
+  const what = `collected 3 ${fruit === 'cherry' ? 'cherries' : fruit + 's'}`;
+  if (fruit === 'orange') { // two random special items, exactly as if picked up off the field
+    const pool = Object.keys(SPECIALS).filter(k => k !== 'token' && k !== 'feast');
+    const got = Array.from({ length: ORANGE_ITEMS }, () => pool[rnd(pool.length)]);
+    for (const type of got) pickUp(room, p, { type }, x2);
+    log(room, `${p.name} ${what}: ${got.join(' + ')}!`);
+    return broadcast(room, { t: 'word', id: p.id, word: fruit, reward: 'items', items: got });
+  }
+  tileBonus(room, p, x2, what, fruit, fruit === 'banana' ? 'grow' : 'cut');
 }
-// The bonus for a word or a set of fruit: a coin flip between a big growth and a big cut to every enemy
-function tileBonus(room, p, x2, what, label) {
+// The bonus for a word (coin flip) or a set of bananas (grow) / cherries (cut): a big growth, or a big
+// cut to every enemy
+function tileBonus(room, p, x2, what, label, kind = Math.random() < 0.5 ? 'grow' : 'cut') {
   const now = Date.now();
   let reward;
-  if (Math.random() < 0.5) { reward = 'grow'; p.grow += WORD_GROW * x2; log(room, `${p.name} ${what}: +${WORD_GROW * x2} length!`); }
+  if (kind === 'grow') { reward = 'grow'; p.grow += WORD_GROW * x2; log(room, `${p.name} ${what}: +${WORD_GROW * x2} length!`); }
   else {
     reward = 'cut';
     for (const q of alivePlayers(room)) if (enemies(room, p, q) && !immune(q, now)) {
@@ -675,7 +686,7 @@ function join(ws, id, m) {
   if (clash) clash.ws.terminate(); // same browser rejoining: drop its old connection
   const slot = freeSlot(room);
   if (!slot) { send(ws, { t: 'error', msg: `Room is full (${MAX_PLAYERS} players max).` }); return null; }
-  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: null, avatar: avatars.clean(m.avatar) };
+  const me = { id, ws, slot, bid: typeof m.bid === 'string' ? m.bid.slice(0, 40) : null, name: String(m.name || 'Player').trim().slice(0, 14) || 'Player', alive: false, body: [], dir: 'R', queue: [], grow: 0, fx: {}, items: [], wins: 0, team: null, color: slot, shade: Number.isInteger(m.shade) && m.shade >= 0 && m.shade < TEAM_SHADES ? m.shade : null, avatar: avatars.clean(m.avatar) };
   room.players.set(id, me);
   if (room.state === 'lobby') setField(room, Math.max(1, players(room).length)); // preview the size the next round will use
   send(ws, { t: 'welcome', id, room: code, w: room.w, h: room.h, tick: TICK_MS, specials: SPECIALS });
@@ -703,6 +714,12 @@ function join(ws, id, m) {
         room.teamMode = !!m.on;
         for (const p of room.players.values()) p.team = null; // last round's teams no longer apply
         sendLobby(room);
+      } else if (m.t === 'teamchoice' && me.id === room.hostId && room.state === 'lobby' && ['random', 'choose'].includes(m.mode)) {
+        room.teamChoice = m.mode; // random teams, or players pick theirs with the color picker
+        sendLobby(room);
+      } else if (m.t === 'shade' && Number.isInteger(m.i) && m.i >= 0 && m.i < TEAM_SHADES) {
+        me.shade = m.i; // preferred team shade from ⚙ Settings (same shade on either team)
+        sendLobby(room);
       } else if (m.t === 'tiles' && me.id === room.hostId && room.state === 'lobby' && TILE_MODES.includes(m.mode)) {
         room.tileMode = m.mode; // bonus tiles for the next rounds: fruit, letters or none
         sendLobby(room);
@@ -710,13 +727,13 @@ function join(ws, id, m) {
         // pick your color while you're not in play (dead, spectating or between rounds):
         // any color normally, or a shade of your team's color in team mode
         if (me.alive && room.state !== 'lobby') return;
-        if (room.teamMode && room.state === 'lobby') {
+        if (room.teamMode && room.state === 'lobby' && room.teamChoice === 'choose') {
           // team mode, between rounds: the picker runs through the 6 red shades then the 6 blue shades,
           // so picking a color also picks your team for the next round
           const cur = (me.teamPick === 'blue' ? TEAM_SHADES : 0) + ((me.shade ?? 0) % TEAM_SHADES);
           const next = (cur + m.d + 2 * TEAM_SHADES) % (2 * TEAM_SHADES);
           me.teamPick = next < TEAM_SHADES ? 'red' : 'blue'; me.shade = next % TEAM_SHADES;
-        } else if (me.team || room.teamMode) { // mid-round (out or spectating): a shade of your current team
+        } else if (me.team || room.teamMode) { // random teams, or mid-round: a shade (same shade on either team)
           const mates = [...room.players.values()].filter(q => q.team && q.team === me.team).sort((a, b) => a.slot - b.slot);
           const cur = me.shade ?? Math.max(0, mates.indexOf(me)) % TEAM_SHADES;
           me.shade = (cur + m.d + TEAM_SHADES) % TEAM_SHADES;

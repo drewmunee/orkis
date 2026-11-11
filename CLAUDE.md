@@ -54,7 +54,8 @@ New games must call the same `leaveRoom()` pattern.
   Blockwar moves with the chosen keys; before a player chooses, both sets work there. Help text follows
   the chosen scheme. New games must honor `SW.controls()`.
 - **Snakewar steering** (setting `snakeKeys`: `normal` | `nokia` | `vim`, `SW.snakeKeys()`): two-key relative
-  steering on top of the normal keys. NOKIA = numpad 1 / 9 (`e.code`), VIM = H / L. Moving sideways, key 1/H
+  steering on top of the normal keys. NOKIA = the numeric keypad's 1 / 9 only, never the top-row digits
+  (`e.code` Numpad1/9, or keypad `e.location` 3 reporting End/PageUp with Num Lock off), VIM = H / L. Moving sideways, key 1/H
   turns up and 9/L turns down; moving up or down, 1/H turns left and 9/L turns right. The client sends
   `{t:'dir', rel:'a'|'b'}` and `snake.js` resolves it against the last queued direction.
 - **Avatars** (setting `avatar`): one of the Snakewar item emojis (`SW.AVATARS` in `common.js`, same list in
@@ -217,11 +218,12 @@ New games must call the same `leaveRoom()` pattern.
   `immune(p)` (ghost, stone or revive shield) is the one check for "safe from other players' items".
 - **Bonus tiles** (battle rounds only, own spawner: ~1 per 4 s, max 4 on the field, 20 s each; never in the
   special pool). The host picks the kind in the lobby (`tilesBtn`, `{t:'tiles', mode}`, `room.tileMode`,
-  fixed per round as `room.roundTiles`): **fruit** (default: 🍌 🍒 🍊; one 3-slot queue per player, a 4th
-  pushes out the oldest; when all 3 are the same fruit it pays out and clears), **letters** (weighted bag, no J/Q/X/Z; 4-letter rack, a 5th
+  fixed per round as `room.roundTiles`): **fruit** (default: 🍌 🍒 🍊; collect any fruit, counted per kind;
+  every 3rd of a kind resets that count and pays its own reward: banana = +12 length, cherry = every enemy
+  loses a third, orange = 2 random special items applied as if picked up), **letters** (weighted bag, no J/Q/X/Z; 4-letter rack, a 5th
   drops the oldest; 4 that can be arranged into a word from `words4.js` (5,466 words from the MIT
   `word-list` package, slurs removed) pay out and clear the rack) or **none**. The payout (`tileBonus`) is a
-  coin flip: +12 length (x2 with Double) or every enemy loses a third (min 3, ghosts immune). Fruit counts /
+  coin flip for words: +12 length (x2 with Double) or every enemy loses a third (min 3, immune snakes safe). Fruit counts /
   letter rack shown under the items. Tiles live in `room.letters` ({ch} or {fruit}). Fruit emoji must be
   drawn with an opaque fillStyle (canvas applies its alpha to emoji). Stats: letters, words, fruit,
   fruit_sets, pacman_used/bites/bitten, poop_used.
@@ -232,14 +234,18 @@ New games must call the same `leaveRoom()` pattern.
 - Snake heads are drawn slightly darker than the body (`darker()` in `public/snakewar.js`) so heads are easy to spot.
 - Colors: while not in play (between rounds, dead, spectating) players use ‹ › by their name on the
   scoreboard: any of 12 colors normally, or one of 6 shades of their team's color in team mode.
-- **Team mode** (host toggle between rounds): Red vs Blue each round. Between rounds in team mode the ‹ ›
+- **Team mode** (host toggle between rounds): Red vs Blue each round. The host also picks **random teams**
+  (default; shuffled and split evenly) or **players choose** (`teamChoiceBtn`, `{t:'teamchoice'}`,
+  `room.teamChoice`). Players set a preferred team shade (0-5, same shade on red or blue) in ⚙ Settings
+  (`teamShade`, sent on join and as `{t:'shade', i}`). In choose mode, between rounds, the ‹ ›
   color picker cycles 6 red shades then 6 blue shades, which sets `teamPick` (shown as R/B in the lobby);
-  `assignTeams` honours picks, puts unpicked players on the smaller team, and only if a team would be
+  otherwise it only changes the shade. `assignTeams` honours picks (choose mode), puts unpicked players on the smaller team, and only if a team would be
   empty moves random players over until the sizes differ by at most 1 (so picks can make e.g. 3v1). Red spawns on the left facing
   right, Blue on the right facing left (revives too). Red team = warm shades,
   blue team = cool shades, plus a team-colored ring on each head. Shears/Slow/Extendo hit the other team
   only. Revive tokens spawn only in team rounds, rarer as the round goes on; every 3 a team collects =
-  1 revive, used automatically to respawn a dead teammate. After any death in a team round, tokens spawn
+  1 revive, used automatically to respawn a dead teammate. Both teams' token progress (●●○) shows beside
+  their revive counts in the top bar, visible to everyone. After any death in a team round, tokens spawn
   4x as often for 20 s. A revived snake blinks in place for 3 s (`spawnUntil`: not moving, nothing can hit
   it, others pass through), then has 3 s of `fx.shield` (passes through like a ghost, immune to items,
   pulsing white ring). Team out = nobody alive. No team score yet.
