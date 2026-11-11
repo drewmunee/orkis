@@ -148,7 +148,7 @@ function finishDaily(room, p) {
   if (ms < daily.MIN_MS) { console.warn(`ignored implausible daily time ${ms} ms from ${p.name}`); send(p.ws, { t: 'daily', ms, error: true }); }
   else {
     stats.add(p, 'stackwar', 'daily_finishes');
-    const firstTry = p.dailyAttempt === 1;
+    const firstTry = p.dailyAttempt === 1 && !p.restarted;
     daily.submit(room.dailyDay, p, ms, firstTry).then(r => send(p.ws, { t: 'daily', ms, firstTry, ...r }),
       e => { console.error('daily write failed:', e.message); send(p.ws, { t: 'daily', ms, error: true }); });
   }
@@ -267,6 +267,7 @@ wss.on('connection', ws => {
         break;
       case 'restart': // daily run only: R starts a fresh attempt at any time, even mid-run
         if (!room.daily || me.id !== room.hostId) return;
+        me.restarted = true; // a restarted run can never earn the ⚡ first-try badge
         startRoom(room);
         break;
       case 'avatar': // picked a new avatar in ⚙ Settings
