@@ -89,13 +89,29 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 
 
 #leaderboard { width:300px; text-align:left; }
-#lbList { list-style:none; margin:0; padding:0; }
-#lbList li { display:flex; align-items:center; gap:10px; padding:5px 2px; border-bottom:1px solid var(--line); }
-#lbList li:last-child { border-bottom:none; }
-#lbList .rk { width:22px; color:var(--dim); font-weight:700; text-align:right; }
-#lbList li:nth-child(1) .rk { color:var(--title); }
-#lbList .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#lbList .empty { color:var(--dim); border:none; }
+#lbList, #dailyList { list-style:none; margin:0; padding:0; }
+#lbList li, #dailyList li { display:flex; align-items:center; gap:10px; padding:5px 2px; border-bottom:1px solid var(--line); }
+#lbList li:last-child, #dailyList li:last-child { border-bottom:none; }
+#lbList .rk, #dailyList .rk { width:22px; color:var(--dim); font-weight:700; text-align:right; }
+#lbList li:nth-child(1) .rk, #dailyList li:nth-child(1) .rk { color:var(--title); }
+#lbList .nm, #dailyList .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#lbList .empty, #dailyList .empty { color:var(--dim); border:none; }
+/* Stackwar daily run: today's top 10 times, next to the leaderboard */
+#daily { width:260px; text-align:left; }
+#dailyList b { font-variant-numeric:tabular-nums; }
+#dailyList li:nth-child(2) .rk { color:#9aa3b5; }
+#dailyList li:nth-child(3) .rk { color:#c98a5a; }
+#dailyBtn { width:100%; margin-top:8px; }
+#dailyReset { color:var(--dim); font-size:12px; margin-top:6px; text-align:center; }
+/* homepage chat, pinned to the bottom-left corner */
+#homeChat { position:fixed; left:14px; bottom:14px; width:300px; height:250px; display:flex; flex-direction:column; text-align:left; z-index:5; }
+#hcLog { flex:1; min-height:0; overflow-y:auto; font-size:13px; margin-bottom:6px; }
+#hcLog div { padding:1px 0; overflow-wrap:anywhere; }
+#hcLog .who { font-weight:700; margin-right:5px; color:var(--title); }
+#hcLog .ev { color:var(--dim); font-style:italic; }
+#hcMsg { width:100%; padding:5px 8px; font-size:13px; }
+#hcErr { font-size:12px; margin-top:4px; }
+#hcErr:empty { display:none; }
 #leaderboard .hint { color:var(--dim); font-size:12px; margin:8px 0 0; }
 
 /* homepage game picker */
@@ -170,3 +186,13 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #topTabs a { padding:6px 18px; border-radius:18px; color:var(--dim); text-decoration:none; font-weight:700; font-size:14px; }
 #topTabs a:hover { color:var(--text); }
 #topTabs a.on { background:var(--accent); color:#111; }
+/* narrower windows: keep the lobby/leaderboard/daily tables clear of the chat in the bottom-left corner */
+@media (max-width:1700px) {
+  #homeChat { width:280px; }
+  #boards { padding-left:310px; }
+}
+@media (max-width:1380px) {
+  #lobbies { width:320px; }
+  #leaderboard { width:240px; }
+  #daily { width:210px; }
+}

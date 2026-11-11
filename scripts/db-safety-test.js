@@ -71,6 +71,14 @@ async function snapshot(pool) {
   const top = await leaderboard.top('stackwar');
   assert.strictEqual(top.filter(e => e.name.toLowerCase() === 'dg').length, 1); ok('legacy DG merged into the browser spot, listed once');
   await swearjar.addQuarter(p); await settings.set(BID, { theme: 'dark' });
+  const homechat = require(path.join(ROOT, 'homechat'));
+  const daily = require(path.join(ROOT, 'daily'));
+  await homechat.post({ bid: BID, name: 'DG', msg: 'hello' });
+  assert.strictEqual((await homechat.since(0)).filter(l => l.msg === 'hello').length, 1); ok('homepage chat line saved once');
+  const day = daily.today();
+  await daily.submit(day, p, 30000); await daily.submit(day, p, 45000);
+  const dtop = await daily.top(day);
+  assert.strictEqual(dtop.length, 1); assert.strictEqual(dtop[0].ms, 30000); ok('daily run keeps the best time, one entry per player');
 
   console.log('4. restarting with no new migrations changes nothing');
   let before = await snapshot(pool);

@@ -32,7 +32,21 @@
       <div class="label">Top 10 <small id="lbWhat"></small></div>
       <ol id="lbList"><li class="empty">Loading…</li></ol>
     </section>
+    <!-- Stackwar only: today's seeded 40-line race -->
+    <section id="daily" class="panel hidden">
+      <div class="label">Daily run <small id="dailyWhat">40 lines, fastest time</small></div>
+      <ol id="dailyList"><li class="empty">Loading…</li></ol>
+      <button id="dailyBtn" type="button">Play today's run</button>
+      <div id="dailyReset"></div>
+    </section>
   </div>
+  <!-- site-wide chat that keeps its last 50 lines -->
+  <section id="homeChat" class="panel">
+    <div class="label">Chat <small>last 50 messages</small></div>
+    <div id="hcLog"></div>
+    <form id="hcForm"><input id="hcMsg" placeholder="Say something…" maxlength="200" autocomplete="off"></form>
+    <div id="hcErr" class="err"></div>
+  </section>
 </div>
 <!-- the selected game's top 3 players, in huge letters drifting across the background -->
 <div id="marquee" aria-hidden="true"></div>

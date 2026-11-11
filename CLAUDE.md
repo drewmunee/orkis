@@ -100,6 +100,22 @@ New games must call the same `leaveRoom()` pattern.
   snapshots; server counts the increase, capped), specials, best solo score and level.
 - New games should record stats the same way and add a card to `statspage.js`.
 
+## Homepage chat and Stackwar daily run
+- **Homepage chat** (`homechat.js`, table `home_chat`): one site-wide room, fixed in the homepage's
+  bottom-left corner; keeps only its newest 50 lines. `GET /api/chat?after=<id>` (polled every 3 s while
+  the homepage shows), `POST /api/chat {bid, name, msg}`. Uses the username box above; slur names refused,
+  1 message/s per player, `/commands` refused (they work in game lobbies), swear jar applies (its line is
+  saved as a nameless event line). Below 1700 px wide the homepage tables shift right of the chat
+  (`#boards` padding) and below 1380 px they slim down, so nothing overlaps at 1152x720.
+- **Daily run** (`daily.js`, table `daily_runs`): Stackwar only, shown right of the leaderboard. Each UTC
+  day has one seed (`seedFor(day)`); "Play today's run" joins a private hidden room (`daily-…`, not in
+  `/api/lobbies`, nobody else can join) that starts at once. Goal: 40 lines; no garbage, no first-4-line
+  bonus, team mode off. The server times it from the end of the 3 s countdown to the clear reaching 40
+  (under 12 s is rejected), keeps each player's best per day (one entry per username on the board, top 10),
+  and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries.
+  The client shows a live x/40 + timer in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top}.
+  Stats: `daily_runs`, `daily_finishes`.
+
 ## Chat commands (all games)
 - `commands.js`, shared by all three games' chat handlers: a chat message starting with `/` is a command,
   not chat (never broadcast, no swear jar). One word, case-insensitive, extra words ignored. Replies go

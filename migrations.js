@@ -46,7 +46,20 @@ const MIGRATIONS = [
         SELECT 1 FROM scores b WHERE b.game = s.game AND b.player_key LIKE 'b:%' AND lower(b.name) = lower(s.name) AND b.score >= s.score)`);
     },
   },
-  // { id: 2, name: '...', async up(q) { await q('ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT ...'); } },
+  {
+    id: 2, name: 'homepage chat + Stackwar daily run times',
+    async up(q) {
+      // the homepage's persistent chat (only the newest lines are kept; see homechat.js)
+      await q(`CREATE TABLE IF NOT EXISTS home_chat (
+        id bigserial PRIMARY KEY, player_key text NOT NULL, name text NOT NULL, msg text NOT NULL,
+        at timestamptz NOT NULL DEFAULT now())`);
+      // Stackwar daily 40-line run: each player's best time per (UTC) day
+      await q(`CREATE TABLE IF NOT EXISTS daily_runs (
+        day text NOT NULL, player_key text NOT NULL, name text NOT NULL, ms integer NOT NULL,
+        achieved_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (day, player_key))`);
+    },
+  },
+  // { id: 3, name: '...', async up(q) { await q('ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT ...'); } },
 ];
 
 const LOCK_ID = 7314021; // any constant; shared by every server instance

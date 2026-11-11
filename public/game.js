@@ -47,6 +47,9 @@ const countingDown = () => performance.now() < countdownEnd;
 // Flip this to true to show it on the homepage and mention ranks after solo runs.
 const SHOW_LEADERBOARD = true;
 let soloRun = false;
+// Daily run: everyone gets the same seeded solo run each (UTC) day; clear 40 lines as fast as you can.
+let dailyRoom = false, dailyRun = null, dailyDone = 0; // dailyRun: {goal, day} while a daily run is on
+const fmtTime = ms => { const t = Math.max(0, ms) / 1000, m = Math.floor(t / 60), sec = t - m * 60; return `${m}:${sec.toFixed(2).padStart(5, '0')}`; };
 let teamMode = false; // host's toggle for the next match; players' .team is set per match ('red' | 'blue' | null)
 const TEAM_COLORS = { red: '#ff4d5e', blue: '#3d7bff' };
 const teamTag = t => t ? `<span class="team team-${t}">${t === 'red' ? 'Red' : 'Blue'}</span>` : ''; // game started with only this player: score goes to the leaderboard
@@ -134,6 +137,8 @@ function lock() {
   if (over) return die();
   const n = clearLines(true);
   if (n) net({ t: 'lines', count: n }); // server counts every clear (solo score) and sends garbage for 2+
+  // daily run: stop the moment you reach the goal; the server times it and sends the result
+  if (dailyRun && lines >= dailyRun.goal && playing) { playing = false; piece = null; dailyDone = performance.now(); setStatus(`Done in ${fmtTime(dailyDone - countdownEnd)}! Checking the time…`); }
   holdUsed = false;
   spawn();
   syncBoard();
@@ -244,6 +249,10 @@ function frame(t) {
   }
   draw();
   renderEffects();
+  if (dailyRun && playing && !countingDown()) { // live timer while a daily run is on
+    const txt = `Daily run: ${Math.min(lines, dailyRun.goal)}/${dailyRun.goal} lines · ${fmtTime(performance.now() - countdownEnd)}`;
+    if ($('status').textContent !== txt) setStatus(txt);
+  }
   requestAnimationFrame(frame);
 }
 // timed effects on you, as pills beside your specials hand; the last 3 s blink so you notice it's ending.
@@ -399,8 +408,8 @@ function renderPlayers() {
   const hostInLobby = myId === hostId && roomState === 'lobby';
   $('startBtn').classList.toggle('hidden', !hostInLobby);
   const teamReady = teamMode && players.length >= 2; // team mode with one player is just a solo run
-  $('startBtn').textContent = players.length === 1 ? 'Start solo run' : teamReady ? 'Start team game' : 'Start game';
-  $('teamBtn').classList.toggle('hidden', !hostInLobby);
+  $('startBtn').textContent = dailyRoom ? 'Play again' : players.length === 1 ? 'Start solo run' : teamReady ? 'Start team game' : 'Start game';
+  $('teamBtn').classList.toggle('hidden', !hostInLobby || dailyRoom);
   $('teamBtn').textContent = teamMode ? 'Team mode: ON (switch to free-for-all)' : 'Switch to team mode';
   $('teamBtn').classList.toggle('on', teamMode);
   $('modeInfo').textContent = roomState !== 'lobby' ? '' : teamReady ? 'Next game: Red vs Blue (teams picked at random)'
@@ -426,16 +435,17 @@ function flash(id) { const el = document.querySelector(`.opp[data-id="${id}"]`);
 
 // ---------- networking ----------
 function net(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
-function connect(name, room) {
+function connect(name, room, isDaily = false) {
+  dailyRoom = isDaily;
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => net({ t: 'join', name, room, bid: SW.bid });
+  ws.onopen = () => net({ t: 'join', name, room, bid: SW.bid, daily: isDaily });
   ws.onclose = () => { setStatus('Disconnected from server.'); playing = false; };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     switch (m.t) {
       case 'error': $('joinErr').textContent = m.msg; break;
       case 'welcome':
-        myId = m.id; $('roomName').textContent = m.room;
+        myId = m.id; $('roomName').textContent = dailyRoom ? 'daily run' : m.room;
         $('join').classList.add('hidden'); $('game').classList.remove('hidden');
         $('swBar').appendChild($('themeBar')); // ⚙ Settings sits at the end of the game's top bar, like Blockwar
         board = newBoard(); renderInv(); setStatus('Waiting for the host to start…');
@@ -447,9 +457,10 @@ function connect(name, room) {
         break;
       case 'start':
         players = m.players; roomState = 'playing'; renderPlayers();
-        soloRun = m.players.length === 1;
-        log(soloRun ? '— Solo run started —' : '— Game started —'); startGame(m.seed);
-        if (m.players.length === 1) setStatus('Solo run: clear as many lines as you can. It speeds up every 10 lines.');
+        soloRun = m.players.length === 1; dailyRun = m.daily || null; dailyDone = 0;
+        log(dailyRun ? '— Daily run started —' : soloRun ? '— Solo run started —' : '— Game started —'); startGame(m.seed);
+        if (dailyRun) setStatus(`Daily run: clear ${dailyRun.goal} lines as fast as you can.`);
+        else if (m.players.length === 1) setStatus('Solo run: clear as many lines as you can. It speeds up every 10 lines.');
         break;
       case 'board': boards.set(m.id, m.cells); renderOpps(); break;
       case 'garbage': if (playing) { addGarbage(m.count, true, m.rich ? 0.95 : 0.7); syncBoard(); } break; // rich: a teammate's line, nearly always has a special
@@ -481,6 +492,14 @@ function connect(name, room) {
         inventory.push(s); if (inventory.length > MAX_INV) inventory.splice(0, inventory.length - MAX_INV);
         renderInv(); log(`Bonus for the first 4-line clear: ${SPECIALS[s][0]}`);
       } break;
+      case 'daily': { // the server's official result for a daily run
+        const msg = m.failed ? `Daily run over: topped out at ${m.lines}/${dailyRun ? dailyRun.goal : 40} lines. Press Play again to retry.`
+          : m.error ? `Daily run: ${fmtTime(m.ms)} (not saved, please try again later).`
+          : `Daily run: ${fmtTime(m.ms)}! ` + (m.prevBest && m.ms >= m.prevBest ? `Your best today is still ${fmtTime(m.prevBest)}. ` : m.prevBest ? 'New personal best for today! ' : '')
+            + (m.onBoard ? `You're #${m.rank} on today's board.` : `Rank #${m.rank} today.`);
+        dailyRun = null; setStatus(msg); log(msg);
+        break;
+      }
       case 'solo': {
         const nl = n => `${n} line${n === 1 ? '' : 's'}`;
         // the yellow result line says whether this run made the leaderboard
@@ -548,7 +567,74 @@ function renderMarquee(top) {
   }
   if (html !== lastMarquee) { lastMarquee = html; $('marquee').innerHTML = html; }
 }
-setInterval(() => { if (!$('join').classList.contains('hidden')) loadLeaderboard(); }, 15000);
+setInterval(() => { if (!$('join').classList.contains('hidden')) { loadLeaderboard(); loadDaily(); } }, 15000);
+
+// ---------- homepage: Stackwar daily run board ----------
+function loadDaily() {
+  const show = GAMES[gameIdx].id === 'stackwar';
+  $('daily').classList.toggle('hidden', !show);
+  if (!show) return;
+  fetch('/api/daily').then(r => r.json()).then(d => {
+    $('dailyWhat').textContent = `${d.goal} lines, fastest time`;
+    const h = Math.floor(d.resetsInMs / 3600000), m = Math.floor(d.resetsInMs / 60000) % 60;
+    $('dailyReset').textContent = `New run in ${h ? h + 'h ' : ''}${m}m`;
+    $('dailyList').innerHTML = d.top.length
+      ? d.top.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><b>${fmtTime(r.ms)}</b></li>`).join('')
+      : '<li class="empty">No times yet today. Be the first!</li>';
+  }).catch(() => { $('dailyList').innerHTML = '<li class="empty">Daily run unavailable right now.</li>'; });
+}
+// usernames are checked (slurs, and for a lobby: someone already using it there) before joining
+async function nameOk(room, game) {
+  try {
+    const q = new URLSearchParams({ name: $('name').value.trim(), room, game, bid: SW.bid });
+    const r = await (await fetch('/api/name-ok?' + q)).json();
+    if (!r.ok) { $('joinErr').textContent = r.msg; $('name').focus(); return false; }
+  } catch {}
+  return true;
+}
+$('dailyBtn').onclick = async () => {
+  $('joinErr').textContent = '';
+  if (!$('name').value.trim()) { $('joinErr').textContent = 'Enter a username first.'; $('name').focus(); return; }
+  if (!(await nameOk('', 'stackwar'))) return;
+  try { localStorage.setItem('sw-name', $('name').value.trim()); } catch {}
+  connect($('name').value, '', true);
+};
+
+// ---------- homepage chat: one site-wide room that keeps its last 50 lines ----------
+let hcLast = 0, hcBusy = false;
+function chatTime(at) { const d = new Date(at); return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+function loadHomeChat() {
+  if ($('join').classList.contains('hidden') || hcBusy) return; // only while the homepage is showing
+  hcBusy = true;
+  fetch('/api/chat?after=' + hcLast).then(r => r.json()).then(lines => {
+    if (!Array.isArray(lines) || !lines.length) return;
+    const log = $('hcLog'), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+    for (const l of lines) {
+      if (l.id <= hcLast) continue;
+      hcLast = l.id;
+      const d = document.createElement('div');
+      d.title = chatTime(l.at);
+      if (l.name) { d.innerHTML = `<span class="who">${esc(l.name)}</span>`; d.appendChild(document.createTextNode(l.msg)); }
+      else { d.className = 'ev'; d.textContent = l.msg; }
+      log.appendChild(d);
+    }
+    while (log.children.length > 50) log.firstChild.remove();
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  }).catch(() => {}).finally(() => { hcBusy = false; });
+}
+$('hcForm').onsubmit = async e => {
+  e.preventDefault();
+  const msg = $('hcMsg').value.trim(); $('hcErr').textContent = '';
+  if (!msg) return;
+  if (!$('name').value.trim()) { $('hcErr').textContent = 'Enter a username above first.'; return; }
+  try {
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bid: SW.bid, name: $('name').value.trim(), msg }) });
+    const d = await r.json();
+    if (!r.ok) { $('hcErr').textContent = d.error || 'Could not send.'; return; }
+    $('hcMsg').value = ''; loadHomeChat();
+  } catch { $('hcErr').textContent = 'Could not send.'; }
+};
+loadHomeChat(); setInterval(loadHomeChat, 3000);
 
 // ---------- homepage game picker ----------
 const GAMES = [{ id: 'stackwar', title: 'STACKWAR' }, { id: 'snakewar', title: 'SNAKEWAR' }, { id: 'blockwar', title: 'BLOCKWAR' }];
@@ -560,7 +646,7 @@ function showGame(dir) {
   if (dir) { t.classList.remove('slide-l', 'slide-r'); void t.offsetWidth; t.classList.add(dir < 0 ? 'slide-l' : 'slide-r'); }
   $('gameDots').innerHTML = GAMES.map((_, i) => `<span class="${i === gameIdx ? 'on' : ''}"></span>`).join('');
   $('leaderboard').classList.toggle('hidden', !SHOW_LEADERBOARD);
-  loadLeaderboard();
+  loadLeaderboard(); loadDaily();
   renderLobbies();
   document.title = g.title[0] + g.title.slice(1).toLowerCase();
   try { localStorage.setItem('sw-game', g.id); } catch {}
@@ -602,11 +688,7 @@ showGame(0);
 $('joinForm').onsubmit = async e => {
   e.preventDefault(); $('joinErr').textContent = '';
   // usernames with racial slurs are refused (the server checks too)
-  try {
-    const q = new URLSearchParams({ name: $('name').value.trim(), room: $('room').value.trim() || 'lobby', game: GAMES[gameIdx].id, bid: SW.bid });
-    const r = await (await fetch('/api/name-ok?' + q)).json();
-    if (!r.ok) { $('joinErr').textContent = r.msg; $('name').focus(); return; }
-  } catch {}
+  if (!(await nameOk($('room').value.trim() || 'lobby', GAMES[gameIdx].id))) return;
   try { localStorage.setItem('sw-name', $('name').value.trim()); } catch {}
   if (GAMES[gameIdx].id === 'blockwar') { location.href = 'block.html?room=' + encodeURIComponent($('room').value.trim() || 'lobby'); return; }
   if (GAMES[gameIdx].id === 'snakewar') { location.href = 'snake.html?room=' + encodeURIComponent($('room').value.trim() || 'lobby'); return; }
