@@ -380,7 +380,9 @@ class StackBot {
         const side = HELPFUL.has(s) ? alive.filter(p => p.team === me.team) : foes;
         if (side.length) return fire(side[rnd(side.length)]);
       }
-      return fire(alive[rnd(alive.length)] || me); // free-for-all: anyone, including itself
+      // free-for-all: helpful ones at anyone (itself included), harmful ones at anyone else
+      const pool = HELPFUL.has(s) ? alive : alive.filter(p => p.id !== this.id);
+      return pool.length ? fire(pool[rnd(pool.length)]) : skip();
     }
     const mine = shape(this.board);
     const sized = foes.map(p => ({ p, ...shape(deserialize(this.boards.get(p.id) || '')), specials: [...(this.boards.get(p.id) || '')].filter(isSpecial).length }));
@@ -422,7 +424,6 @@ class StackBot {
       const best = sized.slice().sort((a, b) => a.max - b.max || Math.random() - 0.5)[0];
       return best && best.max < mine.max - 4 ? fire(best.p) : (this.inventory.length >= 3 ? skip() : undefined);
     }
-    if (s === 'R' && danger) return fire(me); // knock blocks out of its own tall stack
     if (!sized.length) return skip();
     // who to hit: someone close to topping out (finish them), else whoever is doing best (lowest stack);
     // Blank goes to whoever has the most specials on their board

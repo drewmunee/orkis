@@ -195,8 +195,8 @@ New games must call the same `leaveRoom()` pattern.
   left or right, its own survive-mode threshold and tetris appetite) and picks among near-best spots
   (softmax with a per-bot temperature) on top of its difficulty's mistakes, so no two bots play alike. Easy: ~3 s per piece, 25% next-best / 3% random
   spots, likes singles/doubles with occasional building streaks, fires specials at random players every
-  3-8 s. Medium: ~1.5 s, 7% slips, helpful specials (C/N/G) on itself and the rest on a random opponent at
-  once. Insane: usually ~1 s per piece, often 0.75 s (60/40), 5% slips, saves C/N/G/R for emergencies (or a full
+  3-8 s (harmful ones, Random Clear included, never at itself). Medium: ~1.5 s, 7% slips, helpful specials (C/N/G) on itself and the rest on a random opponent at
+  once. Insane: usually ~1 s per piece, often 0.75 s (60/40), 5% slips, saves C/N/G for emergencies (or a full
   hand), Switch only to steal a much better board, finishes off players near the top, otherwise hits the biggest
   threat: other insane bots first in most cases, then people, then medium/easy bots, scaled by how well they're
   doing, with some randomness (Blank: whoever has the most specials). Bots target bots and people alike. Insane bots never take the first-tetris bonus
@@ -210,7 +210,7 @@ New games must call the same `leaveRoom()` pattern.
   side and bad ones to the other team, otherwise anyone) and only Switch with / Blank / finish off opponents.
   Medium and insane rescue a teammate whose stack is 14+ and taller than their own with C/N/G (G only if
   it has 3+ holes): decided once per teammate in trouble for 4 s (`this.rescue`), yes 60% (medium) / 85%
-  (insane). Insane also passes spare C/G (or anything from a full hand) to the teammate with the tallest
+  (insane). Random Clear is treated as an attack by every bot (never fired at itself). Insane also passes spare C/G (or anything from a full hand) to the teammate with the tallest
   stack when it's 3+ rows taller than its own.
 - **/spectate** (chat command) also works in Stackwar: spectators sit out the next games (not in
   `startCount`, teams, stats or `startedWith`; their own game doesn't start, they just watch the boards) and
