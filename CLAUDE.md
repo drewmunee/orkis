@@ -176,6 +176,21 @@ New games must call the same `leaveRoom()` pattern.
 - Specials: A Add Line, C Clear Line, R Random Clear (8 blocks), Q Earthquake, G Gravity, B Blank (3 specials), H Haste,
   D Darkness (target board blacked out ~4s), I Inverted (target's controls scrambled 5s: left/right,
   rotations and up/down swap; hard drop unchanged), S Switch, N Nuke. N/G/S are rarer than the rest.
+- **Bots** (`stackbot.js`): the host adds them between games from the room panel (**＋ Easy / ＋ Medium /
+  ＋ Insane** under the player list, `{t:'addbot', level}`; × removes one, `{t:'removebot', id}`); never in
+  daily runs; up to the 6-player limit. Each bot connects through a fake socket (`BotSocket`, `ws.isBot`, so a
+  browser can't pose as one) and joins/plays with the exact same messages as a browser, so garbage, specials,
+  Switch, teams and winners work unchanged; it keeps its own board with the same rules and shared piece
+  queue as `public/game.js` (keep the two in sync). Bots never get stats; the room closes when no people are
+  left; the host is always a person. Placement: try every rotation/column (with hold for medium/insane),
+  score with a Dellacherie-style evaluation; tetris builders (medium, insane) keep the right column as a well
+  and only take smaller clears under pressure (stack 11+). Easy: ~3 s per piece, 25% next-best / 3% random
+  spots, likes singles/doubles with occasional building streaks, fires specials at random players every
+  3-8 s. Medium: ~1.5 s, 7% slips, helpful specials (C/N/G) on itself and the rest on a random opponent at
+  once. Insane: ~0.75 s, 4% slips, saves C/N/G/R for emergencies (or a full hand), Switch only to steal a much
+  better board, finishes off players near the top, otherwise hits whoever is doing best (Blank: whoever has
+  the most specials). A bot slower than the falling piece only gets part of its move done (so only insane
+  copes at high levels); Darkness/Inverted make them sloppier, Haste speeds their pieces up.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and records the run.
 - **Team mode** (host toggles it in the room panel): each match shuffles players into Red and Blue

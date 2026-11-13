@@ -9,6 +9,7 @@ const moderation = require('./moderation');
 const swearjar = require('./swearjar');
 const commands = require('./commands');
 const avatars = require('./avatars');
+const stackbots = require('./stackbot');
 const homechat = require('./homechat');
 const daily = require('./daily');
 const stats = require('./stats');
@@ -27,7 +28,7 @@ const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/api/lobbies') {
     // homepage lobby browser: every open lobby per game
-    const stackwar = [...rooms.values()].filter(r => !r.daily).map(r => ({ room: r.code, players: r.players.size, names: [...r.players.values()].map(q => q.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
+    const stackwar = [...rooms.values()].filter(r => !r.daily).map(r => ({ room: r.code, players: r.players.size, names: [...r.players.values()].map(q => (q.bot ? '🤖 ' : '') + q.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ stackwar, snakewar: snake.lobbies(), blockwar: block.lobbies() }));
   }
@@ -116,7 +117,7 @@ function broadcast(room, msg, exceptId) {
   for (const p of room.players.values()) if (p.id !== exceptId) send(p.ws, msg);
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null, avatar: p.avatar || null }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null, avatar: p.avatar || null, bot: p.bot || null }));
 }
 function sendLobby(room) {
   broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode });
@@ -250,6 +251,8 @@ wss.on('connection', ws => {
       me.avatar = avatars.clean(m.avatar);
       me.bid = typeof m.bid === 'string' ? m.bid.slice(0, 40) : null; // browser ID: one leaderboard spot per browser
       me.slot = slot;
+      // Stackwar bots (stackbot.js) join through the server's own fake sockets; a browser can't claim to be one
+      if (ws.isBot && stackbots.LEVELS[m.bot]) me.bot = m.bot;
       room.players.set(me.id, me);
       send(ws, { t: 'welcome', id: me.id, room: code });
       sendLobby(room);
@@ -265,6 +268,18 @@ wss.on('connection', ws => {
         if (me.id !== room.hostId || room.state !== 'lobby') return;
         startRoom(room);
         break;
+      case 'addbot': { // host, between games: add a bot (easy / medium / insane); never in daily runs
+        if (me.id !== room.hostId || room.state !== 'lobby' || room.daily || me.bot) return;
+        if (room.players.size >= MAX_PLAYERS) return send(ws, { t: 'log', msg: 'The room is full (6 players max).' });
+        stackbots.addBot(room.code, m.level, [...room.players.values()].map(p => p.name), sock => wss.emit('connection', sock));
+        break;
+      }
+      case 'removebot': {
+        if (me.id !== room.hostId || room.state !== 'lobby') return;
+        const b = room.players.get(m.id);
+        if (b && b.bot) b.ws.terminate();
+        break;
+      }
       case 'restart': // daily run only: R starts a fresh attempt at any time, even mid-run
         if (!room.daily || me.id !== room.hostId) return;
         me.restarted = true; // a restarted run can never earn the ⚡ first-try badge
@@ -356,8 +371,13 @@ wss.on('connection', ws => {
     if (!room) return;
     finishSolo(room, me); // a solo player closing the tab still gets their run recorded
     room.players.delete(me.id);
-    if (room.players.size === 0) { rooms.delete(room.code); return; }
-    if (room.hostId === me.id) room.hostId = room.players.values().next().value.id;
+    const people = [...room.players.values()].filter(p => !p.bot);
+    if (!people.length) { // only bots (or nobody) left: close the room and send the bots home
+      rooms.delete(room.code);
+      for (const p of [...room.players.values()]) p.ws.terminate();
+      return;
+    }
+    if (room.hostId === me.id) room.hostId = people[0].id; // the host is always a person
     if (me.alive) { me.alive = false; broadcast(room, { t: 'dead', id: me.id }); }
     broadcast(room, { t: 'log', msg: `${me.name} left` });
     checkGameOver(room);

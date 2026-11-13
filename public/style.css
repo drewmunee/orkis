@@ -212,3 +212,13 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #hallWins li, #hallFast { padding:1px 2px; font-size:13px; }
 #dailyHall .label { margin:2px 0 2px; }
 @media (max-height:800px) { #join { padding-top:11vh; padding-bottom:4px; } }
+/* Stackwar bots: add buttons under the player list (host, between games), difficulty tag, × to remove */
+#playerList .addBots { display:flex; align-items:center; gap:4px; margin-top:6px; flex-wrap:wrap; }
+#playerList .addBots span { width:100%; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
+#playerList .addBots button { flex:1; padding:3px 2px; font-size:11px; white-space:nowrap; font-weight:700; background:transparent; color:var(--text); border:1px dashed var(--line); border-radius:5px; cursor:pointer; }
+#playerList .addBots button:hover { border-color:var(--accent); }
+#playerList .botTag { margin-right:2px; }
+#playerList .botLv { font-size:10px; font-weight:800; text-transform:uppercase; padding:0 4px; border-radius:6px; color:#111; }
+#playerList .lv-easy { background:#7bffb0; } #playerList .lv-medium { background:#ffd23f; } #playerList .lv-insane { background:#ff5470; color:#fff; }
+#playerList .rmBot { padding:0 5px; margin-left:3px; line-height:15px; font-size:12px; background:transparent; color:var(--dim); border:1px solid var(--line); border-radius:4px; cursor:pointer; }
+#playerList .rmBot:hover { color:#ff4d5e; border-color:#ff4d5e; }
