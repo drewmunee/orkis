@@ -199,8 +199,12 @@ New games must call the same `leaveRoom()` pattern.
   once. Insane: usually ~1 s per piece, often 0.75 s (60/40), 5% slips, saves C/N/G/R for emergencies (or a full
   hand), Switch only to steal a much better board, finishes off players near the top, otherwise hits the biggest
   threat: other insane bots first in most cases, then people, then medium/easy bots, scaled by how well they're
-  doing, with some randomness (Blank: whoever has the most specials). Bots target bots and people alike. A bot slower than the falling piece only gets part of its move done (so only insane
-  copes at high levels); Darkness/Inverted make them sloppier, Haste speeds their pieces up.
+  doing, with some randomness (Blank: whoever has the most specials). Bots target bots and people alike. Insane bots never take the first-tetris bonus
+  (their 4-line clear sends the normal 3 and leaves the bonus up for people and easy/medium bots). A bot slower than the falling piece only gets part of its move done (so only insane
+  copes at high levels); Haste speeds their pieces up. Darkness: they plan on the board they remember from
+  when it went dark (`darkBoard`; later garbage is invisible) and slip up much more, at every difficulty.
+  Inverted: easy/medium pick per inversion to freeze (pieces just fall from spawn) or flail (random spots);
+  insane botches one piece (mirrored), then plays carefully at ~2.4 s per piece until it wears off.
 - **/spectate** (chat command) also works in Stackwar: spectators sit out the next games (not in
   `startCount`, teams, stats or `startedWith`; their own game doesn't start, they just watch the boards) and
   show a grey 👁; one player + spectators is a solo run; everyone spectating = no start; not in daily runs.

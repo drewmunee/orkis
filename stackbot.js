@@ -10,7 +10,10 @@
 //          off, hitting whoever is the biggest threat: usually another insane bot) or to rescue itself.
 // Every bot also has its own style (makeStyle), so two bots of the same difficulty don't play alike.
 // Like a person, a bot that thinks slower than the piece falls doesn't get to finish its moves: the piece
-// lands wherever it got to. Darkness and Inverted make them sloppy for a while; Haste makes pieces fall 3x faster.
+// lands wherever it got to. Haste makes pieces fall 3x faster. Darkness: they play from memory (the board as
+// it was when the lights went out) and slip up a lot, at every difficulty. Inverted: easy / medium either
+// freeze (pieces just fall) or flail (pieces go anywhere); insane botches one piece (mirrored), then recovers
+// and plays slowly and carefully until it wears off.
 const { EventEmitter } = require('events');
 
 const W = 10, H = 23;
@@ -210,6 +213,8 @@ class StackBot {
     // how long this bot "thinks" before the piece is placed (varies around its average)
     // insane: usually about 1 s a piece, but often its fast 0.75 s pace; the others vary around their average
     this.placeAt = at + (this.level === 'insane' ? (Math.random() < 0.6 ? 1000 : 750) * rand(0.8, 1.2) : this.cfg.placeMs * rand(0.55, 1.45));
+    // insane, inverted, after its one slip: careful and slow until the inversion wears off
+    if (this.level === 'insane' && this.invertSlipped && at < this.invertUntil) this.placeAt = at + 2400 * rand(0.85, 1.15);
     const m = PIECES[idx][1], x = ((W - m[0].length) / 2) | 0, y = PIECES[idx][0] === '1' ? -1 : 0;
     if (collides(this.board, m, x, y)) this.die();
   }
@@ -240,8 +245,10 @@ class StackBot {
         for (let y = H - 1; y >= 0; y--) if (b[y].every(c => c !== '.')) { b.splice(y, 1); b.unshift(emptyRow()); y++; } break;
       case 'B': { const sp = []; b.forEach((r, y) => r.forEach((c, x) => isSpecial(c) && sp.push([x, y]))); for (let i = 0; i < 3 && sp.length; i++) { const [x, y] = sp.splice(rnd(sp.length), 1)[0]; b[y][x] = '8'; } break; }
       case 'H': this.hasteUntil = Math.max(this.hasteUntil, now) + 10000; break;
-      case 'D': this.darkUntil = Math.max(this.darkUntil, now) + 4000; break;
-      case 'I': this.invertUntil = Math.max(this.invertUntil, now) + 5000; break;
+      case 'D': if (this.darkUntil < now) this.darkBoard = this.board.map(r => r.slice()); // what it remembers
+        this.darkUntil = Math.max(this.darkUntil, now) + 4000; break;
+      case 'I': if (this.invertUntil < now) { this.invertMode = null; this.invertSlipped = false; } // a fresh inversion
+        this.invertUntil = Math.max(this.invertUntil, now) + 5000; break;
     }
     this.dirty = true;
   }
@@ -255,15 +262,37 @@ class StackBot {
     }
     if (this.dirty && this.playing && now - (this.sentAt || 0) > 120) { this.dirty = false; this.sentAt = now; this.send({ t: 'board', cells: serialize(this.board) }); }
   }
+  // where a piece would land if it just fell from where it spawns (no moves, no rotation)
+  spawnDrop(idx) {
+    const m = PIECES[idx][1], x = ((W - m[0].length) / 2) | 0;
+    let y = PIECES[idx][0] === '1' ? -1 : 0, depth = 0;
+    while (!collides(this.board, m, x, y + 1)) { y++; depth++; }
+    return { idx, m, x, y, depth };
+  }
   place(now) {
-    const cfg = this.cfg;
+    const cfg = this.cfg, dark = now < this.darkUntil, inverted = now < this.invertUntil;
+    if (!dark) this.darkBoard = null;
+    const g = this.gravityMs(now);
+    // Inverted, easy / medium: for each inversion they either freeze (the piece just falls where it spawned)
+    // or flail (pieces go anywhere)
+    if (inverted && this.level !== 'insane') {
+      if (!this.invertMode) this.invertMode = Math.random() < 0.5 ? 'freeze' : 'flail';
+      if (this.invertMode === 'freeze') {
+        const drop = this.spawnDrop(this.piece.idx), lands = this.piece.born + drop.depth * g + 500;
+        if (now < lands) { this.placeAt = lands; return; } // nothing pressed: wait for it to land
+        return this.lock(drop);
+      }
+    }
+    // Darkness: the bot can't see its board, so it plays from memory: the board as it was when the lights
+    // went out (garbage and other changes since then are invisible), and it slips up a lot more
+    const seen = dark ? (this.darkBoard || this.board) : this.board;
     // easy bots now and then try building for a big clear for a while (the odd triple / tetris)
     if (this.level === 'easy' && --this.streakLeft <= 0) { this.building = Math.random() < 0.3; this.streakLeft = 15 + rnd(25); }
-    // pick a piece: the current one, or (insane, once per piece) swap with the saved one if that's better
-    let options = placements(this.board, this.piece.idx).map(p => ({ ...p, s: score(this.level, this.board, p, this.building, this.style) }));
+    // pick a piece: the current one, or (once per piece) swap with the saved one if that's better
+    let options = placements(seen, this.piece.idx).map(p => ({ ...p, s: score(this.level, seen, p, this.building, this.style) }));
     if (cfg.hold && !this.holdUsed) {
       const alt = this.held !== null ? this.held : this.queue.list[0];
-      const altOpts = placements(this.board, alt).map(p => ({ ...p, s: score(this.level, this.board, p, this.building, this.style), hold: true }));
+      const altOpts = placements(seen, alt).map(p => ({ ...p, s: score(this.level, seen, p, this.building, this.style), hold: true }));
       const bestAlt = Math.max(-Infinity, ...altOpts.map(o => o.s)), best = Math.max(-Infinity, ...options.map(o => o.s));
       if (bestAlt > best + 3) {
         const cur = this.piece.idx;
@@ -274,10 +303,9 @@ class StackBot {
     }
     if (!options.length) return this.die();
     options.sort((a, b) => b.s - a.s);
-    // mistakes: sloppier in the dark or with scrambled controls
     let mistake = cfg.mistake, blunder = cfg.blunder;
-    if (now < this.darkUntil) { mistake += this.level === 'insane' ? 0.15 : 0.4; blunder += 0.05; }
-    if (now < this.invertUntil) { mistake += this.level === 'insane' ? 0.2 : 0.5; blunder += 0.08; }
+    if (dark) { mistake += this.level === 'insane' ? 0.3 : 0.4; blunder += 0.08; } // frequent at every difficulty
+    if (inverted && this.level !== 'insane') { mistake = 1; blunder = 0.6; }       // flailing
     // usually one of the good spots, not always the very best: spots close to the best score get a chance
     // too (how close depends on the bot's style), so bots don't all stack the same way
     const best = options[0].s, near = options.filter(o => o.s > best - this.style.temp * 4);
@@ -287,9 +315,22 @@ class StackBot {
     // and real mistakes: a clearly worse spot now and then (insane too, just rarely), or a plain blunder
     if (Math.random() < blunder) pick = options[rnd(options.length)];
     else if (Math.random() < mistake) pick = options[Math.min(options.length - 1, 1 + rnd(cfg.spread + 1))];
+    // Inverted, insane: the first piece goes wrong (left and right are swapped, so it lands mirrored), then
+    // it recovers and plays carefully but slowly until the inversion wears off (see spawn)
+    if (inverted && this.level === 'insane' && !this.invertSlipped) {
+      this.invertSlipped = true;
+      const mirrored = options.filter(o => o.m === pick.m || JSON.stringify(o.m) === JSON.stringify(pick.m))
+        .sort((a, b) => Math.abs(a.x - (W - pick.m[0].length - pick.x)) - Math.abs(b.x - (W - pick.m[0].length - pick.x)))[0];
+      pick = mirrored && mirrored.x !== pick.x ? mirrored : options[options.length - 1 - rnd(Math.min(3, options.length))];
+    }
+    // the plan was made on what the bot saw; the piece lands on the real board (in the dark that can be a
+    // nasty surprise)
+    if (seen !== this.board) {
+      if (collides(this.board, pick.m, pick.x, PIECES[pick.idx][0] === '1' ? -1 : 0)) pick = this.spawnDrop(pick.idx);
+      else { let y = PIECES[pick.idx][0] === '1' ? -1 : 0; while (!collides(this.board, pick.m, pick.x, y + 1)) y++; pick = { ...pick, y }; }
+    }
     // too slow for the falling piece? it lands wherever the bot had got it to
-    const g = this.gravityMs(now), spawnX = ((W - PIECES[pick.idx][1][0].length) / 2) | 0;
-    let depth = 0; { const m0 = PIECES[pick.idx][1]; let y = PIECES[pick.idx][0] === '1' ? -1 : 0; while (!collides(this.board, m0, spawnX, y + 1)) { y++; depth++; } }
+    const { depth } = this.spawnDrop(pick.idx), spawnX = ((W - PIECES[pick.idx][1][0].length) / 2) | 0;
     const timeToLand = depth * g + 500; // fall + lock delay
     const thought = now - this.piece.born;
     if (thought > timeToLand) {

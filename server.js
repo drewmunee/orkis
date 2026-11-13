@@ -344,7 +344,8 @@ wss.on('connection', ws => {
         if (room.daily) { if (me.lines >= daily.GOAL) finishDaily(room, me); return; } // daily run: no garbage, just the race to 40
         let garbage = n >= 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0;
         // The match's first 4-line clear sends 4 lines instead of 3 and earns a free special.
-        const firstFour = n >= 4 && !room.firstFourDone;
+        // insane bots never take the first-tetris bonus; it stays up for people and easy / medium bots
+        const firstFour = n >= 4 && !room.firstFourDone && me.bot !== 'insane';
         // In a team match the bonus special goes to every living player on the clearer's team.
         const team = room.teamMatch ? me.team : null;
         const mates = p => team && p.team === team;
