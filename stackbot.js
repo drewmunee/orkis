@@ -372,12 +372,33 @@ class StackBot {
     const fire = target => { this.inventory.shift(); this.send({ t: 'special', special: s, slot: target.slot }); this.nextSpecialAt = now + this.reaction(); };
     const skip = () => { this.inventory.shift(); this.nextSpecialAt = now + this.reaction(); }; // discard it
     if (!me) return;
-    if (this.level === 'easy') { // random: anyone (including itself), every few seconds
+    if (this.level === 'easy') { // random-ish, every few seconds
       this.nextSpecialAt = now + rand(3000, 8000);
-      return fire(alive[rnd(alive.length)] || me);
+      // team mode: it knows good specials go to its own side and bad ones to the other team, but it's sloppy
+      // about it (a quarter of the time it still fires at anyone) and never checks who actually needs it
+      if (me.team && Math.random() < 0.75) {
+        const side = HELPFUL.has(s) ? alive.filter(p => p.team === me.team) : foes;
+        if (side.length) return fire(side[rnd(side.length)]);
+      }
+      return fire(alive[rnd(alive.length)] || me); // free-for-all: anyone, including itself
     }
     const mine = shape(this.board);
     const sized = foes.map(p => ({ p, ...shape(deserialize(this.boards.get(p.id) || '')), specials: [...(this.boards.get(p.id) || '')].filter(isSpecial).length }));
+    // team mode: a teammate about to top out may get the Clear Line / Nuke / Gravity instead (medium and insane
+    // only). The bot decides once per teammate in trouble (yes / no for the next few seconds), so it's a
+    // judgement call rather than a coin flip every tick; it never gives one away while its own stack is worse.
+    if (HELPFUL.has(s) && me.team) {
+      const mates = alive.filter(p => p.id !== this.id && p.team === me.team)
+        .map(p => ({ p, ...shape(deserialize(this.boards.get(p.id) || '')) }))
+        .filter(f => f.max >= 14 && f.max > mine.max && (s !== 'G' || f.holes >= 3))
+        .sort((a, b) => b.max - a.max);
+      const m = mates[0];
+      if (m) {
+        if (!this.rescue || this.rescue.id !== m.p.id || now > this.rescue.until)
+          this.rescue = { id: m.p.id, yes: Math.random() < (this.level === 'insane' ? 0.85 : 0.6), until: now + 4000 };
+        if (this.rescue.yes) return fire(m.p);
+      }
+    }
     if (this.level === 'medium') { // as soon as it gets them: good ones on itself, bad ones on a random opponent
       if (HELPFUL.has(s)) return fire(me);
       if (s === 'S') { const low = sized.filter(f => f.max < mine.max - 3).sort((a, b) => a.max - b.max)[0]; return low ? fire(low.p) : skip(); }
@@ -387,7 +408,13 @@ class StackBot {
     const danger = mine.max >= 13;
     if (HELPFUL.has(s)) {
       const need = danger || (s === 'G' && mine.holes >= 4) || (s === 'C' && mine.max >= 9);
-      if (need || this.inventory.length >= MAX_INV) return fire(me);
+      if (need) return fire(me);
+      // team mode: a spare one goes to the teammate with the tallest stack if theirs is clearly worse than its own
+      const mate = me.team && alive.filter(p => p.id !== this.id && p.team === me.team)
+        .map(p => ({ p, ...shape(deserialize(this.boards.get(p.id) || '')) })).sort((a, b) => b.max - a.max)[0];
+      const spare = this.inventory.length >= MAX_INV || this.inventory.length >= 3 && s !== 'N';
+      if (spare && mate && mate.max >= mine.max + 3 && (s !== 'G' || mate.holes >= 3)) return fire(mate.p);
+      if (this.inventory.length >= MAX_INV) return fire(me);
       if (s === 'N' && mine.max < 9 && this.inventory.length < MAX_INV) return; // keep the nuke for an emergency
       return this.inventory.length >= 3 ? fire(me) : undefined;
     }

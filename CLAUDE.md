@@ -206,6 +206,12 @@ New games must call the same `leaveRoom()` pattern.
   Inverted: easy/medium pick per inversion to freeze (pieces just fall from spawn) or flail (random spots);
   insane botches one piece (mirrored), then plays carefully at ~2.4 s per piece until it wears off.
   Insane bots also slow to ~1.9 s per piece while Darkness is on them.
+  **Team mode**: bots never aim bad specials at teammates (easy: 75% of the time it sends good ones to its own
+  side and bad ones to the other team, otherwise anyone) and only Switch with / Blank / finish off opponents.
+  Medium and insane rescue a teammate whose stack is 14+ and taller than their own with C/N/G (G only if
+  it has 3+ holes): decided once per teammate in trouble for 4 s (`this.rescue`), yes 60% (medium) / 85%
+  (insane). Insane also passes spare C/G (or anything from a full hand) to the teammate with the tallest
+  stack when it's 3+ rows taller than its own.
 - **/spectate** (chat command) also works in Stackwar: spectators sit out the next games (not in
   `startCount`, teams, stats or `startedWith`; their own game doesn't start, they just watch the boards) and
   show a grey 👁; one player + spectators is a solo run; everyone spectating = no start; not in daily runs.
