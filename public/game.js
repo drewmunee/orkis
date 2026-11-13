@@ -376,12 +376,13 @@ function renderOpps() {
   const wrap = $('opponents');
   // everyone else's board (a watcher sees every board); seated players who are spectating get an eye on theirs
   const others = watcherMode ? ordered() : ordered().slice(1);
-  if (wrap.children.length !== others.length || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id || el.dataset.av !== (others[i].avatar || ''))) {
-    wrap.innerHTML = '';
+  const cs = watcherMode ? 30 : 14; // canvas pixels per cell: sharper boards in the big watcher view
+  if (wrap.children.length !== others.length || +wrap.dataset.cs !== cs || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id || el.dataset.av !== (others[i].avatar || ''))) {
+    wrap.innerHTML = ''; wrap.dataset.cs = cs;
     for (const p of others) {
       const el = document.createElement('div');
       el.className = 'opp'; el.dataset.id = p.id; el.dataset.av = p.avatar || '';
-      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${p.bot ? '🤖' : SW.avatarHtml(p)}${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><div class="oppBoard"><canvas width="${W * 14}" height="${H * 14}"></canvas><div class="specEye" title="Spectating">👁</div></div>`;
+      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${p.bot ? '🤖' : SW.avatarHtml(p)}${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><div class="oppBoard"><canvas width="${W * cs}" height="${H * cs}"></canvas><div class="specEye" title="Spectating">👁</div></div>`;
       el.onclick = () => useSpecial(numOf(players.find(q => q.id === p.id)));
       wrap.appendChild(el);
     }
@@ -394,11 +395,30 @@ function renderOpps() {
     el.querySelector('.tm').innerHTML = teamTag(p.team);
     el.querySelector('.w').textContent = p.wins ? `${p.wins}★` : '';
     const cx = el.querySelector('canvas').getContext('2d');
-    cx.fillStyle = theme.well; cx.fillRect(0, 0, W * 14, H * 14);
+    cx.fillStyle = theme.well; cx.fillRect(0, 0, W * cs, H * cs);
     const b = deserialize(boards.get(p.id));
-    b.forEach((r, y) => r.forEach((c, x) => drawCell(c, x, y, 14, cx)));
+    b.forEach((r, y) => r.forEach((c, x) => drawCell(c, x, y, cs, cx)));
   }
+  fitWatch();
 }
+// Watcher view: pick the column count (1 row of 6, 2 of 3, 3 of 2...) that makes the boards biggest while
+// every board still fits between the top bar and the bottom of the window, then size them to it.
+function fitWatch() {
+  const wrap = $('opponents'), first = wrap.firstElementChild;
+  if (!watcherMode || !first) { wrap.style.gridTemplateColumns = ''; return; }
+  const area = $('swGame'), cst = getComputedStyle(area), gap = 10;
+  const availW = area.clientWidth - parseFloat(cst.paddingLeft) - parseFloat(cst.paddingRight) - $('side').offsetWidth - parseFloat(cst.columnGap || 14);
+  const availH = area.clientHeight - parseFloat(cst.paddingTop) - parseFloat(cst.paddingBottom);
+  const cv = first.querySelector('canvas'), exW = first.offsetWidth - cv.offsetWidth, exH = first.offsetHeight - cv.offsetHeight;
+  const n = wrap.children.length; let best = { w: 0, cols: 3 };
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const w = Math.floor(Math.min((availW - (cols - 1) * gap) / cols - exW, ((availH - (rows - 1) * gap) / rows - exH) * W / H));
+    if (w > best.w) best = { w, cols };
+  }
+  wrap.style.gridTemplateColumns = `repeat(${best.cols}, ${Math.max(60, best.w) + exW}px)`;
+}
+addEventListener('resize', () => fitWatch());
 function renderInv() {
   const el = $('inv'); el.innerHTML = '';
   // always show all 5 slots above the board so it's clear how full the hand is; slot 1 is fired next

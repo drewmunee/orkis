@@ -164,7 +164,7 @@ New games must call the same `leaveRoom()` pattern.
 - Gamepad/controller support would be welcome later, but it is low priority.
 - Boards are 10 wide x 23 tall. The game must fit on screen without scrolling (tested at 1152x720 up to 1920x1080).
 - Stackwar game screen uses Blockwar's layout: top bar (Back to lobby, title + room, ⚙ Settings moved
-  into the bar), then players/chat/Controls & specials on the left, your name + specials hand above
+  into the bar), then players/chat/Controls & specials on the left (300 px wide), your name + specials hand above
   Next, then Saved underneath it (with Lines and Level floating below) and your centered board, and opponent boards (3 columns, sized by window height
   and width) on the right. The homepage no longer has the Controls & specials box.
 - Every player gets the same piece queue (shared seed from the server).
@@ -214,7 +214,8 @@ New games must call the same `leaveRoom()` pattern.
   welcome `watcher:true`; full daily rooms still refuse). Watchers get broadcasts and chat but no seat; they're
   listed in the top bar ("👁 Watching: …", `#watchers`, `lobby.watchers`) and the homepage lobby row
   (`N 👁`, "full (join to watch)"). Their screen hides the main board (`#game.watching`) and shows all
-  6 playing boards larger. A watcher can **Take over** a bot (`{t:'takebot', id}`: the bot leaves, the watcher
+  6 playing boards as big as fits: `fitWatch()` in `game.js` tries every column count (1 row of 6, 2 of 3, ...)
+  and picks the biggest boards that fit top to bottom (canvases drawn at 30 px/cell there). A watcher can **Take over** a bot (`{t:'takebot', id}`: the bot leaves, the watcher
   takes its slot and plays from the next game) or **Take a seat** when one is free (`{t:'sit'}`). If the
   last seated person leaves, the first watcher is seated (and becomes host).
 - Log lines for specials show the special's name as a pill in its block colour (`log(msg, special)`).
