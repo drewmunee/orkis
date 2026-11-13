@@ -28,7 +28,7 @@ const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/api/lobbies') {
     // homepage lobby browser: every open lobby per game
-    const stackwar = [...rooms.values()].filter(r => !r.daily).map(r => ({ room: r.code, players: r.players.size, names: [...r.players.values()].map(q => (q.bot ? '🤖 ' : '') + q.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
+    const stackwar = [...rooms.values()].filter(r => !r.daily).map(r => ({ room: r.code, players: r.players.size, watchers: r.watchers ? r.watchers.size : 0, names: [...r.players.values()].map(q => (q.bot ? '🤖 ' : '') + q.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ stackwar, snakewar: snake.lobbies(), blockwar: block.lobbies() }));
   }
@@ -115,12 +115,14 @@ let nextId = 1;
 function send(ws, msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); }
 function broadcast(room, msg, exceptId) {
   for (const p of room.players.values()) if (p.id !== exceptId) send(p.ws, msg);
+  if (room.watchers) for (const w of room.watchers.values()) if (w.id !== exceptId) send(w.ws, msg); // people watching a full room
 }
 function playerList(room) {
   return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null, avatar: p.avatar || null, bot: p.bot || null, spectating: !!p.spectating }));
 }
 function sendLobby(room) {
-  broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode });
+  broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode,
+    watchers: [...(room.watchers || new Map()).values()].map(w => ({ id: w.id, name: w.name, avatar: w.avatar || null })) });
 }
 function freeSlot(room) {
   const used = new Set([...room.players.values()].map(p => p.slot));
@@ -188,6 +190,12 @@ function startRoom(room) {
 // only easy / medium bots doesn't count). Opponents = everyone who started the game, minus their own team.
 function winCounts(room, p) {
   return (room.startedWith || []).some(q => q !== p && !(room.teamMatch && q.team === p.team) && (!q.bot || q.bot === 'insane'));
+}
+// Seat a watcher in a free slot (a seat that opened up, or a bot's they took over). They play from the next game.
+function seatWatcher(room, me, slot) {
+  room.watchers.delete(me.id);
+  me.watcher = false; me.slot = slot; me.alive = false; me.board = ''; me.wins = me.wins || 0;
+  room.players.set(me.id, me);
 }
 // The host can hand the host role to another person (click their number, or /host N). Returns the reply.
 function makeHost(room, me, target) {
@@ -266,13 +274,24 @@ wss.on('connection', ws => {
       if (clash === 'taken') { send(ws, { t: 'error', msg: moderation.nameTaken(wanted) }); room = null; return; }
       if (clash) clash.ws.terminate(); // same browser rejoining: drop its old connection
       const slot = freeSlot(room);
-      if (!slot) { send(ws, { t: 'error', msg: 'Room is full (6 players max).' }); room = null; return; }
+      // a full room: join as a watcher (no seat, no board) instead of being turned away
+      if (!slot && room.daily) { send(ws, { t: 'error', msg: 'Room is full (6 players max).' }); room = null; return; }
+      if (!slot && moderation.nameClash(room.watchers ? room.watchers.values() : [], wanted, m.bid) === 'taken') { send(ws, { t: 'error', msg: moderation.nameTaken(wanted) }); room = null; return; }
       me.name = wanted;
       me.avatar = avatars.clean(m.avatar);
       me.bid = typeof m.bid === 'string' ? m.bid.slice(0, 40) : null; // browser ID: one leaderboard spot per browser
       me.slot = slot;
       // Stackwar bots (stackbot.js) join through the server's own fake sockets; a browser can't claim to be one
       if (ws.isBot && stackbots.LEVELS[m.bot]) me.bot = m.bot;
+      if (!slot) { // watcher
+        if (ws.isBot) { ws.terminate(); room = null; return; }
+        me.watcher = true; me.slot = 0; (room.watchers ||= new Map()).set(me.id, me);
+        send(ws, { t: 'welcome', id: me.id, room: code, watcher: true });
+        sendLobby(room);
+        for (const p of room.players.values()) if (p.board) send(ws, { t: 'board', id: p.id, cells: p.board });
+        broadcast(room, { t: 'log', msg: `${me.name} is watching` });
+        return;
+      }
       room.players.set(me.id, me);
       send(ws, { t: 'welcome', id: me.id, room: code });
       sendLobby(room);
@@ -282,6 +301,25 @@ wss.on('connection', ws => {
       return;
     }
     if (!room) return;
+    // watchers (a full room) can chat, take over a bot's seat, or take a free seat; nothing else
+    if (me.watcher) {
+      if (m.t === 'takebot') {
+        const b = room.players.get(m.id);
+        if (!b || !b.bot) return;
+        const slot = b.slot;
+        b.ws.terminate(); // the bot leaves (mid-game it counts as out)
+        if (room.players.has(b.id) || [...room.players.values()].some(p => p.slot === slot)) return;
+        seatWatcher(room, me, slot);
+        broadcast(room, { t: 'log', msg: `${me.name} took over ${b.name}'s seat${room.state === 'playing' ? ' (plays from the next game)' : ''}` });
+        sendLobby(room);
+      } else if (m.t === 'sit') {
+        const slot = freeSlot(room);
+        if (!slot) return send(ws, { t: 'log', msg: 'No free seat right now.' });
+        seatWatcher(room, me, slot);
+        broadcast(room, { t: 'log', msg: `${me.name} took a seat${room.state === 'playing' ? ' (plays from the next game)' : ''}` });
+        sendLobby(room);
+      } else if (m.t !== 'chat') return;
+    }
 
     switch (m.t) {
       case 'start':
@@ -359,6 +397,7 @@ wss.on('connection', ws => {
           if (p.id !== me.id && p.alive) { const g = mates(p) ? 1 : garbage; stats.add(me, 'stackwar', 'garbage_sent', g); send(p.ws, mates(p) ? { t: 'garbage', count: 1, from: me.id, rich: true } : { t: 'garbage', count: garbage, from: me.id }); }
         const tName = t => t === 'red' ? 'Red' : 'Blue', other = team === 'red' ? 'blue' : 'red';
         const to = team ? `+${garbage} to ${tName(other)}, +1 to ${tName(team)}` : `+${garbage} to all`;
+        if (n < 4) break; // only 4-line clears are announced (2/3-line ones flooded the chat)
         broadcast(room, { t: 'log', msg: firstFour
           ? `${me.name} got the first 4-line clear → ${to} and a bonus special${team ? ` for team ${tName(team)}` : ''}`
           : `${me.name} cleared ${n} lines → ${to}` });
@@ -411,8 +450,11 @@ wss.on('connection', ws => {
   ws.on('close', () => {
     if (snakeConn) return snakeConn.close();
     if (!room) return;
+    if (me.watcher) { room.watchers.delete(me.id); broadcast(room, { t: 'log', msg: `${me.name} stopped watching` }); sendLobby(room); return; }
     finishSolo(room, me); // a solo player closing the tab still gets their run recorded
     room.players.delete(me.id);
+    // the last seated person left but people are watching: the first watcher takes the seat (and becomes host)
+    if (![...room.players.values()].some(p => !p.bot) && room.watchers && room.watchers.size) seatWatcher(room, room.watchers.values().next().value, me.slot);
     const people = [...room.players.values()].filter(p => !p.bot);
     if (!people.length) { // only bots (or nobody) left: close the room and send the bots home
       rooms.delete(room.code);

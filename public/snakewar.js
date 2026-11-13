@@ -124,7 +124,7 @@ function updateChat() {
   const inRound = roomState !== 'lobby', alive = state.snakes.some(s => s.id === myId);
   const box = $('chatBox'), wasHidden = box.classList.contains('hidden');
   box.classList.toggle('hidden', inRound && alive && document.activeElement !== $('chat'));
-  if (wasHidden && !box.classList.contains('hidden') && chatPinned) $('log').scrollTop = $('log').scrollHeight;
+  if (wasHidden && !box.classList.contains('hidden')) logScroll.toBottom();
 }
 function renderScore() { // classic solo: show food eaten and the best so far
   const me = state.snakes.find(s => s.id === myId);
@@ -168,9 +168,8 @@ function renderPlayers() {
 let lastLens = '';
 function updateLengths() { const k = state.snakes.map(s => s.id + ':' + s.body.length).join(); if (k !== lastLens) { lastLens = k; renderPlayers(); } }
 // The log sticks to the newest line unless you've scrolled up to read older ones.
-let chatPinned = true;
-$('log').addEventListener('scroll', () => { const l = $('log'); if (l.clientHeight) chatPinned = l.scrollHeight - l.scrollTop - l.clientHeight < 30; });
-function addLine(d) { const l = $('log'); l.appendChild(d); while (l.children.length > 150) l.firstChild.remove(); if (chatPinned) l.scrollTop = l.scrollHeight; }
+const logScroll = SW.stickyScroll($('log')); // follows new lines unless you've scrolled up to read
+function addLine(d) { logScroll.add(d); }
 function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
 function chatLine(id, msg) { const d = document.createElement('div'); d.innerHTML = `<span class="who" style="color:${colorOf(id)}">${SW.avatarHtml(playerOf(id))}${esc(nameOf(id))}</span>`; d.appendChild(document.createTextNode(msg)); addLine(d); }
 function flashBanner(text, ms) { banner = { text, until: performance.now() + ms }; }

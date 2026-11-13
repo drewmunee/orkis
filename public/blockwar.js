@@ -458,9 +458,8 @@ function renderPlayers() {
   renderOpps();
 }
 function setStatus(s) { $('status').textContent = s; }
-let chatPinned = true;
-$('log').addEventListener('scroll', () => { const l = $('log'); if (l.clientHeight) chatPinned = l.scrollHeight - l.scrollTop - l.clientHeight < 30; });
-function addLine(d) { const l = $('log'); l.appendChild(d); while (l.children.length > 150) l.firstChild.remove(); if (chatPinned) l.scrollTop = l.scrollHeight; }
+const logScroll = SW.stickyScroll($('log')); // follows new lines unless you've scrolled up to read
+function addLine(d) { logScroll.add(d); }
 function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
 function chatLine(id, msg) { const p = players.find(q => q.id === id), d = document.createElement('div'); d.innerHTML = `<span class="who" style="color:${p ? SLOT_COLORS[numOf(p)] : ''}">${SW.avatarHtml(p)}${esc(nameOf(id))}</span>`; d.appendChild(document.createTextNode(msg)); addLine(d); }
 

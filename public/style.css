@@ -224,3 +224,18 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #playerList .rmBot:hover { color:#ff4d5e; border-color:#ff4d5e; }
 #endBtn { width:100%; margin-top:6px; }
 #playerList .spec { filter:grayscale(1); opacity:.75; } /* spectating: a grey eye */
+/* watching a full room: no board of your own, a bigger view of everyone playing (2 rows of 3) */
+#watchers { flex:1; text-align:center; color:var(--dim); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#game.watching #center { display:none; }
+#game.watching #swGame { grid-template-columns:auto minmax(0,1fr); }
+#game.watching #opponents { justify-self:center; --oppw:clamp(80px, min(calc(((100vh - 150px) / 2 - 40px) * 10 / 23), calc((100vw - 380px) / 3 - 14px)), 260px); }
+#game.watching .opp .name { font-size:15px; }
+#playerList .takeBot, #playerList .takeSeat { padding:1px 6px; margin-left:4px; font-size:11px; font-weight:700; background:transparent; color:var(--text); border:1px solid var(--accent); border-radius:5px; cursor:pointer; }
+#playerList .takeSeat { display:block; width:100%; margin:6px 0 0; padding:4px; }
+/* a seated player who is spectating: an eye over their board for everyone */
+.opp .oppBoard { position:relative; }
+.opp .specEye { display:none; position:absolute; inset:0; align-items:center; justify-content:center; font-size:34px; filter:grayscale(1); opacity:.8; pointer-events:none; }
+.opp.spectating .specEye { display:flex; }
+.opp.spectating canvas { opacity:.35; }
+/* special names in the chat/log, in their block colour */
+.spName { display:inline-block; padding:0 6px; border-radius:4px; font-weight:700; font-style:normal; line-height:1.35; }

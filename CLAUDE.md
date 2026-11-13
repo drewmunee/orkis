@@ -205,9 +205,20 @@ New games must call the same `leaveRoom()` pattern.
   when it went dark (`darkBoard`; later garbage is invisible) and slip up much more, at every difficulty.
   Inverted: easy/medium pick per inversion to freeze (pieces just fall from spawn) or flail (random spots);
   insane botches one piece (mirrored), then plays carefully at ~2.4 s per piece until it wears off.
+  Insane bots also slow to ~1.9 s per piece while Darkness is on them.
 - **/spectate** (chat command) also works in Stackwar: spectators sit out the next games (not in
   `startCount`, teams, stats or `startedWith`; their own game doesn't start, they just watch the boards) and
   show a grey 👁; one player + spectators is a solo run; everyone spectating = no start; not in daily runs.
+  Their board shows a big 👁 over it on everyone's screen.
+- **Watchers** (Stackwar): joining a full room (6 seats) makes you a watcher (`room.watchers`, `me.watcher`,
+  welcome `watcher:true`; full daily rooms still refuse). Watchers get broadcasts and chat but no seat; they're
+  listed in the top bar ("👁 Watching: …", `#watchers`, `lobby.watchers`) and the homepage lobby row
+  (`N 👁`, "full (join to watch)"). Their screen hides the main board (`#game.watching`) and shows all
+  6 playing boards larger. A watcher can **Take over** a bot (`{t:'takebot', id}`: the bot leaves, the watcher
+  takes its slot and plays from the next game) or **Take a seat** when one is free (`{t:'sit'}`). If the
+  last seated person leaves, the first watcher is seated (and becomes host).
+- Log lines for specials show the special's name as a pill in its block colour (`log(msg, special)`).
+- Only 4-line clears are announced in the chat/log; 2- and 3-line clears still send garbage silently.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and records the run.
 - **Team mode** (host toggles it in the room panel): each match shuffles players into Red and Blue
@@ -318,6 +329,9 @@ New games must call the same `leaveRoom()` pattern.
 - Chat/log is hidden from players who are alive in a round (T opens it; in every game T opens chat and
   Enter sends); it shows for
   spectators, eliminated players, and between rounds. It auto-scrolls unless you scrolled up.
+- **Every chat/log on the site** (all three games' logs and the homepage chat) appends through
+  `SW.stickyScroll(el)` in `common.js`: it stays pinned to the bottom (also on resize) unless the user has
+  scrolled up, and resumes once they scroll back down. New chats must use it.
 - **The two games must stay isolated.** Each connection belongs to one game for its life (Snakewar
   joins send `game: 'snake'`); they share only `base.css` (theme + base elements), `common.js` (browser ID +
   settings), the homepage/stats tabs and the `sw-name` / `sw-theme` / `sw-bid` / `sw-settings` browser storage. Stackwar-only styles go in `style.css`, Snakewar-only in `snake.css`.

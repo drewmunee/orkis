@@ -47,6 +47,8 @@ const countingDown = () => performance.now() < countdownEnd;
 // Flip this to true to show it on the homepage and mention ranks after solo runs.
 const SHOW_LEADERBOARD = true;
 let soloRun = false;
+// Watching a full room: no seat and no board of your own, just a bigger view of everyone playing
+let watcherMode = false, watchers = [];
 // Daily run: everyone gets the same seeded solo run each (UTC) day; clear 40 lines as fast as you can.
 let dailyRoom = false, dailyRun = null, dailyDone = 0; // dailyRun: {goal, day} while a daily run is on
 const fmtTime = ms => { const t = Math.max(0, ms) / 1000, m = Math.floor(t / 60), sec = t - m * 60; return `${m}:${sec.toFixed(2).padStart(5, '0')}`; };
@@ -372,13 +374,14 @@ function draw() {
 }
 function renderOpps() {
   const wrap = $('opponents');
-  const others = ordered().slice(1).filter(p => !p.spectating); // spectators have no board to show
+  // everyone else's board (a watcher sees every board); seated players who are spectating get an eye on theirs
+  const others = watcherMode ? ordered() : ordered().slice(1);
   if (wrap.children.length !== others.length || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id || el.dataset.av !== (others[i].avatar || ''))) {
     wrap.innerHTML = '';
     for (const p of others) {
       const el = document.createElement('div');
       el.className = 'opp'; el.dataset.id = p.id; el.dataset.av = p.avatar || '';
-      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${SW.avatarHtml(p)}${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><canvas width="${W * 14}" height="${H * 14}"></canvas>`;
+      el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${p.bot ? '🤖' : SW.avatarHtml(p)}${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><div class="oppBoard"><canvas width="${W * 14}" height="${H * 14}"></canvas><div class="specEye" title="Spectating">👁</div></div>`;
       el.onclick = () => useSpecial(numOf(players.find(q => q.id === p.id)));
       wrap.appendChild(el);
     }
@@ -386,6 +389,7 @@ function renderOpps() {
   for (const el of wrap.children) {
     const p = players.find(q => q.id === +el.dataset.id);
     el.classList.toggle('dead', roomState === 'playing' && !p.alive);
+    el.classList.toggle('spectating', !!p.spectating); // seated but sitting games out: an eye over the board
     el.classList.toggle('team-red', p.team === 'red'); el.classList.toggle('team-blue', p.team === 'blue');
     el.querySelector('.tm').innerHTML = teamTag(p.team);
     el.querySelector('.w').textContent = p.wins ? `${p.wins}★` : '';
@@ -405,16 +409,24 @@ function renderInv() {
     el.appendChild(d);
   }
 }
+// people watching the room (it was full when they came): listed in the top bar, outside the play area
+function renderWatchers() {
+  $('watchers').classList.toggle('hidden', !watchers.length);
+  $('watchers').innerHTML = watchers.length ? `👁 Watching: ${watchers.map(w => (w.id === myId ? '<b>' : '') + SW.avatarHtml(w) + esc(w.name) + (w.id === myId ? ' (you)</b>' : '')).join(', ')}` : '';
+}
 // the host can click another person's number to make them host (crown sits to the left of the numbers)
 const hostBadge = p => myId === hostId && p.id !== myId && !p.bot ? `<span class="mkHost" data-id="${p.id}" title="Make ${esc(p.name)} host">${badge(numOf(p))}</span>` : badge(numOf(p));
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
   $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${SW.avatarHtml(me)}${esc(me.name)}</span>${teamTag(me.team)}` : '';
   const hostInLobby = myId === hostId && roomState === 'lobby';
-  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span><span class="crown">${p.id === hostId ? '👑' : ''}</span>${hostBadge(p)} ${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.bot ? ` <small class="botLv lv-${p.bot}">${p.bot}</small>` : ''}${p.id === myId ? ' (you)' : ''}${p.spectating ? ' <span class="spec" title="Spectating (not playing)">👁</span>' : ''} ${teamTag(p.team)}${p.bot && myId === hostId ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('')
+  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span><span class="crown">${p.id === hostId ? '👑' : ''}</span>${hostBadge(p)} ${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.bot ? ` <small class="botLv lv-${p.bot}">${p.bot}</small>` : ''}${p.id === myId ? ' (you)' : ''}${p.spectating ? ' <span class="spec" title="Spectating (not playing)">👁</span>' : ''} ${teamTag(p.team)}${p.bot && myId === hostId ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}${p.bot && watcherMode ? ` <button class="takeBot" data-id="${p.id}" title="Take this bot's seat: you play from the next game">Take over</button>` : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('')
     // host, between games (not in a daily run): add bots of three difficulties, up to 6 players in all
+    + (watcherMode && players.length < 6 ? '<button type="button" class="takeSeat">Take a free seat</button>' : '')
     + (hostInLobby && !dailyRoom && players.length < 6 ? '<div class="addBots"><span>Add bot</span><button type="button" data-lv="easy">＋ Easy</button><button type="button" data-lv="medium">＋ Medium</button><button type="button" data-lv="insane">＋ Insane</button></div>' : '');
   for (const b of $('playerList').querySelectorAll('.addBots button')) b.onclick = e => { net({ t: 'addbot', level: b.dataset.lv }); e.currentTarget.blur(); };
+  for (const b of $('playerList').querySelectorAll('.takeBot')) b.onclick = e => { net({ t: 'takebot', id: +b.dataset.id }); e.currentTarget.blur(); };
+  for (const b of $('playerList').querySelectorAll('.takeSeat')) b.onclick = e => { net({ t: 'sit' }); e.currentTarget.blur(); };
   for (const b of $('playerList').querySelectorAll('.mkHost')) b.onclick = () => net({ t: 'sethost', id: +b.dataset.id });
   for (const b of $('playerList').querySelectorAll('.rmBot')) b.onclick = e => { net({ t: 'removebot', id: +b.dataset.id }); e.currentTarget.blur(); };
   $('startBtn').classList.toggle('hidden', !hostInLobby);
@@ -432,12 +444,16 @@ function renderPlayers() {
 }
 function updateStats() { $('lines').textContent = lines; $('level').textContent = level; }
 function setStatus(s) { $('status').textContent = s; }
-function addLine(d) {
-  const l = $('log'), atBottom = l.scrollHeight - l.scrollTop - l.clientHeight < 30;
-  l.appendChild(d); while (l.children.length > 150) l.firstChild.remove();
-  if (atBottom) l.scrollTop = l.scrollHeight; // don't yank the view if someone scrolled up to read
+const logScroll = SW.stickyScroll($('log')); // follows new lines unless you've scrolled up to read
+function addLine(d) { logScroll.add(d); }
+function log(msg, special) {
+  const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg;
+  if (special && SPECIALS[special]) { // the special's name in its block colour, e.g. "Bot Blocky → Toni: [Inverted]"
+    const s = document.createElement('span'); s.className = 'spName'; s.textContent = SPECIALS[special][0];
+    s.style.background = SPECIALS[special][1]; s.style.color = SPECIALS[special][4] || '#111'; d.append(s);
+  }
+  addLine(d);
 }
-function log(msg) { const d = document.createElement('div'); d.className = 'ev'; d.textContent = msg; addLine(d); }
 function chatLine(id, msg) {
   const p = players.find(q => q.id === id), d = document.createElement('div'); d.className = 'msg';
   d.innerHTML = `${p ? badge(numOf(p)) : ''}<span class="who"${p ? ` style="color:${SLOT_COLORS[numOf(p)]}"` : ''}>${SW.avatarHtml(p)}${esc(p ? p.name : '?')}</span>`;
@@ -460,18 +476,26 @@ function connect(name, room, isDaily = false) {
       case 'error': $('joinErr').textContent = m.msg; break;
       case 'welcome':
         myId = m.id; $('roomName').textContent = dailyRoom ? 'daily run' : m.room;
+        watcherMode = !!m.watcher; $('game').classList.toggle('watching', watcherMode);
         $('join').classList.add('hidden'); $('game').classList.remove('hidden');
         $('swBar').appendChild($('themeBar')); // ⚙ Settings sits at the end of the game's top bar, like Blockwar
         board = newBoard(); renderInv(); setStatus('Waiting for the host to start…');
         break;
       case 'lobby':
         if (!!m.teamMode !== teamMode && m.state === 'lobby' && !playing) setStatus(''); // mode switched: last result no longer applies
-        players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; renderPlayers();
+        players = m.players; hostId = m.hostId; roomState = m.state; teamMode = !!m.teamMode; watchers = m.watchers || [];
+        { // seated or watching? (a watcher who takes over a bot or a free seat becomes a player)
+          const was = watcherMode; watcherMode = !players.some(p => p.id === myId);
+          $('game').classList.toggle('watching', watcherMode);
+          if (was && !watcherMode) setStatus('You have a seat now: you play from the next game.');
+          if (watcherMode && !was) setStatus('This room is full, so you\'re watching. Take over a bot or a free seat to play.');
+        }
+        renderWatchers(); renderPlayers();
         if (roomState === 'lobby' && !playing) setStatus($('status').textContent || 'Waiting for the host to start…');
         break;
       case 'start':
         players = m.players; roomState = 'playing'; renderPlayers();
-        if ((players.find(p => p.id === myId) || {}).spectating) { // sitting this one out: just watch
+        if (watcherMode || (players.find(p => p.id === myId) || {}).spectating) { // sitting this one out: just watch
           playing = false; piece = null; board = newBoard(); boards.clear(); dailyRun = null;
           log('— Game started (you\'re spectating) —'); setStatus('Spectating this game. Type /spectate to play the next one.'); renderOpps();
           break;
@@ -487,7 +511,7 @@ function connect(name, room, isDaily = false) {
       case 'setboard': if (playing) { board = deserialize(m.cells); fixPiece(); syncBoard(); } break;
       case 'used': {
         const sp = SPECIALS[m.special];
-        log(`${nameOf(m.from)} → ${m.from === m.to ? 'self' : nameOf(m.to)}: ${sp ? sp[0] : m.special}`);
+        log(`${nameOf(m.from)} → ${m.from === m.to ? 'self' : nameOf(m.to)}: ${sp ? '' : m.special}`, m.special);
         flash(m.to);
         break;
       }
@@ -509,7 +533,7 @@ function connect(name, room, isDaily = false) {
       case 'bonus': if (playing) {
         const s = randomSpecial(BONUS_KEYS);
         inventory.push(s); if (inventory.length > MAX_INV) inventory.splice(0, inventory.length - MAX_INV);
-        renderInv(); log(`Bonus for the first 4-line clear: ${SPECIALS[s][0]}`);
+        renderInv(); log('Bonus for the first 4-line clear: ', s);
       } break;
       case 'daily': { // the server's official result for a daily run
         const msg = m.failed ? `Daily run over: topped out at ${m.lines}/${dailyRun ? dailyRun.goal : 40} lines. Press R (or Play again) to retry.`
@@ -632,13 +656,14 @@ $('dailyBtn').onclick = async () => {
 
 // ---------- homepage chat: one site-wide room that keeps its last 50 lines ----------
 let hcLast = 0, hcBusy = false;
+const hcScroll = SW.stickyScroll($('hcLog'), 50); // homepage chat: same follow-unless-scrolled-up behaviour
 function chatTime(at) { const d = new Date(at); return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 function loadHomeChat() {
   if ($('join').classList.contains('hidden') || hcBusy) return; // only while the homepage is showing
   hcBusy = true;
   fetch('/api/chat?after=' + hcLast).then(r => r.json()).then(lines => {
     if (!Array.isArray(lines) || !lines.length) return;
-    const log = $('hcLog'), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+    const log = $('hcLog');
     for (const l of lines) {
       if (l.id <= hcLast) continue;
       hcLast = l.id;
@@ -649,7 +674,7 @@ function loadHomeChat() {
       log.appendChild(d);
     }
     while (log.children.length > 50) log.firstChild.remove();
-    if (atBottom) log.scrollTop = log.scrollHeight;
+    hcScroll.toBottom(); requestAnimationFrame(hcScroll.toBottom);
   }).catch(() => {}).finally(() => { hcBusy = false; });
 }
 $('hcForm').onsubmit = async e => {
@@ -693,7 +718,7 @@ function renderLobbies() {
   $('lobbyCount').textContent = rows.length ? `${total} playing in ${rows.length} ${rows.length === 1 ? 'lobby' : 'lobbies'}` : '';
   list.innerHTML = rows.length ? rows.map(r => `<li class="lobby" data-room="${esc(r.room)}" title="Join ${esc(r.room)}">
       <span class="lname">${esc(r.room)}${r.teamMode ? ' · teams' : ''}${r.mode ? (r.mode === 'lives' ? ' · lives' : ' · clear race') : ''}<span class="lnames">${esc(r.names.join(', '))}</span></span>
-      <span class="lcount">${r.players} ${r.players === 1 ? 'player' : 'players'}</span>
+      <span class="lcount">${r.players} ${r.players === 1 ? 'player' : 'players'}${r.watchers ? ` · ${r.watchers} 👁` : ''}${g === 'stackwar' && r.players >= 6 ? ' · full (join to watch)' : ''}</span>
       <span class="lstate ${r.playing ? 'playing' : 'waiting'}">${r.playing ? 'In game' : 'Waiting'}</span></li>`).join('')
     : '<li class="empty">Nobody is playing right now. Enter a lobby code to start one!</li>';
   for (const li of list.querySelectorAll('li.lobby')) li.onclick = () => {

@@ -108,7 +108,23 @@ window.SW = (() => {
     listeners.push(render);
   }
 
+  // Chat boxes everywhere: keep following new messages unless the reader has scrolled up; scrolling back to
+  // the bottom resumes following. Also catches up when the box is shown or resized (a hidden box has no
+  // height, which used to leave chats stuck partway up).
+  function stickyScroll(el, max = 150) {
+    let pinned = true;
+    const toBottom = () => { if (pinned) el.scrollTop = el.scrollHeight; };
+    el.addEventListener('scroll', () => { if (el.clientHeight) pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 40; });
+    if (window.ResizeObserver) new ResizeObserver(toBottom).observe(el);
+    return {
+      add(node) { el.appendChild(node); while (el.children.length > max) el.firstChild.remove(); toBottom(); requestAnimationFrame(toBottom); },
+      toBottom,
+      get pinned() { return pinned; },
+    };
+  }
+
   return {
+    stickyScroll,
     bid,
     get: (k, d) => settings[k] ?? d,
     set(k, v) { apply({ [k]: v }); saveRemote(); },

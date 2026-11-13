@@ -215,6 +215,8 @@ class StackBot {
     this.placeAt = at + (this.level === 'insane' ? (Math.random() < 0.6 ? 1000 : 750) * rand(0.8, 1.2) : this.cfg.placeMs * rand(0.55, 1.45));
     // insane, inverted, after its one slip: careful and slow until the inversion wears off
     if (this.level === 'insane' && this.invertSlipped && at < this.invertUntil) this.placeAt = at + 2400 * rand(0.85, 1.15);
+    // insane, in the dark: slows right down while it can't see (~1.9 s a piece)
+    else if (this.level === 'insane' && at < this.darkUntil) this.placeAt = at + 1900 * rand(0.85, 1.15);
     const m = PIECES[idx][1], x = ((W - m[0].length) / 2) | 0, y = PIECES[idx][0] === '1' ? -1 : 0;
     if (collides(this.board, m, x, y)) this.die();
   }
