@@ -44,8 +44,8 @@ const COMMANDS = {
   '?': { alias: 'help', run: () => listCommands() },
   podium: { desc: 'top 3 players in this lobby by wins this session', run: podium },
   leaderboard: { desc: 'top 3 players in this lobby by all-time wins in this game', run: allTimeWins },
-  // games that support it pass ctx.spectate (toggles sitting out, returns the reply); Snakewar only for now
-  spectate: { desc: 'sit out the next rounds and just watch; type it again to play (Snakewar)', run: ctx => [ctx.spectate ? ctx.spectate() : 'Spectating is only in Snakewar for now.'] },
+  // games that support it pass ctx.spectate (toggles sitting out, returns the reply): Stackwar and Snakewar
+  spectate: { desc: 'sit out the next games and just watch; type it again to play (Stackwar, Snakewar)', run: ctx => [ctx.spectate ? ctx.spectate() : 'Spectating isn\'t available in this game yet.'] },
 };
 
 // Returns true if msg was a command (it's then handled and must not be sent as chat).

@@ -140,7 +140,7 @@ New games must call the same `leaveRoom()` pattern.
   only to the sender as log lines. Same commands everywhere; results depend on the game/room.
 - `/help` (also `/list`, `/?`, or just `/`) lists them all; `/podium`: top 3 players in this lobby by wins this
   session (room wins, reset on rejoin); `/leaderboard`: top 3 people in this lobby by all-time wins in this
-  game (sum of their `wins_*` stats; commands may return a Promise); `/spectate` (Snakewar: sit out / rejoin; games pass an optional `ctx.spectate` hook). Add new commands to `COMMANDS` (use `alias` for alternate names).
+  game (sum of their `wins_*` stats; commands may return a Promise); `/spectate` (Stackwar and Snakewar: sit out / rejoin; games pass an optional `ctx.spectate` hook; Blockwar says it isn't available yet). Add new commands to `COMMANDS` (use `alias` for alternate names).
 
 ## Moderation and the swear jar
 - `moderation.js`: usernames containing racial slurs are refused at join for every game (checked once in
@@ -194,6 +194,9 @@ New games must call the same `leaveRoom()` pattern.
   better board, finishes off players near the top, otherwise hits whoever is doing best (Blank: whoever has
   the most specials). A bot slower than the falling piece only gets part of its move done (so only insane
   copes at high levels); Darkness/Inverted make them sloppier, Haste speeds their pieces up.
+- **/spectate** (chat command) also works in Stackwar: spectators sit out the next games (not in
+  `startCount`, teams, stats or `startedWith`; their own game doesn't start, they just watch the boards) and
+  show a grey 👁; one player + spectators is a solo run; everyone spectating = no start; not in daily runs.
 - **Solo runs:** a game started with only one player in the room is a solo run. The server counts
   that player's cleared lines itself (clients report each clear, capped at 4) and records the run.
 - **Team mode** (host toggles it in the room panel): each match shuffles players into Red and Blue

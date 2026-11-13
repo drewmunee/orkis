@@ -117,7 +117,7 @@ function broadcast(room, msg, exceptId) {
   for (const p of room.players.values()) if (p.id !== exceptId) send(p.ws, msg);
 }
 function playerList(room) {
-  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null, avatar: p.avatar || null, bot: p.bot || null }));
+  return [...room.players.values()].map(p => ({ id: p.id, name: p.name, slot: p.slot, alive: p.alive, wins: p.wins, team: p.team || null, avatar: p.avatar || null, bot: p.bot || null, spectating: !!p.spectating }));
 }
 function sendLobby(room) {
   broadcast(room, { t: 'lobby', players: playerList(room), hostId: room.hostId, state: room.state, teamMode: !!room.teamMode });
@@ -157,23 +157,26 @@ function finishDaily(room, p) {
   sendLobby(room);
 }
 function startRoom(room) {
+  // players who typed /spectate sit this game out and watch; everyone else plays
+  const playing = [...room.players.values()].filter(p => !p.spectating);
+  if (!playing.length) return broadcast(room, { t: 'log', msg: 'Everyone is spectating: type /spectate to play.' });
   room.state = 'playing';
-  room.startCount = room.players.size;
+  room.startCount = playing.length;
   room.startedAt = Date.now();
-  room.startedWith = [...room.players.values()]; // who played this game (for whether a win counts)
-  for (const p of room.players.values()) stats.add(p, 'stackwar', { played: 1, [room.daily ? 'daily_runs' : room.players.size === 1 ? 'solo_runs' : room.teamMode ? 'team_games' : 'ffa_games']: 1 });
+  room.startedWith = playing; // who played this game (for whether a win counts)
+  for (const p of playing) stats.add(p, 'stackwar', { played: 1, [room.daily ? 'daily_runs' : playing.length === 1 ? 'solo_runs' : room.teamMode ? 'team_games' : 'ffa_games']: 1 });
   let seed = (Math.random() * 2 ** 31) | 0;
   if (room.daily) {
     room.dailyDay = daily.today(); seed = daily.seedFor(room.dailyDay); room.startedAt = Date.now() + COUNTDOWN_MS;
     // count the attempt; a time set on attempt 1 earns the ⚡ first-try badge
     for (const p of room.players.values()) { p.dailyAttempt = null; daily.attempt(room.dailyDay, p).then(n => { p.dailyAttempt = n; }, e => console.error('daily attempt write failed:', e.message)); }
   }
-  for (const p of room.players.values()) { p.alive = true; p.board = ''; p.lines = 0; }
+  for (const p of room.players.values()) { p.alive = !p.spectating; p.board = ''; p.lines = 0; p.team = null; }
   room.firstFourDone = !!room.daily; // first 4-line clear of each match earns a bonus (never in the daily run: same run for everyone)
   // Team mode: shuffle everyone into red and blue (sizes differ by at most one), new teams every match.
   // Teams only decide the winner; garbage and specials work exactly as in a free-for-all.
   room.teamMatch = !!room.teamMode && room.startCount >= 2;
-  const order = [...room.players.values()];
+  const order = playing.slice();
   for (let i = order.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [order[i], order[j]] = [order[j], order[i]]; }
   order.forEach((p, i) => { p.team = room.teamMatch ? (i % 2 ? 'blue' : 'red') : null; });
   broadcast(room, { t: 'start', seed, players: playerList(room), teamMatch: room.teamMatch, daily: room.daily ? { goal: daily.GOAL, day: room.dailyDay } : null });
@@ -375,7 +378,13 @@ wss.on('connection', ws => {
         break;
       case 'chat':
         // /commands (see commands.js) answer only the sender and aren't chat
-        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'stackwar' }, line => send(ws, { t: 'log', msg: line }))) break;
+        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'stackwar', spectate: () => {
+          if (room.daily) return 'There is nothing to spectate in a daily run.';
+          me.spectating = !me.spectating;
+          sendLobby(room);
+          broadcast(room, { t: 'log', msg: me.spectating ? `${me.name} is spectating` : `${me.name} is back in the game` });
+          return me.spectating ? `You'll watch the next games instead of playing${me.alive ? ' (after this one)' : ''}. Type /spectate again to play.` : 'You\'ll play in the next game.';
+        } }, line => send(ws, { t: 'log', msg: line }))) break;
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
         if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => { if (line) broadcast(room, { t: 'log', msg: line }); }, e => console.error('swear jar failed:', e.message)); // a quarter in the jar
         break;
