@@ -222,3 +222,4 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #playerList .lv-easy { background:#7bffb0; } #playerList .lv-medium { background:#ffd23f; } #playerList .lv-insane { background:#ff5470; color:#fff; }
 #playerList .rmBot { padding:0 5px; margin-left:3px; line-height:15px; font-size:12px; background:transparent; color:var(--dim); border:1px solid var(--line); border-radius:4px; cursor:pointer; }
 #playerList .rmBot:hover { color:#ff4d5e; border-color:#ff4d5e; }
+#endBtn { width:100%; margin-top:6px; }

@@ -740,11 +740,14 @@ function join(ws, id, m) {
         if (alivePlayers(room).some(p => !p.bot)) return;
         log(room, `${me.name} ended the round`);
         endRound(room, { ended: true });
-      } else if (m.t === 'removebot' && me.id === room.hostId && room.state === 'lobby') {
+      } else if (m.t === 'removebot' && me.id === room.hostId) { // the host can remove a bot at any time
         const b = room.players.get(m.id);
         if (!b || !b.bot) return;
-        room.players.delete(b.id); log(room, `${b.name} left`);
-        setField(room, Math.max(1, players(room).length)); sendState(room); sendLobby(room);
+        if (b.alive) kill(room, b, 'was removed', { kind: 'left' }); else log(room, `${b.name} left`);
+        room.players.delete(b.id);
+        checkRoundOver(room);
+        if (room.state === 'lobby') { setField(room, Math.max(1, players(room).length)); sendState(room); }
+        sendLobby(room);
       } else if (m.t === 'teamchoice' && me.id === room.hostId && room.state === 'lobby' && ['random', 'choose'].includes(m.mode)) {
         room.teamChoice = m.mode; // random teams, or players pick theirs with the color picker
         sendLobby(room);

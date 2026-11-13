@@ -177,8 +177,11 @@ New games must call the same `leaveRoom()` pattern.
   D Darkness (target board blacked out ~4s), I Inverted (target's controls scrambled 5s: left/right,
   rotations and up/down swap; hard drop unchanged), S Switch, N Nuke. N/G/S are rarer than the rest.
 - **Bots** (`stackbot.js`): the host adds them between games from the room panel (**＋ Easy / ＋ Medium /
-  ＋ Insane** under the player list, `{t:'addbot', level}`; × removes one, `{t:'removebot', id}`); never in
-  daily runs; up to the 6-player limit. Each bot connects through a fake socket (`BotSocket`, `ws.isBot`, so a
+  ＋ Insane** under the player list, `{t:'addbot', level}`); whoever is host can remove one at any time,
+  mid-game too (×, `{t:'removebot', id}`; mid-game it counts as out); never in daily runs; up to the 6-player
+  limit. Once no people are left playing, the host gets **End game** (`endBtn`, `{t:'endgame'}`; no winner).
+  A win only goes into a person's stats (`winCounts`) if their opponents in that game included another
+  person or an insane bot (beating only easy/medium bots still shows ★ in the room but isn't recorded). Each bot connects through a fake socket (`BotSocket`, `ws.isBot`, so a
   browser can't pose as one) and joins/plays with the exact same messages as a browser, so garbage, specials,
   Switch, teams and winners work unchanged; it keeps its own board with the same rules and shared piece
   queue as `public/game.js` (keep the two in sync). Bots never get stats; the room closes when no people are
@@ -254,7 +257,8 @@ New games must call the same `leaveRoom()` pattern.
   drawn with an opaque fillStyle (canvas applies its alpha to emoji). Stats: letters, words, fruit,
   fruit_sets, pacman_used/bites/bitten, poop_used.
 - **Bots** (`snakebot.js`, wired in `snake.js`): the host adds them between rounds with **＋ Add bot** under
-  the player list (`{t:'addbot'}`), × removes one (`{t:'removebot', id}`); up to the 12-player limit, named
+  the player list (`{t:'addbot'}`); whoever is host can remove one at any time with × (`{t:'removebot', id}`;
+  mid-round it dies as "was removed"); up to the 12-player limit, named
   "Bot Rex" etc., shown with 🤖. They're players with a stub socket (`bot: true`), so 1 person + bots is a
   normal battle round (never classic), and they fill teams like unpicked players. Never get stats
   (`stats.js` skips `p.bot`) or leaderboard scores; their kills don't credit them; they can win rounds

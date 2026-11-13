@@ -160,6 +160,7 @@ function startRoom(room) {
   room.state = 'playing';
   room.startCount = room.players.size;
   room.startedAt = Date.now();
+  room.startedWith = [...room.players.values()]; // who played this game (for whether a win counts)
   for (const p of room.players.values()) stats.add(p, 'stackwar', { played: 1, [room.daily ? 'daily_runs' : room.players.size === 1 ? 'solo_runs' : room.teamMode ? 'team_games' : 'ffa_games']: 1 });
   let seed = (Math.random() * 2 ** 31) | 0;
   if (room.daily) {
@@ -180,6 +181,11 @@ function startRoom(room) {
     broadcast(room, { t: 'log', msg: `${team === 'red' ? 'Red' : 'Blue'} team: ${order.filter(p => p.team === team).map(p => p.name).join(', ')}` });
   sendLobby(room);
 }
+// A win only goes into someone's stats if they beat at least one other person or one insane bot (beating
+// only easy / medium bots doesn't count). Opponents = everyone who started the game, minus their own team.
+function winCounts(room, p) {
+  return (room.startedWith || []).some(q => q !== p && !(room.teamMatch && q.team === p.team) && (!q.bot || q.bot === 'insane'));
+}
 function checkGameOver(room) {
   if (room.state !== 'playing') return;
   const alive = [...room.players.values()].filter(p => p.alive);
@@ -190,7 +196,7 @@ function checkGameOver(room) {
     room.state = 'lobby';
     for (const p of room.players.values()) p.alive = false;
     const winnerTeam = alive.length ? alive[0].team : null;
-    for (const p of room.players.values()) if (winnerTeam && p.team === winnerTeam) stats.add(p, 'stackwar', 'wins_team');
+    for (const p of room.players.values()) if (winnerTeam && p.team === winnerTeam && winCounts(room, p)) stats.add(p, 'stackwar', 'wins_team');
     broadcast(room, { t: 'gameover', winnerTeam });
     sendLobby(room);
     return;
@@ -199,7 +205,7 @@ function checkGameOver(room) {
   if (!over) return;
   room.state = 'lobby';
   const winner = room.startCount > 1 ? alive[0] : null;
-  if (winner) { winner.wins++; stats.add(winner, 'stackwar', 'wins_ffa'); }
+  if (winner) { winner.wins++; if (winCounts(room, winner)) stats.add(winner, 'stackwar', 'wins_ffa'); }
   for (const p of room.players.values()) p.alive = false;
   broadcast(room, { t: 'gameover', winnerId: winner ? winner.id : null, winnerName: winner ? winner.name : null });
   sendLobby(room);
@@ -274,10 +280,20 @@ wss.on('connection', ws => {
         stackbots.addBot(room.code, m.level, [...room.players.values()].map(p => p.name), sock => wss.emit('connection', sock));
         break;
       }
-      case 'removebot': {
-        if (me.id !== room.hostId || room.state !== 'lobby') return;
+      case 'removebot': { // the host (whoever it is now) can remove a bot at any time; mid-game it counts as out
+        if (me.id !== room.hostId) return;
         const b = room.players.get(m.id);
         if (b && b.bot) b.ws.terminate();
+        break;
+      }
+      case 'endgame': { // host: once no people are left playing, stop the bots playing on
+        if (me.id !== room.hostId || room.state !== 'playing') return;
+        if ([...room.players.values()].some(p => p.alive && !p.bot)) return;
+        room.state = 'lobby';
+        for (const p of room.players.values()) p.alive = false;
+        broadcast(room, { t: 'log', msg: `${me.name} ended the game` });
+        broadcast(room, { t: 'gameover', winnerId: null, winnerName: null });
+        sendLobby(room);
         break;
       }
       case 'restart': // daily run only: R starts a fresh attempt at any time, even mid-run

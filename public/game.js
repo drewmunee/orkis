@@ -409,7 +409,7 @@ function renderPlayers() {
   const me = players.find(p => p.id === myId);
   $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${SW.avatarHtml(me)}${esc(me.name)}</span>${teamTag(me.team)}` : '';
   const hostInLobby = myId === hostId && roomState === 'lobby';
-  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.bot ? ` <small class="botLv lv-${p.bot}">${p.bot}</small>` : ''}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''} ${teamTag(p.team)}${p.bot && hostInLobby ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('')
+  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.bot ? ` <small class="botLv lv-${p.bot}">${p.bot}</small>` : ''}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''} ${teamTag(p.team)}${p.bot && myId === hostId ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('')
     // host, between games (not in a daily run): add bots of three difficulties, up to 6 players in all
     + (hostInLobby && !dailyRoom && players.length < 6 ? '<div class="addBots"><span>Add bot</span><button type="button" data-lv="easy">＋ Easy</button><button type="button" data-lv="medium">＋ Medium</button><button type="button" data-lv="insane">＋ Insane</button></div>' : '');
   for (const b of $('playerList').querySelectorAll('.addBots button')) b.onclick = e => { net({ t: 'addbot', level: b.dataset.lv }); e.currentTarget.blur(); };
@@ -418,6 +418,8 @@ function renderPlayers() {
   const teamReady = teamMode && players.length >= 2; // team mode with one player is just a solo run
   $('startBtn').textContent = dailyRoom ? 'Play again' : players.length === 1 ? 'Start solo run' : teamReady ? 'Start team game' : 'Start game';
   $('teamBtn').classList.toggle('hidden', !hostInLobby || dailyRoom);
+  // host: once no people are left playing, stop the bots playing on
+  $('endBtn').classList.toggle('hidden', !(myId === hostId && roomState === 'playing' && players.some(p => p.bot) && players.every(p => p.bot || !p.alive)));
   $('teamBtn').textContent = teamMode ? 'Team mode: ON (switch to free-for-all)' : 'Switch to team mode';
   $('teamBtn').classList.toggle('on', teamMode);
   $('modeInfo').textContent = roomState !== 'lobby' ? '' : teamReady ? 'Next game: Red vs Blue (teams picked at random)'
@@ -714,6 +716,7 @@ $('joinForm').onsubmit = async e => {
   connect($('name').value, $('room').value);
 };
 $('startBtn').onclick = () => net({ t: 'start' });
+$('endBtn').onclick = e => { net({ t: 'endgame' }); e.target.blur(); };
 // Leave the room for real: tell the server first (so it drops you immediately), then close.
 function leaveRoom() { try { if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ t: 'leave' })); ws.close(); } } catch {} }
 window.addEventListener('pagehide', leaveRoom); // tab closed, reloaded, browser back, or Back to lobby
