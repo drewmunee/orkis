@@ -294,19 +294,24 @@ function syncBoard() { // throttle board broadcasts to one per frame
 }
 
 // ---------- drawing ----------
-// Inverted: every piece colour (1-7) swapped for another one, none keeping its own; garbage stays grey
+// Inverted: every piece colour (1-7) swapped for another one, none keeping its own; grey garbage cells each
+// get a random piece colour too (fixed per square for the whole inversion, so they don't flicker)
 let invertColors = null, drawingOpps = false;
 function shuffledColors() {
   const ids = ['1', '2', '3', '4', '5', '6', '7']; let to;
   do { to = ids.slice().sort(() => Math.random() - 0.5); } while (to.some((c, i) => c === ids[i]));
-  return Object.fromEntries(ids.map((c, i) => [c, COLORS[to[i]]]));
+  return { ...Object.fromEntries(ids.map((c, i) => [c, COLORS[to[i]]])), seed: Math.random() * 1e9 | 0 };
 }
-const cellColor = c => !drawingOpps && invertColors && invertColors[c] && performance.now() < invertUntil ? invertColors[c] : COLORS[c];
+function cellColor(c, x, y) {
+  if (drawingOpps || !invertColors || performance.now() >= invertUntil) return COLORS[c];
+  if (c === '8') { let h = Math.imul(x * 73856093 ^ y * 19349663 ^ invertColors.seed, 2654435761) >>> 0; return COLORS[String(1 + (h >>> 7) % 7)]; }
+  return invertColors[c] || COLORS[c];
+}
 function drawCell(c, x, y, size, cx, alpha = 1) {
   if (c === '.') return;
   cx.globalAlpha = alpha;
   const sp = isSpecial(c);
-  cx.fillStyle = sp ? SPECIALS[c][1] : cellColor(c);
+  cx.fillStyle = sp ? SPECIALS[c][1] : cellColor(c, x, y);
   cx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
   if (sp) { cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.lineWidth = 1; cx.strokeRect(x * size + 1.5, y * size + 1.5, size - 3, size - 3); }
   if (!sp && size > 12) { cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(x * size + 1, y * size + 1, size - 2, 4); }
