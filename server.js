@@ -189,6 +189,17 @@ function startRoom(room) {
 function winCounts(room, p) {
   return (room.startedWith || []).some(q => q !== p && !(room.teamMatch && q.team === p.team) && (!q.bot || q.bot === 'insane'));
 }
+// The host can hand the host role to another person (click their number, or /host N). Returns the reply.
+function makeHost(room, me, target) {
+  if (me.id !== room.hostId) return 'Only the host can do that.';
+  if (!target || !room.players.has(target.id)) return 'That player isn\'t here.';
+  if (target.bot) return 'Bots can\'t be host.';
+  if (target === me) return 'You\'re already the host.';
+  room.hostId = target.id;
+  broadcast(room, { t: 'log', msg: `${me.name} made ${target.name} the host` });
+  sendLobby(room);
+  return `${target.name} is now the host.`;
+}
 function checkGameOver(room) {
   if (room.state !== 'playing') return;
   const alive = [...room.players.values()].filter(p => p.alive);
@@ -289,6 +300,11 @@ wss.on('connection', ws => {
         if (b && b.bot) b.ws.terminate();
         break;
       }
+      case 'sethost': { // host clicked another player's number
+        const reply = makeHost(room, me, room.players.get(m.id));
+        if (room.hostId !== m.id) send(ws, { t: 'log', msg: reply });
+        break;
+      }
       case 'endgame': { // host: once no people are left playing, stop the bots playing on
         if (me.id !== room.hostId || room.state !== 'playing') return;
         if ([...room.players.values()].some(p => p.alive && !p.bot)) return;
@@ -378,7 +394,7 @@ wss.on('connection', ws => {
         break;
       case 'chat':
         // /commands (see commands.js) answer only the sender and aren't chat
-        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'stackwar', spectate: () => {
+        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'stackwar', setHost: t => makeHost(room, me, t), spectate: () => {
           if (room.daily) return 'There is nothing to spectate in a daily run.';
           me.spectating = !me.spectating;
           sendLobby(room);

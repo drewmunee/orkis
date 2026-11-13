@@ -446,8 +446,9 @@ function renderPlayers() {
   $('players').innerHTML = ordered().map(p => {
     const b = p.id === myId ? null : others.get(p.id);
     const info = p.wins ? `${p.wins}★` : '';
-    return `<div class="${roomState !== 'lobby' && !p.alive ? 'dead' : ''}">${badge(numOf(p))}<span class="nm">${SW.avatarHtml(p)}${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}</span><span class="info">${info}</span></div>`;
+    return `<div class="${roomState !== 'lobby' && !p.alive ? 'dead' : ''}"><span class="crown">${p.id === hostId ? '👑' : ''}</span>${myId === hostId && p.id !== myId ? `<span class="mkHost" data-id="${p.id}" title="Make ${esc(p.name)} host">${badge(numOf(p))}</span>` : badge(numOf(p))}<span class="nm">${SW.avatarHtml(p)}${esc(p.name)}${p.id === myId ? ' (you)' : ''}</span><span class="info">${info}</span></div>`;
   }).join('');
+  for (const b of $('players').querySelectorAll('.mkHost')) b.onclick = () => net({ t: 'sethost', id: +b.dataset.id }); // host: click a number to hand over host
   const host = myId === hostId && roomState === 'lobby', multi = players.length > 1;
   $('modeBox').classList.toggle('hidden', !(host && multi));
   for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === lobbyMode);

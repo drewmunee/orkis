@@ -34,3 +34,8 @@ button { background:var(--accent); color:#111; font-weight:700; cursor:pointer; 
 .av { display:inline-block; margin-right:4px; font-size:1.05em; line-height:1; font-style:normal; }
 .shade2 { display:inline-flex; gap:1px; vertical-align:middle; }
 .shade2 i { width:7px; height:14px; border-radius:2px; display:block; }
+/* player lists (all games) */
+.crown { display:inline-block; width:18px; flex:none; text-align:center; font-size:13px; } /* host crown, left of the numbers (empty slot keeps them lined up) */
+.mkHost { cursor:pointer; }
+.mkHost:hover .slot, .mkHost.nm:hover { outline:2px solid var(--accent); outline-offset:1px; border-radius:50%; }
+.mkHost.nm:hover { border-radius:4px; }

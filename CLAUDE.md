@@ -138,6 +138,10 @@ New games must call the same `leaveRoom()` pattern.
 - `commands.js`, shared by all three games' chat handlers: a chat message starting with `/` is a command,
   not chat (never broadcast, no swear jar). One word, case-insensitive, extra words ignored. Replies go
   only to the sender as log lines. Same commands everywhere; results depend on the game/room.
+- `/host N` (`/host 2` or `/host two`; numbers as in the player list, 1 = you, others by join slot): the host
+  hands the host role to another person (never a bot); games pass `ctx.setHost`. Commands get their extra
+  words as `args`. The host can also click another person's number (Snakewar: name) in the player list
+  (`{t:'sethost', id}`). In every player list the 👑 sits in a fixed slot left of the number/colour.
 - `/help` (also `/list`, `/?`, or just `/`) lists them all; `/podium`: top 3 players in this lobby by wins this
   session (room wins, reset on rejoin); `/leaderboard`: top 3 people in this lobby by all-time wins in this
   game (sum of their `wins_*` stats; commands may return a Promise); `/spectate` (Stackwar and Snakewar: sit out / rejoin; games pass an optional `ctx.spectate` hook; Blockwar says it isn't available yet). Add new commands to `COMMANDS` (use `alias` for alternate names).
@@ -186,13 +190,16 @@ New games must call the same `leaveRoom()` pattern.
   Switch, teams and winners work unchanged; it keeps its own board with the same rules and shared piece
   queue as `public/game.js` (keep the two in sync). Bots never get stats; the room closes when no people are
   left; the host is always a person. Placement: try every rotation/column (with hold for medium/insane),
-  score with a Dellacherie-style evaluation; tetris builders (medium, insane) keep the right column as a well
-  and only take smaller clears under pressure (stack 11+). Easy: ~3 s per piece, 25% next-best / 3% random
+  score with a Dellacherie-style evaluation; tetris builders (medium, insane) keep a well column and only take
+  smaller clears under pressure. Every bot gets its own style (`makeStyle`: weights nudged ±25%, well on the
+  left or right, its own survive-mode threshold and tetris appetite) and picks among near-best spots
+  (softmax with a per-bot temperature) on top of its difficulty's mistakes, so no two bots play alike. Easy: ~3 s per piece, 25% next-best / 3% random
   spots, likes singles/doubles with occasional building streaks, fires specials at random players every
   3-8 s. Medium: ~1.5 s, 7% slips, helpful specials (C/N/G) on itself and the rest on a random opponent at
-  once. Insane: ~0.75 s, 4% slips, saves C/N/G/R for emergencies (or a full hand), Switch only to steal a much
-  better board, finishes off players near the top, otherwise hits whoever is doing best (Blank: whoever has
-  the most specials). A bot slower than the falling piece only gets part of its move done (so only insane
+  once. Insane: usually ~1 s per piece, often 0.75 s (60/40), 5% slips, saves C/N/G/R for emergencies (or a full
+  hand), Switch only to steal a much better board, finishes off players near the top, otherwise hits the biggest
+  threat: other insane bots first in most cases, then people, then medium/easy bots, scaled by how well they're
+  doing, with some randomness (Blank: whoever has the most specials). Bots target bots and people alike. A bot slower than the falling piece only gets part of its move done (so only insane
   copes at high levels); Darkness/Inverted make them sloppier, Haste speeds their pieces up.
 - **/spectate** (chat command) also works in Stackwar: spectators sit out the next games (not in
   `startCount`, teams, stats or `startedWith`; their own game doesn't start, they just watch the boards) and

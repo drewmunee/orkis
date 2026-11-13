@@ -143,12 +143,13 @@ function renderPlayers() {
     // your own row gets ‹ › to change color whenever you're not in play
     const pick = p.id === myId && canPickColor();
     const dot = `<span class="dot" style="background:${colorOf(p.id)}"></span>`;
-    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}">${pick ? '<button class="cbtn" data-d="-1" title="Previous color">‹</button>' + dot + '<button class="cbtn" data-d="1" title="Next color">›</button>' : dot}${tag}<span class="nm" title="${esc(p.name)}">${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.id === hostId ? ' 👑' : ''}${p.bot && myId === hostId ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}${p.spectating ? ' <span class="spec" title="Spectating (not playing)">👁</span>' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
+    return `<div class="${p.id === myId ? 'me' : ''}${out ? ' dead' : ''}"><span class="crown">${p.id === hostId ? '👑' : ''}</span>${pick ? '<button class="cbtn" data-d="-1" title="Previous color">‹</button>' + dot + '<button class="cbtn" data-d="1" title="Next color">›</button>' : dot}${tag}<span class="nm${myId === hostId && p.id !== myId && !p.bot ? ' mkHost' : ''}" data-id="${p.id}" title="${myId === hostId && p.id !== myId && !p.bot ? `Make ${esc(p.name)} host` : esc(p.name)}">${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.bot && myId === hostId ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}${p.spectating ? ' <span class="spec" title="Spectating (not playing)">👁</span>' : ''}</span><span class="ln">${len || ''}${p.wins ? ` ${p.wins}★` : ''}</span></div>`;
   }).join('');
   // host, between rounds: ＋ adds a bot (up to the 12-player limit); × removes one
   if (myId === hostId && roomState === 'lobby' && players.length < 12) $('players').insertAdjacentHTML('beforeend', '<button id="addBot" type="button" title="Add a computer-controlled snake">＋ Add bot</button>');
   const add = $('addBot'); if (add) add.onclick = e => { net({ t: 'addbot' }); e.currentTarget.blur(); };
   for (const b of $('players').querySelectorAll('.rmBot')) b.onclick = e => { net({ t: 'removebot', id: +b.dataset.id }); e.currentTarget.blur(); };
+  for (const b of $('players').querySelectorAll('.mkHost')) b.onclick = () => net({ t: 'sethost', id: +b.dataset.id }); // host: click a name to hand over host
   for (const b of $('players').querySelectorAll('.cbtn')) b.onclick = e => { net({ t: 'color', d: +b.dataset.d }); e.currentTarget.blur(); };
   const hostInLobby = myId === hostId && roomState === 'lobby', teamReady = teamMode && players.length >= 2;
   $('startBtn').classList.toggle('hidden', !hostInLobby);

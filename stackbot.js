@@ -5,9 +5,10 @@
 //          doubles (the odd triple/tetris), fires specials at random people every few seconds.
 //  medium: every ~1.5 s, builds for tetrises (keeps the right-hand column open, uses hold) and only takes
 //          smaller clears when it has to; uses good specials on itself and bad ones on others as soon as it gets them.
-//  insane: every ~0.75 s, builds tetrises, uses hold, rarely slips up, and is the only one that keeps up at
-//          high levels; saves specials for when they hurt most (finishing someone off, hitting whoever is
-//          doing best) or to rescue itself.
+//  insane: usually ~1 s a piece (often 0.75 s), builds tetrises, uses hold, slips up now and then, and is
+//          the only one that keeps up at high levels; saves specials for when they hurt most (finishing someone
+//          off, hitting whoever is the biggest threat: usually another insane bot) or to rescue itself.
+// Every bot also has its own style (makeStyle), so two bots of the same difficulty don't play alike.
 // Like a person, a bot that thinks slower than the piece falls doesn't get to finish its moves: the piece
 // lands wherever it got to. Darkness and Inverted make them sloppy for a while; Haste makes pieces fall 3x faster.
 const { EventEmitter } = require('events');
@@ -30,7 +31,7 @@ const LEVELS = {
   // mistake: picks the 2nd..(1+spread)th best spot instead of the best; blunder: a random spot
   easy:   { placeMs: 3000, mistake: 0.25, spread: 3, blunder: 0.03, tetris: false, hold: false },
   medium: { placeMs: 1500, mistake: 0.07, spread: 2, blunder: 0.01, tetris: true,  hold: true },
-  insane: { placeMs: 750,  mistake: 0.04, spread: 1, blunder: 0.003, tetris: true, hold: true },
+  insane: { placeMs: 900,  mistake: 0.05, spread: 1, blunder: 0.004, tetris: true, hold: true }, // ~1 s, often 0.75 s
 };
 const NAMES = ['Nova', 'Blocky', 'Tetra', 'Ziggy', 'Bolt', 'Pixel', 'Quad', 'Stax', 'Echo', 'Rook'];
 const rnd = n => Math.floor(Math.random() * n);
@@ -111,40 +112,53 @@ function placeOn(board, p) {
 // How good is the board after this placement? Higher is better. Based on Pierre Dellacherie's classic
 // hand-tuned evaluation (landing height, cleared cells, row/column transitions, holes, wells), plus
 // each difficulty's taste in line clears. Tetris builders treat the right-hand column as a reserved well.
-function features(board, cols) {
+// skip: a column left out of the evaluation and treated like a wall (a tetris builder's well), or -1
+function features(board, skip = -1) {
   let rowT = 0, colT = 0, holes = 0, wells = 0;
+  const filled = (y, x) => x < 0 || x >= W || x === skip || board[y][x] !== '.';
   for (let y = 0; y < H; y++) {
     let prev = true; // the wall counts as filled
-    for (let x = 0; x < cols; x++) { const f = board[y][x] !== '.'; if (f !== prev) rowT++; prev = f; }
-    if (!prev) rowT++;
+    for (let x = 0; x <= W; x++) { const f = filled(y, x); if (f !== prev) rowT++; prev = f; }
   }
-  for (let x = 0; x < cols; x++) {
+  for (let x = 0; x < W; x++) {
+    if (x === skip) continue;
     let prev = false, covered = false;
     for (let y = 0; y < H; y++) { const f = board[y][x] !== '.'; if (f !== prev) colT++; prev = f; if (f) covered = true; else if (covered) holes++; }
     if (!prev) colT++; // the floor counts as filled
     let depth = 0; // cumulative well depth: empty cells with filled (or wall) on both sides
     for (let y = 0; y < H; y++) {
-      const filled = c => c < 0 || c >= cols || board[y][c] !== '.';
-      if (board[y][x] === '.' && filled(x - 1) && filled(x + 1)) { depth++; wells += depth; } else if (board[y][x] !== '.') depth = 0; else depth = 0;
+      if (board[y][x] === '.' && filled(y, x - 1) && filled(y, x + 1)) { depth++; wells += depth; } else depth = 0;
     }
   }
   return { rowT, colT, holes, wells };
 }
-function score(level, before, p, building) {
+// Each bot gets its own style, so no two play quite alike: its weights are nudged by up to ±25%, tetris
+// builders keep their well on the left or the right, and they differ in when they give up building and
+// just survive, how much they want tetrises, and how often they take a near-best spot instead of the best.
+function makeStyle(level) {
+  const j = () => rand(0.8, 1.25);
+  return {
+    landing: 4.5 * j(), clear: 3.42 * j(), rowT: 3.22 * j(), colT: 9.35 * j(), holes: 7.9 * j(), wells: 3.39 * j(),
+    wellCol: Math.random() < 0.5 ? W - 1 : 0, surviveAt: 9 + rnd(4), tetris: rand(70, 110), smallClear: j(),
+    // how far below the best a spot can score and still get picked sometimes (bigger = looser play)
+    temp: { easy: rand(2.5, 5), medium: rand(2, 3.5), insane: rand(0.8, 1.6) }[level],
+  };
+}
+function score(level, before, p, building, st) {
   const { board, lines, over } = placeOn(before, p);
   if (over) return -1e9;
   const cells = p.m.flat().filter(Boolean).length;
   const rows = p.m.map((r, i) => r.some(Boolean) ? i : -1).filter(i => i >= 0);
   const landing = H - (p.y + (rows[0] + rows[rows.length - 1]) / 2);
   const tallBefore = shape(before).max;
-  const builder = (LEVELS[level].tetris || building) && tallBefore < 11; // under pressure everyone just survives
-  const usesWell = p.m.some((r, y) => r.some((v, x) => v && p.x + x === W - 1));
-  const f = features(board, builder ? W - 1 : W);
-  const holes = builder ? features(board, W).holes : f.holes; // holes count everywhere, the well column included
-  let s = -4.5 * landing + 3.42 * (lines * cells / 4) - 3.22 * f.rowT - 9.35 * f.colT - 7.9 * holes - 3.39 * f.wells;
+  const builder = (LEVELS[level].tetris || building) && tallBefore < st.surviveAt + 2; // under pressure everyone just survives
+  const usesWell = p.m.some((r, y) => r.some((v, x) => v && p.x + x === st.wellCol));
+  const f = features(board, builder ? st.wellCol : -1);
+  const holes = builder ? features(board).holes : f.holes; // holes count everywhere, the well column included
+  let s = -st.landing * landing + st.clear * (lines * cells / 4) - st.rowT * f.rowT - st.colT * f.colT - st.holes * holes - st.wells * f.wells;
   if (!builder) s += [0, 8, 18, 30, 45][lines];               // any clear is welcome (easy likes singles/doubles)
   else {
-    s += [0, -18, -14, -8, 90][lines];                         // hold out for tetrises
+    s += [0, -18 * st.smallClear, -14 * st.smallClear, -8 * st.smallClear, st.tetris][lines]; // hold out for tetrises
     if (usesWell && lines < 4) s -= 70;                        // don't plug the well
   }
   return s;
@@ -154,6 +168,7 @@ class StackBot {
   constructor(level, name, connect) {
     this.level = LEVELS[level] ? level : 'medium';
     this.cfg = LEVELS[this.level];
+    this.style = makeStyle(this.level);
     this.name = name;
     this.players = []; this.boards = new Map();
     this.playing = false; this.alive = false;
@@ -193,7 +208,8 @@ class StackBot {
     this.piece = { idx, born: at };
     this.holdUsed = false;
     // how long this bot "thinks" before the piece is placed (varies around its average)
-    this.placeAt = at + this.cfg.placeMs * rand(0.55, 1.45);
+    // insane: usually about 1 s a piece, but often its fast 0.75 s pace; the others vary around their average
+    this.placeAt = at + (this.level === 'insane' ? (Math.random() < 0.6 ? 1000 : 750) * rand(0.8, 1.2) : this.cfg.placeMs * rand(0.55, 1.45));
     const m = PIECES[idx][1], x = ((W - m[0].length) / 2) | 0, y = PIECES[idx][0] === '1' ? -1 : 0;
     if (collides(this.board, m, x, y)) this.die();
   }
@@ -244,10 +260,10 @@ class StackBot {
     // easy bots now and then try building for a big clear for a while (the odd triple / tetris)
     if (this.level === 'easy' && --this.streakLeft <= 0) { this.building = Math.random() < 0.3; this.streakLeft = 15 + rnd(25); }
     // pick a piece: the current one, or (insane, once per piece) swap with the saved one if that's better
-    let options = placements(this.board, this.piece.idx).map(p => ({ ...p, s: score(this.level, this.board, p, this.building) }));
+    let options = placements(this.board, this.piece.idx).map(p => ({ ...p, s: score(this.level, this.board, p, this.building, this.style) }));
     if (cfg.hold && !this.holdUsed) {
       const alt = this.held !== null ? this.held : this.queue.list[0];
-      const altOpts = placements(this.board, alt).map(p => ({ ...p, s: score(this.level, this.board, p, this.building), hold: true }));
+      const altOpts = placements(this.board, alt).map(p => ({ ...p, s: score(this.level, this.board, p, this.building, this.style), hold: true }));
       const bestAlt = Math.max(-Infinity, ...altOpts.map(o => o.s)), best = Math.max(-Infinity, ...options.map(o => o.s));
       if (bestAlt > best + 3) {
         const cur = this.piece.idx;
@@ -262,9 +278,15 @@ class StackBot {
     let mistake = cfg.mistake, blunder = cfg.blunder;
     if (now < this.darkUntil) { mistake += this.level === 'insane' ? 0.15 : 0.4; blunder += 0.05; }
     if (now < this.invertUntil) { mistake += this.level === 'insane' ? 0.2 : 0.5; blunder += 0.08; }
-    let pick = options[0];
+    // usually one of the good spots, not always the very best: spots close to the best score get a chance
+    // too (how close depends on the bot's style), so bots don't all stack the same way
+    const best = options[0].s, near = options.filter(o => o.s > best - this.style.temp * 4);
+    const weights = near.map(o => Math.exp((o.s - best) / this.style.temp)), total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total, pick = near[0];
+    for (let i = 0; i < near.length; i++) { r -= weights[i]; if (r <= 0) { pick = near[i]; break; } }
+    // and real mistakes: a clearly worse spot now and then (insane too, just rarely), or a plain blunder
     if (Math.random() < blunder) pick = options[rnd(options.length)];
-    else if (Math.random() < mistake) pick = options[Math.min(options.length - 1, 1 + rnd(cfg.spread))];
+    else if (Math.random() < mistake) pick = options[Math.min(options.length - 1, 1 + rnd(cfg.spread + 1))];
     // too slow for the falling piece? it lands wherever the bot had got it to
     const g = this.gravityMs(now), spawnX = ((W - PIECES[pick.idx][1][0].length) / 2) | 0;
     let depth = 0; { const m0 = PIECES[pick.idx][1]; let y = PIECES[pick.idx][0] === '1' ? -1 : 0; while (!collides(this.board, m0, spawnX, y + 1)) { y++; depth++; } }
@@ -327,7 +349,7 @@ class StackBot {
       return this.inventory.length >= 3 ? fire(me) : undefined;
     }
     if (s === 'S') { // trade boards with whoever has the best one, but only when ours is clearly worse
-      const best = sized.sort((a, b) => a.max - b.max)[0];
+      const best = sized.slice().sort((a, b) => a.max - b.max || Math.random() - 0.5)[0];
       return best && best.max < mine.max - 4 ? fire(best.p) : (this.inventory.length >= 3 ? skip() : undefined);
     }
     if (s === 'R' && danger) return fire(me); // knock blocks out of its own tall stack
@@ -335,9 +357,13 @@ class StackBot {
     // who to hit: someone close to topping out (finish them), else whoever is doing best (lowest stack);
     // Blank goes to whoever has the most specials on their board
     const finish = sized.filter(f => f.max >= 15).sort((a, b) => b.max - a.max)[0];
+    // threat: other insane bots first (in most cases), then people, then medium and easy bots; scaled by how
+    // well they're doing (a low stack), with a little randomness so it isn't always the same pick
+    const rank = p => p.bot === 'insane' ? 3 : !p.bot ? 2 : p.bot === 'medium' ? 1.4 : 1;
+    const threat = f => rank(f.p) * (1.2 - f.max / H) * rand(0.75, 1.25);
     let target;
-    if (s === 'B') target = sized.sort((a, b) => b.specials - a.specials)[0];
-    else target = finish || sized.sort((a, b) => a.max - b.max)[0];
+    if (s === 'B') target = sized.slice().sort((a, b) => b.specials - a.specials || Math.random() - 0.5)[0];
+    else target = finish || sized.slice().sort((a, b) => threat(b) - threat(a))[0];
     const worthIt = finish || s === 'B' && target.specials >= 2 || target.max >= 9 || this.inventory.length >= 3 || 'HDI'.includes(s);
     if (worthIt) return fire(target.p);
     this.nextSpecialAt = now + 400;
@@ -366,4 +392,4 @@ function addBot(roomCode, level, taken, connect) {
   return bot;
 }
 
-module.exports = { addBot, LEVELS, _internals: { placements, score, shape, StackBot, deserialize, makeQueue, PIECES } };
+module.exports = { addBot, LEVELS, _internals: { placements, score, shape, StackBot, deserialize, makeQueue, PIECES, makeStyle } };

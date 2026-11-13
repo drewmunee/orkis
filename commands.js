@@ -45,16 +45,31 @@ const COMMANDS = {
   podium: { desc: 'top 3 players in this lobby by wins this session', run: podium },
   leaderboard: { desc: 'top 3 players in this lobby by all-time wins in this game', run: allTimeWins },
   // games that support it pass ctx.spectate (toggles sitting out, returns the reply): Stackwar and Snakewar
+  host: { desc: 'make another player host: /host 2 or /host two (numbers as in the player list, 1 = you)', run: hostCmd },
   spectate: { desc: 'sit out the next games and just watch; type it again to play (Stackwar, Snakewar)', run: ctx => [ctx.spectate ? ctx.spectate() : 'Spectating isn\'t available in this game yet.'] },
 };
 
+// /host N: hand the host role to player number N (per viewer, like the player list: 1 = you, then everyone
+// else in join-slot order). Accepts digits or words. Each game passes ctx.setHost(player) -> reply line.
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+function hostCmd(ctx, args) {
+  if (!ctx.setHost) return ['Changing the host isn\'t available here.'];
+  const word = String(args[0] || '').toLowerCase().replace(/^#/, '');
+  const n = /^\d+$/.test(word) ? +word : NUMBER_WORDS.indexOf(word);
+  if (!(n >= 1)) return ['Type /host and a player\'s number from the player list, e.g. /host 2 or /host two.'];
+  const order = [ctx.me, ...ctx.players.filter(p => p !== ctx.me).sort((a, b) => a.slot - b.slot)];
+  const target = order[n - 1];
+  if (!target) return [`There's no player ${n} in this lobby.`];
+  return [ctx.setHost(target)];
+}
+
 // Returns true if msg was a command (it's then handled and must not be sent as chat).
 function handle(msg, ctx, reply) {
-  const m = /^\s*\/(\S*)/.exec(String(msg || ''));
+  const m = /^\s*\/(\S*)\s*(.*)$/.exec(String(msg || ''));
   if (!m) return false;
-  const name = m[1].toLowerCase(), cmd = COMMANDS[name];
+  const name = m[1].toLowerCase(), cmd = COMMANDS[name], args = m[2].trim().split(/\s+/).filter(Boolean);
   const lines = !name ? listCommands() // just "/" lists everything too
-    : cmd ? cmd.run({ ...ctx, players: [...ctx.players] })
+    : cmd ? cmd.run({ ...ctx, players: [...ctx.players] }, args)
     : [`Unknown command /${name}. Type /help for the list.`];
   // a command may answer later (e.g. /leaderboard reads saved stats)
   Promise.resolve(lines).then(ls => { for (const line of ls) reply(line); }, e => { console.error('command failed:', e.message); reply('That command failed, try again in a moment.'); });

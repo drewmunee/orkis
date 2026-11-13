@@ -184,6 +184,16 @@ function addBot(room) {
   log(room, `${name} joined`);
   return true;
 }
+function makeHost(room, me, target) {
+  if (me.id !== room.hostId) return 'Only the host can do that.';
+  if (!target || !room.players.has(target.id)) return 'That player isn\'t here.';
+  if (target.bot) return 'Bots can\'t be host.';
+  if (target === me) return 'You\'re already the host.';
+  room.hostId = target.id;
+  log(room, `${me.name} made ${target.name} the host`);
+  sendLobby(room);
+  return `${target.name} is now the host.`;
+}
 // Players who typed /spectate sit the next rounds out and just watch.
 const players = room => [...room.players.values()].filter(p => !p.spectating);
 function startRound(room) {
@@ -722,6 +732,8 @@ function join(ws, id, m) {
         const sideways = last === 'L' || last === 'R';
         const d = DIRS[m.d] ? m.d : m.rel === 'a' ? (sideways ? 'U' : 'L') : (sideways ? 'D' : 'R');
         if (d !== last && !isReverse(last, d)) me.queue.push(d);
+      } else if (m.t === 'sethost') { // host clicked another player's name
+        const r = makeHost(room, me, room.players.get(m.id)); if (room.hostId !== m.id) send(ws, { t: 'log', msg: r });
       } else if (m.t === 'avatar') { // picked a new avatar in ⚙ Settings
         me.avatar = avatars.clean(m.a); sendLobby(room);
       } else if (m.t === 'use') {
@@ -775,7 +787,7 @@ function join(ws, id, m) {
         sendLobby(room);
       } else if (m.t === 'chat') {
         // /commands (see commands.js) answer only the sender and aren't chat
-        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'snakewar', spectate: () => {
+        if (commands.handle(m.msg, { me, players: room.players.values(), game: 'snakewar', setHost: t => makeHost(room, me, t), spectate: () => {
           me.spectating = !me.spectating;
           if (room.state === 'lobby') { setField(room, Math.max(1, players(room).length)); sendState(room); }
           sendLobby(room);

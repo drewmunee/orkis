@@ -405,14 +405,17 @@ function renderInv() {
     el.appendChild(d);
   }
 }
+// the host can click another person's number to make them host (crown sits to the left of the numbers)
+const hostBadge = p => myId === hostId && p.id !== myId && !p.bot ? `<span class="mkHost" data-id="${p.id}" title="Make ${esc(p.name)} host">${badge(numOf(p))}</span>` : badge(numOf(p));
 function renderPlayers() {
   const me = players.find(p => p.id === myId);
   $('mySlot').innerHTML = me ? `${badge(1, true)}<span class="nm">${SW.avatarHtml(me)}${esc(me.name)}</span>${teamTag(me.team)}` : '';
   const hostInLobby = myId === hostId && roomState === 'lobby';
-  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span>${badge(numOf(p))} ${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.bot ? ` <small class="botLv lv-${p.bot}">${p.bot}</small>` : ''}${p.id === hostId ? ' 👑' : ''}${p.id === myId ? ' (you)' : ''}${p.spectating ? ' <span class="spec" title="Spectating (not playing)">👁</span>' : ''} ${teamTag(p.team)}${p.bot && myId === hostId ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('')
+  $('playerList').innerHTML = ordered().map(p => `<div class="${roomState === 'playing' && !p.alive ? 'dead' : ''}"><span><span class="crown">${p.id === hostId ? '👑' : ''}</span>${hostBadge(p)} ${p.bot ? '<span class="botTag" title="Bot">🤖</span>' : SW.avatarHtml(p)}${esc(p.name)}${p.bot ? ` <small class="botLv lv-${p.bot}">${p.bot}</small>` : ''}${p.id === myId ? ' (you)' : ''}${p.spectating ? ' <span class="spec" title="Spectating (not playing)">👁</span>' : ''} ${teamTag(p.team)}${p.bot && myId === hostId ? ` <button class="rmBot" data-id="${p.id}" title="Remove this bot">×</button>` : ''}</span><span>${p.wins ? p.wins + '★' : ''}</span></div>`).join('')
     // host, between games (not in a daily run): add bots of three difficulties, up to 6 players in all
     + (hostInLobby && !dailyRoom && players.length < 6 ? '<div class="addBots"><span>Add bot</span><button type="button" data-lv="easy">＋ Easy</button><button type="button" data-lv="medium">＋ Medium</button><button type="button" data-lv="insane">＋ Insane</button></div>' : '');
   for (const b of $('playerList').querySelectorAll('.addBots button')) b.onclick = e => { net({ t: 'addbot', level: b.dataset.lv }); e.currentTarget.blur(); };
+  for (const b of $('playerList').querySelectorAll('.mkHost')) b.onclick = () => net({ t: 'sethost', id: +b.dataset.id });
   for (const b of $('playerList').querySelectorAll('.rmBot')) b.onclick = e => { net({ t: 'removebot', id: +b.dataset.id }); e.currentTarget.blur(); };
   $('startBtn').classList.toggle('hidden', !hostInLobby);
   const playerCount = players.filter(p => !p.spectating).length; // spectators sit the game out

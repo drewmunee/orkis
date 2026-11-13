@@ -60,6 +60,15 @@ function recordSolo(room, p, score) {
     err => { console.error('blockwar leaderboard write failed:', err.message); send(p.ws, { t: 'solo', score, error: true }); });
 }
 
+function makeHost(room, me, target) {
+  if (me.id !== room.hostId) return 'Only the host can do that.';
+  if (!target || !room.players.has(target.id)) return 'That player isn\'t here.';
+  if (target === me) return 'You\'re already the host.';
+  room.hostId = target.id;
+  log(room, `${me.name} made ${target.name} the host`);
+  sendLobby(room);
+  return `${target.name} is now the host.`;
+}
 function join(ws, id, m) {
   const code = String(m.room || 'lobby').trim().toLowerCase().slice(0, 20) || 'lobby';
   let room = rooms.get(code);
@@ -97,6 +106,7 @@ function join(ws, id, m) {
         case 'avatar': // picked a new avatar in ⚙ Settings
           me.avatar = avatars.clean(m.a); sendLobby(room);
           break;
+        case 'sethost': { const r = makeHost(room, me, room.players.get(m.id)); if (room.hostId !== m.id) send(ws, { t: 'log', msg: r }); break; }
         case 'mode':
           if (me.id !== room.hostId || room.state !== 'lobby' || !MODES.includes(m.mode)) return;
           room.mode = m.mode; sendLobby(room);
@@ -152,7 +162,7 @@ function join(ws, id, m) {
           break;
         case 'chat':
           // /commands (see commands.js) answer only the sender and aren't chat
-          if (commands.handle(m.msg, { me, players: room.players.values(), game: 'blockwar' }, line => send(ws, { t: 'log', msg: line }))) break;
+          if (commands.handle(m.msg, { me, players: room.players.values(), game: 'blockwar', setHost: t => makeHost(room, me, t) }, line => send(ws, { t: 'log', msg: line }))) break;
           broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
           if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => { if (line) log(room, line); }, e => console.error('swear jar failed:', e.message)); // a quarter in the jar
           break;
