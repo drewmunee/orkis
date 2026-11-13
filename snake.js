@@ -780,7 +780,7 @@ function join(ws, id, m) {
           return me.spectating ? `You'll watch the next rounds instead of playing${me.alive ? ' (after this one)' : ''}. Type /spectate again to play.` : 'You\'ll play in the next round.';
         } }, line => send(ws, { t: 'log', msg: line }))) return;
         broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
-        if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => log(room, line), e => console.error('swear jar failed:', e.message)); // a quarter in the jar
+        if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => { if (line) log(room, line); }, e => console.error('swear jar failed:', e.message)); // a quarter in the jar
       }
     },
     close() {

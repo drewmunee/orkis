@@ -57,8 +57,8 @@ async function post({ bid, name, msg }) {
   if (lastSent.size > 5000) lastSent.clear();
   await store.add(key, name, msg);
   if (moderation.hasSwear(msg)) {
-    const line = await swearjar.addQuarter(p);
-    await store.add('system', '', line); // shown as an event line (no name)
+    const line = await swearjar.addQuarter(p); // null when this quarter goes in quietly
+    if (line) await store.add('system', '', line); // shown as an event line (no name)
   }
 }
 

@@ -148,8 +148,10 @@ New games must call the same `leaveRoom()` pattern.
   names. Lists are base64-encoded in the file; matching undoes look-alike characters, ignores spacing/
   punctuation and catches stretched letters, while short words only match as whole words. Owner asked
   for slurs only; chat is not filtered.
-- Swear jar (`swearjar.js`, table `swear_jar`): any chat message with a swear word adds one quarter and
-  the room sees "<name> puts a quarter into the swear jar. The swear jar is at $X.XX." Kept permanently,
+- Swear jar (`swearjar.js`, table `swear_jar`): any chat message with a swear word always adds one quarter;
+  the room sees "<name> puts a quarter into the swear jar. The swear jar is at $X.XX." only on that player's
+  1st quarter and every 3rd after (1st, 4th, 7th ... by their saved count; `addQuarter` resolves to null
+  for the quiet ones, and callers skip null). Kept permanently,
   per player (browser ID), so per-player totals can be shown later.
 
 ## Product decisions

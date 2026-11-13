@@ -154,7 +154,7 @@ function join(ws, id, m) {
           // /commands (see commands.js) answer only the sender and aren't chat
           if (commands.handle(m.msg, { me, players: room.players.values(), game: 'blockwar' }, line => send(ws, { t: 'log', msg: line }))) break;
           broadcast(room, { t: 'chat', id: me.id, msg: String(m.msg).slice(0, 200) });
-          if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => log(room, line), e => console.error('swear jar failed:', e.message)); // a quarter in the jar
+          if (moderation.hasSwear(m.msg)) swearjar.addQuarter(me).then(line => { if (line) log(room, line); }, e => console.error('swear jar failed:', e.message)); // a quarter in the jar
           break;
       }
     },

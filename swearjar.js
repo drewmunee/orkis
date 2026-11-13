@@ -29,8 +29,15 @@ const jar = pool ? postgresJar(pool) : fileJar();
 const dollars = q => '$' + (q / 4).toFixed(2);
 
 // Add a quarter for this player; resolves to the line to show in chat.
+// Every swear always goes in the jar, but the chat line only appears on a player's 1st quarter and then
+// every ANNOUNCE_EVERY-th one after (1st, 4th, 7th ...), so it doesn't flood the chat. Resolves to the line to
+// show, or null when this quarter goes in quietly.
+const ANNOUNCE_EVERY = 3;
 async function addQuarter(p) {
-  const total = await jar.add(playerKey(p.bid, p.name), p.name);
+  const key = playerKey(p.bid, p.name);
+  const total = await jar.add(key, p.name);
+  const mine = await jar.mine(key);
+  if ((mine - 1) % ANNOUNCE_EVERY !== 0) return null;
   return `${p.name} puts a quarter into the swear jar. The swear jar is at ${dollars(total)}.`;
 }
 
