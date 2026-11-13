@@ -377,11 +377,11 @@ function renderOpps() {
   // everyone else's board (a watcher sees every board); seated players who are spectating get an eye on theirs
   const others = watcherMode ? ordered() : ordered().slice(1);
   const cs = watcherMode ? 30 : 14; // canvas pixels per cell: sharper boards in the big watcher view
-  if (wrap.children.length !== others.length || +wrap.dataset.cs !== cs || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id || el.dataset.av !== (others[i].avatar || ''))) {
+  if (wrap.children.length !== others.length || +wrap.dataset.cs !== cs || [...wrap.children].some((el, i) => +el.dataset.id !== others[i].id || el.dataset.av !== (others[i].avatar || '') || +el.dataset.num !== numOf(others[i]))) {
     wrap.innerHTML = ''; wrap.dataset.cs = cs;
     for (const p of others) {
       const el = document.createElement('div');
-      el.className = 'opp'; el.dataset.id = p.id; el.dataset.av = p.avatar || '';
+      el.className = 'opp'; el.dataset.id = p.id; el.dataset.av = p.avatar || ''; el.dataset.num = numOf(p); // numbers are per viewer: rebuild when they change
       el.innerHTML = `<div class="name">${badge(numOf(p), true)}<span class="nm">${p.bot ? '🤖' : SW.avatarHtml(p)}${esc(p.name)}</span><span class="tm"></span><span class="w"></span></div><div class="oppBoard"><canvas width="${W * cs}" height="${H * cs}"></canvas><div class="specEye" title="Spectating">👁</div></div>`;
       el.onclick = () => useSpecial(numOf(players.find(q => q.id === p.id)));
       wrap.appendChild(el);
