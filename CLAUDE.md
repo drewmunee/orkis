@@ -179,7 +179,9 @@ New games must call the same `leaveRoom()` pattern.
   at once collects each special in those lines twice.
 - Specials: A Add Line, C Clear Line, R Random Clear (8 blocks), Q Earthquake, G Gravity, B Blank (3 specials), H Haste,
   D Darkness (target board blacked out ~4s), I Inverted (target's controls scrambled 5s: left/right,
-  rotations and up/down swap; hard drop unchanged), S Switch, N Nuke. N/G/S are rarer than the rest.
+  rotations and up/down swap; hard drop unchanged; on the target's own screen every piece colour 1-7 is
+  swapped for another for as long as it lasts (`invertColors`, board/falling piece/Next/Saved; opponent boards and
+  garbage keep their colours)), S Switch, N Nuke. N/G/S are rarer than the rest.
 - **Bots** (`stackbot.js`): the host adds them between games from the room panel (**＋ Easy / ＋ Medium /
   ＋ Insane** under the player list, `{t:'addbot', level}`); whoever is host can remove one at any time,
   mid-game too (×, `{t:'removebot', id}`; mid-game it counts as out); never in daily runs; up to the 6-player

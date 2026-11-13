@@ -21,7 +21,7 @@ const SPECIALS = {
   B: ['Blank',        '#d0d0d0', 'Turns 3 of the target\'s special blocks into junk', 3],
   H: ['Haste',        '#ff66d9', 'Target pieces fall 3x faster for 10 seconds', 3],
   D: ['Darkness',     '#3b3363', 'Blacks out the target board for 4 seconds (only the falling piece stays faintly visible)', 3, '#fff'],
-  I: ['Inverted',     '#19d3b5', 'Scrambles the target\'s controls for 5 seconds: left/right swap, rotations reverse, and up/down swap', 3],
+  I: ['Inverted',     '#19d3b5', 'Scrambles the target\'s controls for 5 seconds (left/right swap, rotations reverse, up/down swap) and shuffles their piece colours', 3],
   S: ['Switch',       '#fff36b', 'Switches your whole board with the target', 0.7],
   N: ['Nuke',         '#ffffff', 'Wipes the target board completely clean', 0.7],
 };
@@ -222,7 +222,9 @@ function applySpecial(s) {
     // timed specials stack: a second one adds its full time to whatever is left
     case 'H': hasteUntil = stack(hasteUntil, 10000); break;
     case 'D': if (darkUntil < performance.now()) darkStart = performance.now(); darkUntil = stack(darkUntil, DARKNESS_MS); break;
-    case 'I': invertUntil = stack(invertUntil, INVERT_MS); break;
+    case 'I': // controls scrambled, and the piece colours on your own screen get shuffled for as long as it lasts
+      if (invertUntil < performance.now()) invertColors = shuffledColors();
+      invertUntil = stack(invertUntil, INVERT_MS); break;
   }
   if (playing) { fixPiece(); syncBoard(); }
 }
@@ -280,7 +282,7 @@ function die() {
   setStatus('You topped out!');
 }
 function startGame(seed) {
-  board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0; darkUntil = 0; invertUntil = 0;
+  board = newBoard(); queue = makeQueue(seed); inventory = []; lines = 0; level = 1; hasteUntil = 0; darkUntil = 0; invertUntil = 0; invertColors = null;
   held = null; holdUsed = false;
   playing = true; dropAcc = 0; countdownEnd = performance.now() + COUNTDOWN_MS; spawn(); renderInv(); updateStats(); syncBoard();
   boards.clear();
@@ -292,11 +294,19 @@ function syncBoard() { // throttle board broadcasts to one per frame
 }
 
 // ---------- drawing ----------
+// Inverted: every piece colour (1-7) swapped for another one, none keeping its own; garbage stays grey
+let invertColors = null, drawingOpps = false;
+function shuffledColors() {
+  const ids = ['1', '2', '3', '4', '5', '6', '7']; let to;
+  do { to = ids.slice().sort(() => Math.random() - 0.5); } while (to.some((c, i) => c === ids[i]));
+  return Object.fromEntries(ids.map((c, i) => [c, COLORS[to[i]]]));
+}
+const cellColor = c => !drawingOpps && invertColors && invertColors[c] && performance.now() < invertUntil ? invertColors[c] : COLORS[c];
 function drawCell(c, x, y, size, cx, alpha = 1) {
   if (c === '.') return;
   cx.globalAlpha = alpha;
   const sp = isSpecial(c);
-  cx.fillStyle = sp ? SPECIALS[c][1] : COLORS[c];
+  cx.fillStyle = sp ? SPECIALS[c][1] : cellColor(c);
   cx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
   if (sp) { cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.lineWidth = 1; cx.strokeRect(x * size + 1.5, y * size + 1.5, size - 3, size - 3); }
   if (!sp && size > 12) { cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(x * size + 1, y * size + 1, size - 2, 4); }
@@ -397,7 +407,9 @@ function renderOpps() {
     const cx = el.querySelector('canvas').getContext('2d');
     cx.fillStyle = theme.well; cx.fillRect(0, 0, W * cs, H * cs);
     const b = deserialize(boards.get(p.id));
+    drawingOpps = true; // other players' boards keep their real colours
     b.forEach((r, y) => r.forEach((c, x) => drawCell(c, x, y, cs, cx)));
+    drawingOpps = false;
   }
   fitWatch();
 }
