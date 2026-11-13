@@ -36,6 +36,12 @@
     <section id="daily" class="panel hidden">
       <div class="label">Daily run <small id="dailyWhat">40 lines, fastest time</small></div>
       <ol id="dailyList"><li class="empty">Loading…</li></ol>
+      <div id="dailyHall" class="hidden">
+        <div class="label">Most daily wins</div>
+        <ol id="hallWins"></ol>
+        <div class="label">Fastest ever</div>
+        <div id="hallFast"></div>
+      </div>
       <button id="dailyBtn" type="button">Play today's run</button>
       <div id="dailyReset"></div>
     </section>
@@ -80,16 +86,16 @@
       </details>
     </aside>
 
-    <!-- center: your name and specials hand, then saved/next pieces beside your board -->
+    <!-- center: your name and specials hand, then next/saved pieces beside your board -->
     <section id="center">
       <div id="meBar" class="label me"><span id="mySlot"></span><div id="fx" title="Effects on you right now"></div><div id="inv" title="Your specials (leftmost fires next)"></div></div>
       <div id="playArea">
         <div id="pieceCol">
           <div id="pieces">
-            <div class="label">Saved <small>C / Shift</small></div>
-            <canvas id="hold" width="100" height="70"></canvas>
-            <div class="label nextLabel">Next</div>
+            <div class="label">Next</div>
             <canvas id="next" width="100" height="204"></canvas>
+            <div class="label holdLabel">Saved <small>C / Shift</small></div>
+            <canvas id="hold" width="100" height="70"></canvas>
           </div>
           <!-- lines and level float under the piece queue -->
           <div id="runStats">

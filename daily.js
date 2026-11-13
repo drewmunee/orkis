@@ -36,6 +36,16 @@ function postgresDaily(pool) {
       return { best, prevBest: prev ? prev.ms : 0, rank, onBoard: rank <= TOP_N };
     }),
     async top(day) { await ready(); return (await topQuery(day, TOP_N)).rows.map(r => ({ name: r.name, ms: r.ms, at: r.achieved_at, firstTry: r.first_try })); },
+    // hall of fame: the 3 names with the most daily wins (finished days; ties on a day all count as wins,
+    // same as placings) and the fastest time ever on any day
+    async hall(today) {
+      await ready();
+      const wins = (await pool.query(`WITH best AS (SELECT day, lower(name) AS n, MAX(name) AS nm, MIN(ms) AS m FROM daily_runs WHERE day < $1 GROUP BY day, lower(name)),
+          won AS (SELECT b.n, b.nm FROM best b WHERE b.m = (SELECT MIN(m) FROM best x WHERE x.day = b.day))
+        SELECT MAX(nm) AS name, count(*) AS wins FROM won GROUP BY n ORDER BY wins DESC, name LIMIT 3`, [today])).rows;
+      const f = (await pool.query('SELECT name, ms, day FROM daily_runs ORDER BY ms, achieved_at LIMIT 1')).rows[0];
+      return { wins: wins.map(r => ({ name: r.name, wins: +r.wins })), fastest: f ? { name: f.name, ms: f.ms, day: f.day } : null };
+    },
     // finished days (before `today`) where this player's best ranked 1st / top 3 (one entry per name)
     async placings(key, today) {
       await ready();
@@ -69,6 +79,17 @@ function fileDaily() {
       return { best, prevBest: prev ? prev.ms : 0, rank, onBoard: rank <= TOP_N };
     },
     async top(day) { return sorted(day).slice(0, TOP_N); },
+    async hall(today) {
+      const tally = new Map(); let fastest = null;
+      for (const day of Object.keys(f.data)) {
+        if (!/^\d{4}-\d\d-\d\d$/.test(day)) continue;
+        const list = sorted(day);
+        if (list[0] && (!fastest || list[0].ms < fastest.ms)) fastest = { name: list[0].name, ms: list[0].ms, day };
+        if (day >= today || !list.length) continue;
+        for (const e of list.filter(e => e.ms === list[0].ms)) { const k = e.name.toLowerCase(), t = tally.get(k) || { name: e.name, wins: 0 }; t.wins++; tally.set(k, t); }
+      }
+      return { wins: [...tally.values()].sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name)).slice(0, 3), fastest };
+    },
     async placings(key, today) {
       let wins = 0, podiums = 0;
       for (const day of Object.keys(f.data)) {
@@ -90,6 +111,8 @@ module.exports = {
   attempt: (day, p) => store.attempt(day, playerKey(p.bid, p.name)),
   submit: (day, p, ms, firstTry) => store.submit(day, playerKey(p.bid, p.name), p.name, ms, firstTry),
   top: day => store.top(day),
+  // { wins: [{name, wins}] (top 3), fastest: {name, ms, day} | null }
+  hall: () => store.hall(today()),
   // { wins, podiums }: finished days this player (browser) won / placed top 3 on the daily board
   placings: (bid, name) => store.placings(playerKey(bid, name), today()),
 };

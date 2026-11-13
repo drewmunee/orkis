@@ -42,7 +42,7 @@ const server = http.createServer((req, res) => {
   if (p === '/api/daily') {
     // Stackwar daily run: today's top 10 times
     const day = daily.today();
-    daily.top(day).then(top => json(200, { day, goal: daily.GOAL, resetsInMs: daily.msUntilReset(), top }),
+    Promise.all([daily.top(day), daily.hall()]).then(([top, hall]) => json(200, { day, goal: daily.GOAL, resetsInMs: daily.msUntilReset(), top, hall }),
       e => { console.error('daily read failed:', e.message); json(500, { error: 'unavailable' }); });
     return;
   }

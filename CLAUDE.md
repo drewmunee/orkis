@@ -124,7 +124,11 @@ New games must call the same `leaveRoom()` pattern.
   and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries, and
   **R** restarts instantly at any time, even mid-run (`{t:'restart'}`, daily rooms only; same seed, new
   attempt, 3 s countdown; once R is used, no run in that session can get the ⚡ badge).
-  The client shows the live timer under Level (`#timeStat`, daily runs only; it holds the final time) and x/40 in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top}.
+  The client shows the live timer under Level (`#timeStat`, daily runs only; it holds the final time) and x/40 in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top, hall}.
+  Under the daily top 10, a hall of fame (`daily.hall`): the 3 names with the most daily wins (finished
+  days; ties on a day all count, same as placings) and the single fastest time ever (any day, today
+  included). To fit at 1152x720 the daily list scrolls inside its box when short of room, and windows
+  under 800 px tall get less space above the picker.
   Stats: `daily_runs`, `daily_finishes`, plus `daily_wins` / `daily_podiums` (1st / top 3 on finished days,
   worked out from `daily_runs` by `daily.placings` when `/api/stats` is read; shown in the Stackwar card). Every run started counts as an attempt (`daily_attempts`, topped-out
   and quit runs too); a best time set on attempt 1 shows a ⚡ on the board (`first_try`), and a better time
@@ -155,7 +159,7 @@ New games must call the same `leaveRoom()` pattern.
 - Boards are 10 wide x 23 tall. The game must fit on screen without scrolling (tested at 1152x720 up to 1920x1080).
 - Stackwar game screen uses Blockwar's layout: top bar (Back to lobby, title + room, ⚙ Settings moved
   into the bar), then players/chat/Controls & specials on the left, your name + specials hand above
-  Saved/Next (with Lines and Level floating underneath) and your centered board, and opponent boards (3 columns, sized by window height
+  Next, then Saved underneath it (with Lines and Level floating below) and your centered board, and opponent boards (3 columns, sized by window height
   and width) on the right. The homepage no longer has the Controls & specials box.
 - Every player gets the same piece queue (shared seed from the server).
 - Players can save one piece (C or Shift). Bringing it back swaps it with the current piece; allowed once per piece.

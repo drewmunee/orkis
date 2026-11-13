@@ -587,6 +587,15 @@ function loadDaily() {
     $('dailyList').innerHTML = d.top.length
       ? d.top.map((r, i) => `<li><span class="rk">${i + 1}</span><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><b>${fmtTime(r.ms)}</b>${r.firstTry ? '<span class="ft" title="Set on their first try today">⚡</span>' : '<span class="ft"></span>'}</li>`).join('')
       : '<li class="empty">No times yet today. Be the first!</li>';
+    // hall of fame: most daily wins (top 3) and the fastest time ever
+    const hall = d.hall || { wins: [], fastest: null };
+    $('dailyHall').classList.toggle('hidden', !hall.wins.length && !hall.fastest);
+    $('hallWins').innerHTML = hall.wins.length
+      ? hall.wins.map((r, i) => `<li><span class="rk">${['🥇', '🥈', '🥉'][i]}</span><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span><b>${r.wins} ${r.wins === 1 ? 'win' : 'wins'}</b></li>`).join('')
+      : '<li class="empty">No finished days yet.</li>';
+    $('hallFast').innerHTML = hall.fastest
+      ? `<span class="nm" title="${esc(hall.fastest.name)}">⏱ ${esc(hall.fastest.name)}</span><b>${fmtTime(hall.fastest.ms)}</b><small>${new Date(hall.fastest.day + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</small>`
+      : '';
   }).catch(() => { $('dailyList').innerHTML = '<li class="empty">Daily run unavailable right now.</li>'; });
 }
 // usernames are checked (slurs, and for a lobby: someone already using it there) before joining

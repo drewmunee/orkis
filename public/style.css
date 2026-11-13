@@ -62,7 +62,7 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 #runStats #runTime { font-size:24px; }
 #runStats b { display:block; font-size:30px; font-weight:900; line-height:1.1; font-variant-numeric:tabular-nums; }
 #pieces { width:112px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 6px; }
-#pieces .nextLabel { margin-top:12px; }
+#pieces .holdLabel { margin-top:12px; } /* saved piece sits under the piece queue */
 #next, #hold { display:block; margin:0 auto; }
 #board { display:block; background:var(--well); border:2px solid var(--line); border-radius:6px; height:clamp(400px, calc(100vh - 128px), 1000px); width:auto; aspect-ratio:10 / 23; }
 .sp { width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-weight:800; border-radius:4px; color:#111; }
@@ -90,13 +90,13 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 
 
 #leaderboard { width:300px; text-align:left; }
-#lbList, #dailyList { list-style:none; margin:0; padding:0; }
-#lbList li, #dailyList li { display:flex; align-items:center; gap:10px; padding:5px 2px; border-bottom:1px solid var(--line); }
+#lbList, #dailyList, #hallWins { list-style:none; margin:0; padding:0; }
+#lbList li, #dailyList li, #hallWins li { display:flex; align-items:center; gap:10px; padding:5px 2px; border-bottom:1px solid var(--line); }
 #lbList li:last-child, #dailyList li:last-child { border-bottom:none; }
 #lbList .rk, #dailyList .rk { width:22px; color:var(--dim); font-weight:700; text-align:right; }
 #lbList li:nth-child(1) .rk, #dailyList li:nth-child(1) .rk { color:var(--title); }
-#lbList .nm, #dailyList .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#lbList .empty, #dailyList .empty { color:var(--dim); border:none; }
+#lbList .nm, #dailyList .nm, #hallWins .nm, #hallFast .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#lbList .empty, #dailyList .empty, #hallWins .empty { color:var(--dim); border:none; }
 /* Stackwar daily run: today's top 10 times, next to the leaderboard */
 #daily { width:260px; text-align:left; }
 #dailyList b { font-variant-numeric:tabular-nums; }
@@ -198,3 +198,17 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
   #leaderboard { width:240px; }
   #daily { width:210px; }
 }
+/* daily hall of fame under the daily top 10 */
+#dailyHall { margin-top:10px; padding-top:8px; border-top:1px solid var(--line); }
+#dailyHall .label { margin-top:4px; }
+#hallWins li { padding:3px 2px; border-bottom:none; }
+#hallWins .rk { width:22px; text-align:center; }
+#hallWins b, #hallFast b { font-variant-numeric:tabular-nums; }
+#hallFast { display:flex; align-items:center; gap:8px; padding:3px 2px; }
+#hallFast small { color:var(--dim); font-size:11px; }
+/* keep the homepage on one screen: on short windows the picker sits higher, and the daily top 10 scrolls
+   inside its box once there isn't room for all of it (at 1080 tall everything shows) */
+#dailyList { max-height:calc(100vh - 560px); min-height:96px; overflow-y:auto; }
+#hallWins li, #hallFast { padding:1px 2px; font-size:13px; }
+#dailyHall .label { margin:2px 0 2px; }
+@media (max-height:800px) { #join { padding-top:11vh; padding-bottom:4px; } }

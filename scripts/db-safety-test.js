@@ -97,6 +97,9 @@ async function snapshot(pool) {
   assert.deepStrictEqual(await daily.placings(B3, 'Three'), { wins: 0, podiums: 3 }); ok('daily placings: 4th place on a day is no podium');
   await daily.submit(daily.today(), { bid: B3, name: 'Three' }, 13000);
   assert.deepStrictEqual(await daily.placings(B3, 'Three'), { wins: 0, podiums: 3 }); ok("today's board isn't counted until the day is over");
+  const hall = await daily.hall();
+  assert.deepStrictEqual(hall.wins.map(r => [r.name, r.wins]), [['Two', 2], ['DG', 1], ['Four', 1]]); ok('hall of fame: most daily wins (finished days)');
+  assert.strictEqual(hall.fastest.ms, 1000); assert.strictEqual(hall.fastest.name, 'Four'); ok('hall of fame: fastest time ever');
 
   console.log('4. restarting with no new migrations changes nothing');
   let before = await snapshot(pool);
