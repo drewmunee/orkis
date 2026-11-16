@@ -751,13 +751,20 @@ function renderLobbies() {
   if (!list) return;
   if (!lobbyData) return;
   const rows = (lobbyData[g] || []).slice().sort((a, b) => b.players - a.players || a.room.localeCompare(b.room));
+  // Stackwar daily runs are private, but list who's playing one so the homepage shows everyone who's on
+  const dailies = g === 'stackwar' ? lobbyData.stackwarDaily || [] : [];
   const total = rows.reduce((n, r) => n + r.players, 0);
-  $('lobbyCount').textContent = rows.length ? `${total} playing in ${rows.length} ${rows.length === 1 ? 'lobby' : 'lobbies'}` : '';
-  list.innerHTML = rows.length ? rows.map(r => `<li class="lobby" data-room="${esc(r.room)}" title="Join ${esc(r.room)}">
+  const parts = [rows.length && `${total} playing in ${rows.length} ${rows.length === 1 ? 'lobby' : 'lobbies'}`, dailies.length && `${dailies.length} on the daily run`].filter(Boolean);
+  $('lobbyCount').textContent = parts.join(' · ');
+  const dailyRows = dailies.map(d => `<li class="dailyRow" title="${esc(d.name)} is playing today's daily run (private)">
+      <span class="lname">📅 Daily run<span class="lnames">${esc(d.name)}</span></span>
+      <span class="lcount">${d.playing ? `${d.lines}/${d.goal} lines` : ''}</span>
+      <span class="lstate ${d.playing ? 'playing' : 'waiting'}">${d.playing ? 'In run' : 'Between runs'}</span></li>`).join('');
+  list.innerHTML = dailyRows + (rows.length ? rows.map(r => `<li class="lobby" data-room="${esc(r.room)}" title="Join ${esc(r.room)}">
       <span class="lname">${esc(r.room)}${r.teamMode ? ' · teams' : ''}${r.mode ? (r.mode === 'lives' ? ' · lives' : ' · clear race') : ''}<span class="lnames">${esc(r.names.join(', '))}</span></span>
       <span class="lcount">${r.players} ${r.players === 1 ? 'player' : 'players'}${r.watchers ? ` · ${r.watchers} 👁` : ''}${g === 'stackwar' && r.players >= 6 ? ' · full (join to watch)' : ''}</span>
       <span class="lstate ${r.playing ? 'playing' : 'waiting'}">${r.playing ? 'In game' : 'Waiting'}</span></li>`).join('')
-    : '<li class="empty">Nobody is playing right now. Enter a lobby code to start one!</li>';
+    : dailies.length ? '' : '<li class="empty">Nobody is playing right now. Enter a lobby code to start one!</li>');
   for (const li of list.querySelectorAll('li.lobby')) li.onclick = () => {
     $('room').value = li.dataset.room;
     if ($('name').value.trim()) $('joinForm').requestSubmit(); else $('name').focus();

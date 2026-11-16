@@ -29,8 +29,11 @@ const server = http.createServer((req, res) => {
   if (p === '/api/lobbies') {
     // homepage lobby browser: every open lobby per game
     const stackwar = [...rooms.values()].filter(r => !r.daily).map(r => ({ room: r.code, players: r.players.size, watchers: r.watchers ? r.watchers.size : 0, names: [...r.players.values()].map(q => (q.bot ? '🤖 ' : '') + q.name), playing: r.state !== 'lobby', teamMode: !!r.teamMode }));
+    // people playing today's daily run (private rooms: shown on the homepage so people can see who's on, not joinable)
+    const stackwarDaily = [...rooms.values()].filter(r => r.daily).flatMap(r => [...r.players.values()].filter(q => !q.bot)
+      .map(q => ({ name: q.name, lines: Math.min(q.lines || 0, daily.GOAL), goal: daily.GOAL, playing: r.state === 'playing' && !!q.alive })));
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify({ stackwar, snakewar: snake.lobbies(), blockwar: block.lobbies() }));
+    return res.end(JSON.stringify({ stackwar, stackwarDaily, snakewar: snake.lobbies(), blockwar: block.lobbies() }));
   }
   const q = new URL(req.url, 'http://x').searchParams;
   const json = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };

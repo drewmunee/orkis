@@ -239,3 +239,4 @@ form { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 .opp.spectating canvas { opacity:.35; }
 /* special names in the chat/log, in their block colour */
 .spName { display:inline-block; padding:0 6px; border-radius:4px; font-weight:700; font-style:normal; line-height:1.35; }
+#lobbyList li.dailyRow { cursor:default; }

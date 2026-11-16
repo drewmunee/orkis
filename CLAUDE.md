@@ -124,6 +124,8 @@ New games must call the same `leaveRoom()` pattern.
   and doesn't touch the normal solo leaderboard. Topping out just ends the attempt; "Play again" retries, and
   **R** restarts instantly at any time, even mid-run (`{t:'restart'}`, daily rooms only; same seed, new
   attempt, 3 s countdown; once R is used, no run in that session can get the ⚡ badge).
+  People on a daily run show on the homepage's Stackwar lobby list as non-clickable "📅 Daily run" rows (name,
+  x/40 lines, In run / Between runs; `stackwarDaily` in `/api/lobbies`) and in the count line; nobody can watch them.
   The client shows the live timer under Level (`#timeStat`, daily runs only; it holds the final time) and x/40 in the status line. `GET /api/daily` -> {day, goal, resetsInMs, top, hall}.
   Under the daily top 10, a hall of fame (`daily.hall`): the 3 names with the most daily wins (finished
   days; ties on a day all count, same as placings) and the single fastest time ever (any day, today
